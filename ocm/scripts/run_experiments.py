@@ -40,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--out", default=None, help="Optional JSON results path.")
     parser.add_argument(
+        "--checkpoint-dir", default=None,
+        help="Directory (e.g. a Google Drive path) for resumable per-(method,seed) "
+             "checkpoints; a crashed/refreshed run resumes instead of restarting.",
+    )
+    parser.add_argument(
         "--seeds", type=int, nargs="+", default=list(exp.DEFAULT_SEEDS),
         help="Seeds (one run per method per seed). Default: the 5 research seeds.",
     )
@@ -134,13 +139,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         per_category=per_category,
         stress_per_class=stress_per_class,
         settings_factory=settings_factory,
+        checkpoint_dir=args.checkpoint_dir,
+        out_path=args.out,
     )
     exp.print_report(report)
 
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as fh:
-            json.dump(report, fh, indent=2, default=str)
         print(f"\nWrote full results to {args.out}")
+    elif args.checkpoint_dir:
+        print(f"\nWrote results + checkpoints under {args.checkpoint_dir}")
     return 0
 
 

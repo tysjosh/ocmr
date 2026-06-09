@@ -31,6 +31,8 @@ figures.
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional
 
@@ -42,6 +44,49 @@ from ocm.evaluation.baselines import build_baseline
 from ocm.evaluation.benchmark import BenchmarkGenerator
 from ocm.evaluation.runner import BaselineRunner
 from ocm.evaluation.strategies import MemoryStrategy
+
+
+# --------------------------------------------------------------------------- #
+# Checkpointing (resume across Colab refreshes / crashes)
+# --------------------------------------------------------------------------- #
+class _Checkpoint:
+    """Tiny JSON checkpoint store keyed by a per-unit-of-work name.
+
+    When ``directory`` is set (e.g. a Google Drive path), each completed unit of
+    work (one ``(method, seed)`` run, one \u03c4 row, ...) is written atomically so a
+    resumed run skips already-finished work. When ``directory`` is ``None`` it is
+    a no-op (every ``load`` misses, nothing is saved).
+    """
+
+    def __init__(self, directory: Optional[str]) -> None:
+        self.dir = directory
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+
+    def _path(self, name: str) -> str:
+        safe = name.replace("/", "_").replace(" ", "_")
+        return os.path.join(self.dir, f"{safe}.json")  # type: ignore[arg-type]
+
+    def load(self, name: str) -> Optional[Any]:
+        if not self.dir:
+            return None
+        path = self._path(name)
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+        except Exception:  # pragma: no cover - corrupt/partial file: recompute
+            return None
+
+    def save(self, name: str, obj: Any) -> None:
+        if not self.dir:
+            return
+        path = self._path(name)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(obj, fh, default=str)
+        os.replace(tmp, path)  # atomic on the same filesystem
 
 #: Default seeds (5 per method, per the paper's protocol).
 DEFAULT_SEEDS: tuple[int, ...] = (1337, 7, 42, 99, 2024)
@@ -190,6 +235,7 @@ def run_multiseed(
     top_k: int = 10,
     extractor: object | None = None,
     embeddings: object | None = None,
+    checkpoint_dir: Optional[str] = None,
 ) -> MultiSeedResult:
     """Run ``methods`` across ``seeds`` and collect decisive metrics per seed.
 
@@ -198,37 +244,52 @@ def run_multiseed(
     optionally caps the example count. A shared ``extractor`` / ``embeddings``
     (loaded once, e.g. a local Qwen + sentence-transformers) is injected into
     every container so heavy models are not reloaded per arm.
+
+    When ``checkpoint_dir`` is set, each completed ``(method, seed)`` is persisted
+    there and skipped on a resumed run \u2014 so a Colab crash/refresh loses at most
+    the in-flight arm, not the whole run.
     """
     methods = list(methods)
     seeds = list(seeds)
+    ckpt = _Checkpoint(checkpoint_dir)
     result = MultiSeedResult(methods=methods, seeds=seeds)
     for method in methods:
         result.per_seed[method] = {m: [] for m in DECISIVE_METRICS}
         result.per_seed_category[method] = {}
 
     for seed in seeds:
-        examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
-        if limit is not None:
-            examples = examples[:limit]
+        examples = None  # generated lazily; skipped entirely if all arms cached
         for method in methods:
-            runner = BaselineRunner(settings_factory=settings_factory, top_k=top_k)
-            strategy = _build_strategy(
-                method, settings_factory, extractor=extractor, embeddings=embeddings
-            )
-            records: list[dict] = []
-            for example in examples:
-                quarantined = runner._ingest_sessions(strategy, example)
-                for q_index, question in enumerate(example.questions):
-                    records.append(
-                        runner._run_question(
-                            method, strategy, example, q_index, question,
-                            write_quarantined=quarantined,
+            key = f"ms__{method}__seed{seed}__pc{per_category}"
+            cached = ckpt.load(key)
+            if cached is not None:
+                dm = cached["decisive"]
+                cat = cached.get("category", {})
+            else:
+                if examples is None:
+                    examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
+                    if limit is not None:
+                        examples = examples[:limit]
+                runner = BaselineRunner(settings_factory=settings_factory, top_k=top_k)
+                strategy = _build_strategy(
+                    method, settings_factory, extractor=extractor, embeddings=embeddings
+                )
+                records: list[dict] = []
+                for example in examples:
+                    quarantined = runner._ingest_sessions(strategy, example)
+                    for q_index, question in enumerate(example.questions):
+                        records.append(
+                            runner._run_question(
+                                method, strategy, example, q_index, question,
+                                write_quarantined=quarantined,
+                            )
                         )
-                    )
-            dm = decisive_metrics(records)
+                dm = decisive_metrics(records)
+                cat = task_success_by_category(records)
+                ckpt.save(key, {"decisive": dm, "category": cat})
             for metric, value in dm.items():
-                result.per_seed[method][metric].append(value)
-            result.per_seed_category[method][seed] = task_success_by_category(records)
+                result.per_seed[method][metric].append(float(value))
+            result.per_seed_category[method][seed] = cat
     return result
 
 
@@ -335,6 +396,7 @@ def threshold_sweep(
     settings_factory: Callable[[], Settings] = _default_settings,
     extractor: object | None = None,
     embeddings: object | None = None,
+    checkpoint_dir: Optional[str] = None,
 ) -> dict[str, Any]:
     """Sweep the contradiction threshold τ and report calibration (Table VI).
 
@@ -343,12 +405,22 @@ def threshold_sweep(
     objective ``J(τ) = ContrRate + lambda_q*FalseQuarantine + lambda_c*ECE``.
     The ``settings_factory`` supplies the base configuration (extractor /
     embeddings); τ is overridden per row. A shared ``extractor`` / ``embeddings``
-    is injected so heavy models are not reloaded per τ. Returns per-τ rows and
-    the τ minimizing J.
+    is injected so heavy models are not reloaded per τ; completed τ rows are
+    checkpointed to ``checkpoint_dir`` and skipped on resume. Returns per-τ rows
+    and the τ minimizing J.
     """
-    examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
+    ckpt = _Checkpoint(checkpoint_dir)
+    examples = None
     rows: list[dict[str, float]] = []
     for tau in taus:
+        key = f"tau__{method}__{tau}__seed{seed}__pc{per_category}"
+        cached = ckpt.load(key)
+        if cached is not None:
+            rows.append(cached)
+            continue
+        if examples is None:
+            examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
+
         def tau_factory(tau=tau) -> Settings:
             return settings_factory().model_copy(
                 update={"contradiction_high_confidence": float(tau)}
@@ -374,14 +446,16 @@ def threshold_sweep(
         brier = stats.brier_score(confidences, correct)
         false_q = _false_quarantine_rate(records)
         j = dm["contradiction_rate"] + lambda_q * false_q + lambda_c * ece
-        rows.append({
+        row = {
             "tau": float(tau),
             "contradiction_rate": dm["contradiction_rate"],
             "false_quarantine": false_q,
             "ece": ece,
             "brier": brier,
             "objective_j": j,
-        })
+        }
+        ckpt.save(key, row)
+        rows.append(row)
     best = min(rows, key=lambda r: r["objective_j"]) if rows else None
     return {"rows": rows, "selected_tau": best["tau"] if best else None,
             "lambda_q": lambda_q, "lambda_c": lambda_c}
@@ -398,12 +472,14 @@ def stress_by_intensity(
     settings_factory: Callable[[], Settings] = _default_settings,
     extractor: object | None = None,
     embeddings: object | None = None,
+    checkpoint_dir: Optional[str] = None,
 ) -> dict[str, Any]:
     """Aggregate task success by perturbation intensity and entity-resolution.
 
     Returns, per method, mean task success at low/medium/high intensity (Table
     IX), and the entity-resolution F1 / false-merge over alias scenarios (Table
-    VIII).
+    VIII). Each ``(method, seed)`` and the entity-resolution pass are
+    checkpointed to ``checkpoint_dir`` and skipped on resume.
     """
     from ocm.evaluation.stress import (
         INTENSITY_LEVELS,
@@ -413,12 +489,22 @@ def stress_by_intensity(
 
     methods = list(methods)
     seeds = list(seeds)
+    ckpt = _Checkpoint(checkpoint_dir)
     task_success: dict[str, dict[str, list[float]]] = {
         m: {lvl: [] for lvl in INTENSITY_LEVELS} for m in methods
     }
     for seed in seeds:
-        examples = generate_stress_examples(seed=seed, per_class=per_class)
+        examples = None
         for method in methods:
+            key = f"stress__{method}__seed{seed}__pc{per_class}"
+            cached = ckpt.load(key)
+            if cached is not None:
+                for lvl in INTENSITY_LEVELS:
+                    if cached.get(lvl) is not None:
+                        task_success[method][lvl].append(float(cached[lvl]))
+                continue
+            if examples is None:
+                examples = generate_stress_examples(seed=seed, per_class=per_class)
             runner = BaselineRunner(settings_factory=settings_factory)
             strategy = _build_strategy(
                 method, settings_factory, extractor=extractor, embeddings=embeddings
@@ -433,10 +519,14 @@ def stress_by_intensity(
                     )
                     lvl = rec.get("intensity") or "low"
                     by_level.setdefault(lvl, []).append(float(rec.get("score", 0.0)))
+            seed_means: dict[str, Optional[float]] = {}
             for lvl in INTENSITY_LEVELS:
                 vals = by_level.get(lvl) or []
-                if vals:
-                    task_success[method][lvl].append(100.0 * sum(vals) / len(vals))
+                mean = (100.0 * sum(vals) / len(vals)) if vals else None
+                seed_means[lvl] = mean
+                if mean is not None:
+                    task_success[method][lvl].append(mean)
+            ckpt.save(key, seed_means)
 
     intensity_table = {
         method: {
@@ -446,12 +536,16 @@ def stress_by_intensity(
         for method in methods
     }
     # Entity resolution is governance-path-independent (writes are governed);
-    # evaluate it once over the alias stress examples.
-    alias_examples = generate_stress_examples(seed=seeds[0], per_class=per_class)
-    er = evaluate_entity_resolution(
-        alias_examples, settings_factory=settings_factory,
-        extractor=extractor, embeddings=embeddings,
-    )
+    # evaluate it once over the alias stress examples (checkpointed).
+    er_key = f"stress_entity_resolution__seed{seeds[0]}__pc{per_class}"
+    er = ckpt.load(er_key)
+    if er is None:
+        alias_examples = generate_stress_examples(seed=seeds[0], per_class=per_class)
+        er = evaluate_entity_resolution(
+            alias_examples, settings_factory=settings_factory,
+            extractor=extractor, embeddings=embeddings,
+        )
+        ckpt.save(er_key, er)
     return {"task_success_by_intensity": intensity_table, "entity_resolution": er}
 
 
@@ -474,6 +568,8 @@ def run_full_suite(
     embeddings: object | None = None,
     stress_per_class: int = 30,
     taus: Iterable[float] = (0.6, 0.7, 0.8, 0.9, 0.95),
+    checkpoint_dir: Optional[str] = None,
+    out_path: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run the **entire** research protocol and return a structured result.
 
@@ -486,28 +582,37 @@ def run_full_suite(
     :class:`~ocm.extraction.transformers_extractor.TransformersExtractor`) and
     ``embeddings`` (e.g. a real ``LocalEmbeddingProvider``) to run the genuine
     LLM-driven experiment; they are loaded once and reused across every arm.
+
+    Set ``checkpoint_dir`` (e.g. a Google Drive path) to persist per-unit-of-work
+    progress so a crashed/refreshed session resumes instead of restarting; the
+    final report is written to ``out_path`` (defaulting to
+    ``<checkpoint_dir>/report.json`` when a checkpoint dir is given).
     """
+    seeds = list(seeds)
     baselines = list(baselines)
     methods = baselines + [a for a in DEFAULT_ABLATIONS if a != "full"]
 
     ms = run_multiseed(
         methods, seeds=seeds, per_category=per_category,
         settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+        checkpoint_dir=checkpoint_dir,
     )
     aggregated = aggregate_methods(ms)
     non_ocmr = [b for b in baselines if b != "B3"]
     significance = significance_vs_best_baseline(ms, "B3", non_ocmr or baselines)
     sweep = threshold_sweep(
-        taus=taus, seed=list(seeds)[0], per_category=per_category,
+        taus=taus, seed=seeds[0], per_category=per_category,
         settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+        checkpoint_dir=checkpoint_dir,
     )
     stress = stress_by_intensity(
-        methods=baselines, seeds=list(seeds)[:1], per_class=stress_per_class,
+        methods=baselines, seeds=seeds[:1], per_class=stress_per_class,
         settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+        checkpoint_dir=checkpoint_dir,
     )
-    return {
+    report = {
         "methods": methods,
-        "seeds": list(seeds),
+        "seeds": seeds,
         "per_category": per_category,
         "decisive_metrics": {
             method: {metric: aggregated[method][metric].__dict__ for metric in aggregated[method]}
@@ -517,6 +622,15 @@ def run_full_suite(
         "threshold_sweep": sweep,
         "stress": stress,
     }
+    # Persist the final report (Drive-friendly).
+    if out_path is None and checkpoint_dir:
+        out_path = os.path.join(checkpoint_dir, "report.json")
+    if out_path:
+        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, indent=2, default=str)
+        report["_saved_to"] = out_path
+    return report
 
 
 def print_report(report: dict[str, Any]) -> None:

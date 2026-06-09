@@ -170,6 +170,19 @@ def test_run_full_suite_shape_and_significance_excludes_b3():
     assert "task_success_by_intensity" in report["stress"]
 
 
+def test_run_full_suite_checkpoint_resume(tmp_path):
+    import os
+    d = str(tmp_path / "ckpt")
+    r1 = exp.run_full_suite(seeds=[1337], per_category=1, stress_per_class=2, checkpoint_dir=d)
+    files = os.listdir(d)
+    assert any(f.startswith("ms__") for f in files)
+    assert os.path.exists(os.path.join(d, "report.json"))
+    assert str(r1.get("_saved_to", "")).endswith("report.json")
+    # A resumed run reproduces the decisive metrics from the checkpoints.
+    r2 = exp.run_full_suite(seeds=[1337], per_category=1, stress_per_class=2, checkpoint_dir=d)
+    assert r1["decisive_metrics"] == r2["decisive_metrics"]
+
+
 def test_shared_extractor_is_injected_into_every_arm():
     """A shared extractor/embeddings object is reused across all containers."""
     from ocm.extraction.transformers_extractor import TransformersExtractor
