@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / tooling caches
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# OCM runtime artifacts (storage / vector index / generated data)
+ocm.db
+*.sqlite
+*.sqlite3
+.chroma/
+benchmark.jsonl
+results.json
+vllm.log
+
+# OS / editor
+.DS_Store
+.ipynb_checkpoints/
