@@ -118,17 +118,22 @@ DEFAULT_ABLATIONS: tuple[str, ...] = (
 
 
 def build_ablation_strategy(
-    name: str, settings_factory: Callable[[], Settings]
+    name: str,
+    settings_factory: Callable[[], Settings],
+    *,
+    extractor: object | None = None,
+    embeddings: object | None = None,
 ) -> MemoryStrategy:
     """Build a :class:`MemoryStrategy` for ablation ``name``.
 
     Constructs a dedicated :class:`CoreContainer` whose :class:`Settings` carry
     the ablation's write-time governance overrides, then wires a strategy with
-    the ablation's retrieval toggles.
+    the ablation's retrieval toggles. A shared ``extractor`` / ``embeddings``
+    (loaded once) is injected so a heavy model is not reloaded per arm.
     """
     if name not in ABLATIONS:
         raise KeyError(f"unknown ablation {name!r}; known: {sorted(ABLATIONS)}")
     spec = ABLATIONS[name]
     settings = settings_factory().model_copy(update=spec.settings_overrides)
-    container = CoreContainer(settings)
+    container = CoreContainer(settings, extractor=extractor, embeddings=embeddings)
     return MemoryStrategy(spec.name, container, spec.toggles)

@@ -89,6 +89,7 @@ class CoreContainer:
         settings: Settings,
         repo: StorageRepository | None = None,
         extractor: object | None = None,
+        embeddings: "EmbeddingProvider | None" = None,
     ) -> None:
         """Build the full component graph from ``settings``.
 
@@ -105,6 +106,11 @@ class CoreContainer:
                 :class:`LLMExtractor` wired with a fake HTTP client for offline
                 tests). When omitted the extractor is selected from
                 ``settings.extractor`` (Req 27.3).
+            embeddings: Optional pre-built :class:`EmbeddingProvider` to inject.
+                Lets an expensive provider (e.g. a real sentence-transformers
+                model) be **loaded once and shared** across many containers
+                (the multi-seed/ablation experiment harness). When omitted the
+                provider is selected from ``settings`` (Req 27.3).
         """
         self.settings = settings
 
@@ -118,8 +124,10 @@ class CoreContainer:
         # --- graph: rebuild from durable storage on startup (Req 11.8) ----
         self.graph: GraphStore = rebuild_graph(self.repo)
 
-        # --- embeddings + vector index ------------------------------------
-        self.embeddings: EmbeddingProvider = self._build_embedding_provider(settings)
+        # --- embeddings + vector index (provider injectable, Req 27.3) ----
+        self.embeddings: EmbeddingProvider = (
+            embeddings if embeddings is not None else self._build_embedding_provider(settings)
+        )
         self.vector_index = VectorIndex(
             self.embeddings,
             chroma_mode=settings.chroma_mode,

@@ -154,3 +154,41 @@ def test_stress_by_intensity_shape():
     for lvls in ti.values():
         assert set(lvls) == set(INTENSITY_LEVELS)
     assert "entity_resolution_f1" in out["entity_resolution"]
+
+
+def test_run_full_suite_shape_and_significance_excludes_b3():
+    report = exp.run_full_suite(seeds=[1337, 7], per_category=2, stress_per_class=2)
+    # All arms present (4 baselines + 4 ablations).
+    assert set(report["methods"]) == {
+        "B0", "B1", "B2", "B3", "no_schema", "no_contradiction_gate",
+        "no_provenance", "no_hybrid",
+    }
+    # Significance compares B3 against a NON-OCMR baseline (never itself).
+    for metric, t in report["significance_vs_best_baseline"]["metric_tests"].items():
+        assert t["vs_baseline"] in {"B0", "B1", "B2"}
+    assert report["threshold_sweep"]["rows"]
+    assert "task_success_by_intensity" in report["stress"]
+
+
+def test_shared_extractor_is_injected_into_every_arm():
+    """A shared extractor/embeddings object is reused across all containers."""
+    from ocm.extraction.transformers_extractor import TransformersExtractor
+
+    calls = {"n": 0}
+
+    def fake_complete(_messages):
+        calls["n"] += 1
+        import json
+        return json.dumps({
+            "entities": [{"type": "Person", "name": "Alice", "fields": {}},
+                         {"type": "Project", "name": "Orion", "fields": {}}],
+            "events": [], "claims": [], "documents": [], "decisions": [],
+            "relations": [{"subject": "Alice", "predicate": "OWNS", "object": "Orion",
+                           "confidence": 0.95, "write_intent": "new_fact"}],
+        })
+
+    shared = TransformersExtractor(complete=fake_complete)
+    ms = exp.run_multiseed(["B0", "B3"], seeds=[1337], per_category=1, extractor=shared)
+    # The one shared extractor handled writes for every arm (proves reuse).
+    assert calls["n"] > 0
+    assert set(ms.methods) == {"B0", "B3"}

@@ -202,6 +202,9 @@ def _norm(text: str) -> str:
 def evaluate_entity_resolution(
     examples: list[BenchmarkExample],
     settings_factory=None,
+    *,
+    extractor=None,
+    embeddings=None,
 ) -> dict[str, float]:
     """Replay alias examples and score entity-resolution quality.
 
@@ -231,7 +234,9 @@ def evaluate_entity_resolution(
     alias_examples = [e for e in examples if e.gold_entity_groups]
     for example in alias_examples:
         n_examples += 1
-        container = CoreContainer(settings_factory())
+        container = CoreContainer(
+            settings_factory(), extractor=extractor, embeddings=embeddings
+        )
         for session in example.sessions:
             container.write_pipeline.run(
                 session.input, f"{example.id}:{session.session_id}"

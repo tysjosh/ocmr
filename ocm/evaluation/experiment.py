@@ -37,7 +37,7 @@ from typing import Any, Callable, Iterable, Optional
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
 from ocm.evaluation import stats
-from ocm.evaluation.ablations import build_ablation_strategy
+from ocm.evaluation.ablations import DEFAULT_ABLATIONS, build_ablation_strategy
 from ocm.evaluation.baselines import build_baseline
 from ocm.evaluation.benchmark import BenchmarkGenerator
 from ocm.evaluation.runner import BaselineRunner
@@ -143,11 +143,26 @@ def task_success_by_category(records: list[dict]) -> dict[str, float]:
 # --------------------------------------------------------------------------- #
 # Method construction (baselines + ablations behind one name space)
 # --------------------------------------------------------------------------- #
-def _build_strategy(method: str, settings_factory: Callable[[], Settings]) -> MemoryStrategy:
-    """Build a strategy for a method name (a B-baseline or a named ablation)."""
+def _build_strategy(
+    method: str,
+    settings_factory: Callable[[], Settings],
+    *,
+    extractor: object | None = None,
+    embeddings: object | None = None,
+) -> MemoryStrategy:
+    """Build a strategy for a method name (a B-baseline or a named ablation).
+
+    A shared ``extractor`` / ``embeddings`` (loaded once) is injected into every
+    container so a heavy model is not reloaded per arm.
+    """
     if method.startswith("B"):
-        return build_baseline(method, CoreContainer(settings_factory()))
-    return build_ablation_strategy(method, settings_factory)
+        container = CoreContainer(
+            settings_factory(), extractor=extractor, embeddings=embeddings
+        )
+        return build_baseline(method, container)
+    return build_ablation_strategy(
+        method, settings_factory, extractor=extractor, embeddings=embeddings
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -173,12 +188,16 @@ def run_multiseed(
     limit: Optional[int] = None,
     settings_factory: Callable[[], Settings] = _default_settings,
     top_k: int = 10,
+    extractor: object | None = None,
+    embeddings: object | None = None,
 ) -> MultiSeedResult:
     """Run ``methods`` across ``seeds`` and collect decisive metrics per seed.
 
     Each seed generates its own benchmark (the source of per-seed variance). For
     speed, ``per_category`` controls the benchmark size per seed and ``limit``
-    optionally caps the example count.
+    optionally caps the example count. A shared ``extractor`` / ``embeddings``
+    (loaded once, e.g. a local Qwen + sentence-transformers) is injected into
+    every container so heavy models are not reloaded per arm.
     """
     methods = list(methods)
     seeds = list(seeds)
@@ -193,7 +212,9 @@ def run_multiseed(
             examples = examples[:limit]
         for method in methods:
             runner = BaselineRunner(settings_factory=settings_factory, top_k=top_k)
-            strategy = _build_strategy(method, settings_factory)
+            strategy = _build_strategy(
+                method, settings_factory, extractor=extractor, embeddings=embeddings
+            )
             records: list[dict] = []
             for example in examples:
                 quarantined = runner._ingest_sessions(strategy, example)
@@ -312,6 +333,8 @@ def threshold_sweep(
     lambda_c: float = 10.0,
     method: str = "B3",
     settings_factory: Callable[[], Settings] = _default_settings,
+    extractor: object | None = None,
+    embeddings: object | None = None,
 ) -> dict[str, Any]:
     """Sweep the contradiction threshold τ and report calibration (Table VI).
 
@@ -319,8 +342,9 @@ def threshold_sweep(
     contradiction rate, false-quarantine rate, ECE, Brier, and the selection
     objective ``J(τ) = ContrRate + lambda_q*FalseQuarantine + lambda_c*ECE``.
     The ``settings_factory`` supplies the base configuration (extractor /
-    embeddings); τ is overridden per row. Returns per-τ rows and the τ
-    minimizing J.
+    embeddings); τ is overridden per row. A shared ``extractor`` / ``embeddings``
+    is injected so heavy models are not reloaded per τ. Returns per-τ rows and
+    the τ minimizing J.
     """
     examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
     rows: list[dict[str, float]] = []
@@ -331,7 +355,9 @@ def threshold_sweep(
             )
 
         runner = BaselineRunner(settings_factory=tau_factory)
-        strategy = _build_strategy(method, tau_factory)
+        strategy = _build_strategy(
+            method, tau_factory, extractor=extractor, embeddings=embeddings
+        )
         records: list[dict] = []
         for example in examples:
             quarantined = runner._ingest_sessions(strategy, example)
@@ -370,6 +396,8 @@ def stress_by_intensity(
     *,
     per_class: int = 8,
     settings_factory: Callable[[], Settings] = _default_settings,
+    extractor: object | None = None,
+    embeddings: object | None = None,
 ) -> dict[str, Any]:
     """Aggregate task success by perturbation intensity and entity-resolution.
 
@@ -392,7 +420,9 @@ def stress_by_intensity(
         examples = generate_stress_examples(seed=seed, per_class=per_class)
         for method in methods:
             runner = BaselineRunner(settings_factory=settings_factory)
-            strategy = _build_strategy(method, settings_factory)
+            strategy = _build_strategy(
+                method, settings_factory, extractor=extractor, embeddings=embeddings
+            )
             by_level: dict[str, list[float]] = {lvl: [] for lvl in INTENSITY_LEVELS}
             for example in examples:
                 quarantined = runner._ingest_sessions(strategy, example)
@@ -418,5 +448,109 @@ def stress_by_intensity(
     # Entity resolution is governance-path-independent (writes are governed);
     # evaluate it once over the alias stress examples.
     alias_examples = generate_stress_examples(seed=seeds[0], per_class=per_class)
-    er = evaluate_entity_resolution(alias_examples, settings_factory=settings_factory)
+    er = evaluate_entity_resolution(
+        alias_examples, settings_factory=settings_factory,
+        extractor=extractor, embeddings=embeddings,
+    )
     return {"task_success_by_intensity": intensity_table, "entity_resolution": er}
+
+
+# --------------------------------------------------------------------------- #
+# Full research suite (one entry point for the whole protocol)
+# --------------------------------------------------------------------------- #
+#: Full benchmark size per category (the research protocol, not a smoke run).
+FULL_PER_CATEGORY: int = 25
+
+DEFAULT_BASELINES: tuple[str, ...] = ("B0", "B1", "B2", "B3")
+
+
+def run_full_suite(
+    *,
+    seeds: Iterable[int] = DEFAULT_SEEDS,
+    per_category: int = FULL_PER_CATEGORY,
+    baselines: Iterable[str] = DEFAULT_BASELINES,
+    settings_factory: Callable[[], Settings] = _default_settings,
+    extractor: object | None = None,
+    embeddings: object | None = None,
+    stress_per_class: int = 30,
+    taus: Iterable[float] = (0.6, 0.7, 0.8, 0.9, 0.95),
+) -> dict[str, Any]:
+    """Run the **entire** research protocol and return a structured result.
+
+    Produces every table group at full scale: decisive metrics with 95% CIs for
+    baselines + ablations (Tables II\u2013IV/X), paired significance vs the strongest
+    baseline (Table VII), the \u03c4-sweep + calibration (Table VI), and the stress
+    suite (Tables VIII\u2013IX).
+
+    Pass a shared ``extractor`` (e.g. an in-process Qwen
+    :class:`~ocm.extraction.transformers_extractor.TransformersExtractor`) and
+    ``embeddings`` (e.g. a real ``LocalEmbeddingProvider``) to run the genuine
+    LLM-driven experiment; they are loaded once and reused across every arm.
+    """
+    baselines = list(baselines)
+    methods = baselines + [a for a in DEFAULT_ABLATIONS if a != "full"]
+
+    ms = run_multiseed(
+        methods, seeds=seeds, per_category=per_category,
+        settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+    )
+    aggregated = aggregate_methods(ms)
+    non_ocmr = [b for b in baselines if b != "B3"]
+    significance = significance_vs_best_baseline(ms, "B3", non_ocmr or baselines)
+    sweep = threshold_sweep(
+        taus=taus, seed=list(seeds)[0], per_category=per_category,
+        settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+    )
+    stress = stress_by_intensity(
+        methods=baselines, seeds=list(seeds)[:1], per_class=stress_per_class,
+        settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+    )
+    return {
+        "methods": methods,
+        "seeds": list(seeds),
+        "per_category": per_category,
+        "decisive_metrics": {
+            method: {metric: aggregated[method][metric].__dict__ for metric in aggregated[method]}
+            for method in aggregated
+        },
+        "significance_vs_best_baseline": significance,
+        "threshold_sweep": sweep,
+        "stress": stress,
+    }
+
+
+def print_report(report: dict[str, Any]) -> None:
+    """Pretty-print a :func:`run_full_suite` report as the paper's tables."""
+    agg = report["decisive_metrics"]
+    print("\n=== Decisive metrics (mean [95% CI] across seeds) ===")
+    print(f"{'Method':<22}{'TaskSuccess up':<22}{'Contradiction dn':<22}{'ConstraintViol dn':<22}")
+    for method in report["methods"]:
+        m = agg[method]
+        def ci(metric: str) -> str:
+            d = m[metric]
+            return f"{d['mean']:.1f} [{d['low']:.1f},{d['high']:.1f}]"
+        print(f"{method:<22}{ci('task_success'):<22}{ci('contradiction_rate'):<22}{ci('constraint_violations'):<22}")
+
+    print("\n=== Significance: B3 vs strongest non-OCMR baseline (Holm-Bonferroni) ===")
+    for metric, t in report["significance_vs_best_baseline"]["metric_tests"].items():
+        eff = t["effect_size"]
+        eff_s = f"{eff:.3f}" if isinstance(eff, (int, float)) else str(eff)
+        print(f"  {metric:<22} vs {t['vs_baseline']:<4} {t['test']:<14} "
+              f"corrected_p={t['corrected_p']:.4f} reject={t['reject_null']} "
+              f"{t['effect_name']}={eff_s}")
+
+    print("\n=== Threshold sweep (tau) + calibration ===")
+    print(f"{'tau':<8}{'ContrRate':<12}{'FalseQuar':<12}{'ECE':<10}{'Brier':<10}{'J(tau)':<10}")
+    for row in report["threshold_sweep"]["rows"]:
+        print(f"{row['tau']:<8}{row['contradiction_rate']:<12.2f}{row['false_quarantine']:<12.2f}"
+              f"{row['ece']:<10.3f}{row['brier']:<10.3f}{row['objective_j']:<10.3f}")
+    print(f"  selected tau (min J): {report['threshold_sweep']['selected_tau']}")
+
+    print("\n=== Stress: task success by perturbation intensity ===")
+    ti = report["stress"]["task_success_by_intensity"]
+    print(f"{'Method':<10}{'low':<10}{'medium':<10}{'high':<10}")
+    for method, lvls in ti.items():
+        print(f"{method:<10}{lvls.get('low', 0):<10.1f}{lvls.get('medium', 0):<10.1f}{lvls.get('high', 0):<10.1f}")
+    er = report["stress"]["entity_resolution"]
+    print(f"  entity-resolution F1={er['entity_resolution_f1']:.3f} "
+          f"false_merge_rate={er['false_merge_rate']:.3f} (n={int(er['n_examples'])})")
