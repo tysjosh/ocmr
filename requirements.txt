@@ -26,7 +26,8 @@ sentence-transformers>=2.6  # real all-MiniLM-L6-v2 embeddings (--embeddings loc
 transformers>=4.45        # AutoModelForCausalLM / AutoTokenizer
 accelerate>=0.30          # device_map="auto" sharding
 # torch                   # install the build matching your CUDA/CPU (preinstalled on Colab)
-# bitsandbytes>=0.43      # optional 4-bit loading on smaller GPUs
+# autoawq                 # to load AWQ 4-bit checkpoints, e.g. Qwen2.5-32B-Instruct-AWQ
+# bitsandbytes>=0.43      # alternative on-the-fly 4-bit/8-bit loading
 
 # --- Testing / evaluation (dev) ---------------------------------------------
 pytest>=8.0               # test runner
