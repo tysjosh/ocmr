@@ -1,0 +1,33 @@
+# Ontology-Constrained Memory (OCM) — Python dependencies.
+# Mirrors the [project] dependencies in pyproject.toml. Python >= 3.11.
+#
+#   pip install -r requirements.txt
+#
+# Offline-first: chromadb, sentence-transformers, transformers, accelerate are
+# only needed for real vector store / real embeddings / a local in-process LLM
+# extractor. The code falls back to a pure-Python vector index, a deterministic
+# embedding provider, and the offline mock extractor when they are absent.
+
+# --- Core runtime (required) ------------------------------------------------
+pydantic>=2.6,<3          # entity/assertion models, settings, contracts (v2)
+networkx>=3.2             # in-memory accepted-only graph projection (Graph_Store)
+fastapi>=0.110            # POST/GET /memory/* API service
+uvicorn>=0.29             # ASGI server for `python -m ocm.scripts.serve`
+httpx>=0.27               # OpenAI-compatible LLM transport + FastAPI TestClient
+
+# --- Real embeddings / vector store (optional; offline fallbacks exist) ------
+chromadb>=0.4.24          # persistent/in-memory vector index (R2)
+sentence-transformers>=2.6  # real all-MiniLM-L6-v2 embeddings (--embeddings local)
+
+# --- Local in-process LLM extractor (optional; for TransformersExtractor) ----
+# Needed only to run a local Qwen (or other HF model) as the W1 extractor in the
+# same process via CoreContainer(..., extractor=TransformersExtractor(...)). The
+# OpenAI-compatible LLMExtractor path needs none of these (just httpx).
+transformers>=4.45        # AutoModelForCausalLM / AutoTokenizer
+accelerate>=0.30          # device_map="auto" sharding
+# torch                   # install the build matching your CUDA/CPU (preinstalled on Colab)
+# bitsandbytes>=0.43      # optional 4-bit loading on smaller GPUs
+
+# --- Testing / evaluation (dev) ---------------------------------------------
+pytest>=8.0               # test runner
+hypothesis>=6.100         # property-based tests
