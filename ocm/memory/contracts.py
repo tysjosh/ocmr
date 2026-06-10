@@ -20,7 +20,7 @@ Requirements: 6.1, 6.2, 8.1, 9.7, 10.1, 19.2.
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, confloat
+from pydantic import BaseModel, Field, confloat
 
 from ocm.ontology.enums import ResolutionStatus, Severity, WriteIntent
 
@@ -29,15 +29,18 @@ class ExtractionResult(BaseModel):
     """Raw, typed output of an extractor (W1).
 
     Items are kept as plain dicts here and validated into their concrete entity
-    models downstream during normalization/resolution.
+    models downstream during normalization/resolution. The six item lists
+    default to empty so a model that omits a section (e.g. no ``documents``)
+    still validates rather than hard-failing the whole write; the offline
+    ``MockExtractor`` always populates all six explicitly.
     """
 
-    entities: list[dict]
-    events: list[dict]
-    claims: list[dict]
-    documents: list[dict]
-    decisions: list[dict]
-    relations: list[dict]  # {subject, predicate, object, confidence, write_intent?}
+    entities: list[dict] = Field(default_factory=list)
+    events: list[dict] = Field(default_factory=list)
+    claims: list[dict] = Field(default_factory=list)
+    documents: list[dict] = Field(default_factory=list)
+    decisions: list[dict] = Field(default_factory=list)
+    relations: list[dict] = Field(default_factory=list)  # {subject, predicate, object, confidence, write_intent?}
     extractor_version: str
 
 
