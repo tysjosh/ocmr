@@ -91,6 +91,41 @@ class _Checkpoint:
 #: Default seeds (5 per method, per the paper's protocol).
 DEFAULT_SEEDS: tuple[int, ...] = (1337, 7, 42, 99, 2024)
 
+
+def _seed_everything(seed: int) -> None:
+    """Best-effort global seeding for reproducibility (import-safe).
+
+    Seeds Python's ``random`` always, and ``numpy`` / ``torch`` /
+    ``transformers`` *only if they are importable*, so the offline test
+    environment (which has none of the ML stack) stays dependency-free while a
+    real LLM run on Colab gets fully seeded. With the local extractor's greedy
+    decoding (``do_sample=False``) generation is already deterministic; this
+    additionally pins weight-init/dropout RNG and any sampling fallbacks so each
+    seed is reproducible end to end.
+    """
+    import random as _random
+
+    _random.seed(seed)
+    try:  # numpy
+        import numpy as _np
+
+        _np.random.seed(seed)
+    except Exception:  # pragma: no cover - numpy absent in hermetic tests
+        pass
+    try:  # transformers convenience seeder (also seeds torch when present)
+        from transformers import set_seed as _set_seed  # type: ignore
+
+        _set_seed(seed)
+    except Exception:  # pragma: no cover - transformers absent offline
+        try:  # fall back to torch directly
+            import torch as _torch  # type: ignore
+
+            _torch.manual_seed(seed)
+            if _torch.cuda.is_available():  # pragma: no cover - GPU only
+                _torch.cuda.manual_seed_all(seed)
+        except Exception:  # pragma: no cover - torch absent offline
+            pass
+
 #: The three decisive metrics and their optimization direction.
 DECISIVE_METRICS: dict[str, str] = {
     "task_success": "max",
@@ -258,6 +293,7 @@ def run_multiseed(
         result.per_seed_category[method] = {}
 
     for seed in seeds:
+        _seed_everything(seed)
         examples = None  # generated lazily; skipped entirely if all arms cached
         for method in methods:
             key = f"ms__{method}__seed{seed}__pc{per_category}"
@@ -410,6 +446,7 @@ def threshold_sweep(
     and the τ minimizing J.
     """
     ckpt = _Checkpoint(checkpoint_dir)
+    _seed_everything(seed)
     examples = None
     rows: list[dict[str, float]] = []
     for tau in taus:
@@ -494,6 +531,7 @@ def stress_by_intensity(
         m: {lvl: [] for lvl in INTENSITY_LEVELS} for m in methods
     }
     for seed in seeds:
+        _seed_everything(seed)
         examples = None
         for method in methods:
             key = f"stress__{method}__seed{seed}__pc{per_class}"
