@@ -93,6 +93,28 @@ from ocm.validation.schema_validator import SchemaValidator
 #: Vector_Index (Req 16.6). Optional and side-effecting.
 MemoryEmbedHook = Callable[[str, BaseModel], None]
 
+#: String tokens an LLM may emit for an absent value. JSON ``null`` decodes to
+#: Python ``None``, but a model often emits these as literal *strings* inside a
+#: JSON string field; they must be treated as "no value" before Pydantic tries
+#: to parse them as a datetime.
+_NULLISH_STRINGS = frozenset({"", "null", "none", "n/a", "na", "nil", "undefined"})
+
+
+def _coerce_optional_datetime(value: Any) -> Any:
+    """Return ``None`` for nullish/empty LLM placeholders, else the value as-is.
+
+    LLM extractors sometimes fill an unknown timestamp with the literal string
+    ``"null"`` (or ``""``/``"none"``) rather than JSON ``null``. Such strings are
+    truthy and would reach the ``Event`` model and fail datetime parsing, so we
+    normalize them to ``None`` here; genuine datetime/ISO-string values pass
+    through untouched for Pydantic to validate.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip().lower() in _NULLISH_STRINGS:
+        return None
+    return value
+
 #: Predicate for the first-class status assertion ``Task -[HAS_STATUS]-> StatusValue``.
 #: Promoting status to an assertion lets a status flip become an
 #: assertion-to-assertion contradiction whose quarantine points at the accepted
@@ -385,8 +407,8 @@ class WritePipeline:
             model = Event(
                 id=event_id,
                 type=ev.get("type", "event"),
-                timestamp_start=ev.get("timestamp_start") or now,
-                timestamp_end=ev.get("timestamp_end"),
+                timestamp_start=_coerce_optional_datetime(ev.get("timestamp_start")) or now,
+                timestamp_end=_coerce_optional_datetime(ev.get("timestamp_end")),
                 description=ev.get("description", name),
             )
             self._persist_node("Event", model, name=name)
@@ -412,7 +434,7 @@ class WritePipeline:
                 text=text,
                 source_ref=source_ref,
                 confidence=claim.get("confidence", 1.0),
-                created_at=claim.get("created_at") or now,
+                created_at=_coerce_optional_datetime(claim.get("created_at")) or now,
             )
             self.repo.upsert_claim(model)
             self.provenance_tracker.record(
@@ -439,7 +461,7 @@ class WritePipeline:
                 id=doc_id,
                 title=title,
                 path_or_url=path,
-                created_at=doc.get("created_at") or now,
+                created_at=_coerce_optional_datetime(doc.get("created_at")) or now,
                 tags=list(doc.get("tags") or []),
             )
             self.repo.upsert_document(model)
@@ -487,7 +509,7 @@ class WritePipeline:
             model = Decision(
                 id=dec_id,
                 summary=summary,
-                timestamp=dec.get("timestamp") or now,
+                timestamp=_coerce_optional_datetime(dec.get("timestamp")) or now,
                 made_by=dec.get("made_by"),
                 status=status,
             )
@@ -825,6 +847,11 @@ class WritePipeline:
     ) -> BaseModel:
         """Build the concrete ontology model for an extracted entity dict."""
         fields = dict(ent.get("fields") or {})
+        # Normalize LLM nullish placeholders ("null"/"none"/"") in datetime
+        # fields to real None so model defaults apply instead of failing parse.
+        for _dt_key in ("due_at", "timestamp"):
+            if _dt_key in fields:
+                fields[_dt_key] = _coerce_optional_datetime(fields[_dt_key])
         name = ent.get("name") or ent.get("title") or ""
 
         def present(*keys: str) -> dict:
