@@ -70,6 +70,15 @@ SYSTEM_PROMPT = (
     "status in fields, e.g. {\"type\":\"Task\",\"name\":\"T1\","
     '"fields":{"status":"done"}}.\n'
     "\n"
+    "STATUS / COMPLETION is NOT a relation. There is no COMPLETED/STARTED/"
+    "FINISHED predicate. To say a task is completed/started/blocked/cancelled, "
+    "emit the Task entity with fields.status set to one of: todo, in_progress, "
+    "blocked, done, cancelled. Examples: \"Bob completed Task T1\" -> "
+    '{"type":"Task","name":"T1","fields":{"status":"done"}} (plus, if the doer '
+    "matters, an ASSIGNED_TO relation T1->Bob). \"Task T1 is not started\" -> "
+    '{"type":"Task","name":"T1","fields":{"status":"todo"}}. Project/Person '
+    "status goes in fields.status the same way.\n"
+    "\n"
     "Relation direction is STRICT — subject and object types are fixed:\n"
     "- OWNS: subject=Person/Organization, object=Project. (\"Alice owns "
     "Project Orion\" -> subject=Alice, object=Project Orion)\n"
@@ -97,7 +106,16 @@ SYSTEM_PROMPT = (
     "\"relations\":[{\"subject\":\"Alice\",\"predicate\":\"OWNS\","
     "\"object\":\"Project Orion\",\"confidence\":0.95,\"write_intent\":\"new_fact\"},"
     "{\"subject\":\"T1\",\"predicate\":\"ASSIGNED_TO\",\"object\":\"Bob\","
-    "\"confidence\":0.95,\"write_intent\":\"new_fact\"}]}"
+    "\"confidence\":0.95,\"write_intent\":\"new_fact\"}]}\n"
+    "\n"
+    "Worked example (status/completion).\n"
+    "Input: \"Bob completed Task T1.\"\n"
+    "Output: {\"entities\":[{\"type\":\"Task\",\"name\":\"T1\","
+    "\"fields\":{\"status\":\"done\"}},{\"type\":\"Person\",\"name\":\"Bob\","
+    "\"fields\":{}}],\"events\":[],\"claims\":[],\"documents\":[],"
+    "\"decisions\":[],\"relations\":[{\"subject\":\"T1\","
+    "\"predicate\":\"ASSIGNED_TO\",\"object\":\"Bob\",\"confidence\":0.9,"
+    "\"write_intent\":\"new_fact\"}]}"
 )
 
 
