@@ -352,6 +352,7 @@ def run_multiseed(
     extractor: object | None = None,
     embeddings: object | None = None,
     checkpoint_dir: Optional[str] = None,
+    token_counter: Optional[Any] = None,
 ) -> MultiSeedResult:
     """Run ``methods`` across ``seeds`` and collect decisive metrics per seed.
 
@@ -400,7 +401,10 @@ def run_multiseed(
                     examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
                     if limit is not None:
                         examples = examples[:limit]
-                runner = BaselineRunner(settings_factory=settings_factory, top_k=top_k)
+                runner = BaselineRunner(
+                    settings_factory=settings_factory, top_k=top_k,
+                    token_counter=token_counter,
+                )
                 strategy = _build_strategy(
                     method, settings_factory, extractor=extractor, embeddings=embeddings
                 )
@@ -775,6 +779,7 @@ def run_full_suite(
     taus: Iterable[float] = (0.6, 0.7, 0.8, 0.9, 0.95),
     checkpoint_dir: Optional[str] = None,
     out_path: Optional[str] = None,
+    token_counter: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Run the **entire** research protocol and return a structured result.
 
@@ -800,7 +805,7 @@ def run_full_suite(
     ms = run_multiseed(
         methods, seeds=seeds, per_category=per_category,
         settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
-        checkpoint_dir=checkpoint_dir,
+        checkpoint_dir=checkpoint_dir, token_counter=token_counter,
     )
     aggregated = aggregate_methods(ms)
     non_ocmr = [b for b in baselines if b != "B3"]

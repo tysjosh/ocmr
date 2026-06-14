@@ -95,6 +95,7 @@ class BaselineRunner:
         logger: Optional[ResearchLogger] = None,
         settings_factory: Any = _default_settings,
         top_k: int = DEFAULT_TOP_K,
+        token_counter: Optional[Any] = None,
     ) -> None:
         """Create a runner.
 
@@ -105,10 +106,16 @@ class BaselineRunner:
                 used to build each fresh container. Defaults to deterministic,
                 offline settings so the run is reproducible.
             top_k: Retrieval depth passed to ``strategy.query`` per question.
+            token_counter: Optional ``callable(str) -> int`` used to measure
+                context size for the efficiency table's token-overhead column. A
+                model tokenizer's encoder gives true token counts for the LLM
+                run; when omitted a whitespace split is used (a ratio-preserving
+                proxy that keeps the offline reference deterministic).
         """
         self.logger = logger or ResearchLogger()
         self._settings_factory = settings_factory
         self.top_k = top_k
+        self._token_counter = token_counter
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -294,16 +301,16 @@ class BaselineRunner:
         hits = sum(1 for token in expected if str(token).lower() in haystack)
         return hits / len(expected)
 
-    @staticmethod
-    def _context_tokens(package: EvidencePackage) -> int:
-        """Whitespace-token count of the context a method would feed downstream.
+    def _context_tokens(self, package: EvidencePackage) -> int:
+        """Token count of the context a method would feed downstream.
 
         A proxy for prompt/context size used by the efficiency table's token-
         overhead column (paper Table V): the rendered answer plus the text of
         every retrieved item, surfaced conflict, and provenance source the
         package carries. Governed arms add provenance/conflict annotations, so
-        their context is larger — this quantifies that overhead relative to a
-        bare baseline.
+        their context is larger — this quantifies that overhead. Uses the
+        injected ``token_counter`` (a real model tokenizer for the LLM run) when
+        available, else a whitespace split.
         """
         parts: list[str] = []
         if package.answer:
@@ -319,7 +326,16 @@ class BaselineRunner:
             ref = getattr(source, "source_ref", None)
             if ref:
                 parts.append(str(ref))
-        return len(" ".join(parts).split())
+        text = " ".join(parts)
+        if self._token_counter is not None:
+            try:
+                return int(len(self._token_counter(text)))
+            except TypeError:
+                # Counter may return an int directly rather than a sequence.
+                return int(self._token_counter(text))
+            except Exception:  # pragma: no cover - defensive: fall back to proxy
+                pass
+        return len(text.split())
 
     @staticmethod
     def _haystack(package: EvidencePackage) -> str:

@@ -60,6 +60,26 @@ CATEGORIES: tuple[str, ...] = (
     "evidence_required_decisions",
 )
 
+#: Mapping from the paper's four headline scenario classes (Tables II/IX) to the
+#: implementation's six categories. The paper reports four scenario classes
+#: (Recall, Contradiction-heavy, Temporal, Planning); the harness additionally
+#: generates entity-resolution and evidence categories, which the paper reports
+#: separately (entity resolution in Table VIII; evidence via the C8/governance
+#: results). When reproducing the paper's per-scenario breakdown, group the
+#: per-category metrics by this mapping.
+#:
+#: Scale note: the paper's protocol is 4 classes x 120 trajectories = 480. The
+#: harness scale is governed by ``per_category`` (default :data:`PER_CATEGORY`),
+#: so the paper's 120/class is reproduced with ``per_category=120`` over the four
+#: headline categories; the default 25/class is a faster offline reference. The
+#: per-class count and category set are configuration, not hard-coded results.
+PAPER_SCENARIO_CLASSES: dict[str, str] = {
+    "Recall": "longitudinal_factual_qa",
+    "Contradiction-heavy": "contradiction_heavy_update_stream",
+    "Temporal": "temporal_reasoning_ordered_events",
+    "Planning": "multi_step_planning_entity_consistency",
+}
+
 # --- Fixed vocabularies (sampled with a seeded RNG) -------------------------
 
 _NAMES: tuple[str, ...] = (
