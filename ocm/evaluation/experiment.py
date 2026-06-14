@@ -16,7 +16,9 @@ Decisive metrics (operational definitions)
 -------------------------------------------
 Computed per (method, seed) from the runner's question-level records:
 
-* ``task_success`` (↑) — mean blended answer+conflict score × 100.
+* ``task_success`` (↑) — answering / plan completion only: the mean fraction of
+  expected answer tokens recalled (× 100), decoupled from conflict-surfacing so
+  it is independent of ``contradiction_rate``.
 * ``contradiction_rate`` (↓) — per 100 responses, the rate at which a *known*
   contradiction was **not** surfaced (a governance miss that leaks a
   contradiction into the response).

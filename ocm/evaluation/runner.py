@@ -223,8 +223,14 @@ class BaselineRunner:
 
         answer_score = self._answer_score(question, package)
         conflict_correct = conflict_surfaced == bool(question.expected_conflict)
-        # Pragmatic blended score: half answer-token recall, half conflict match.
-        score = 0.5 * answer_score + 0.5 * (1.0 if conflict_correct else 0.0)
+        # Task success = answering / plan completion only (paper §IV-B). It is
+        # the fraction of expected answer tokens recalled, decoupled from
+        # conflict-surfacing — that is measured independently by the
+        # contradiction-rate metric, and false-quarantine by the tau-sweep.
+        # Bundling conflict-surfacing into task success previously double-counted
+        # conflict behavior and penalized the governed system for surfacing
+        # (even correctly), so the three decisive metrics were not independent.
+        score = answer_score
         # Calibration signals: the package's confidence and whether the answer
         # was fully correct (all expected tokens present).
         answer_correct = answer_score >= 1.0
