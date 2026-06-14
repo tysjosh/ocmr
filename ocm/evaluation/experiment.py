@@ -228,6 +228,28 @@ def durable_constraint_violations(container: Any) -> tuple[int, int]:
     return violations, len(accepted)
 
 
+def durable_row_count(container: Any) -> int:
+    """Durable storage footprint for the efficiency table (paper Table V).
+
+    Counts the full persisted footprint a method keeps: entities + ALL assertions
+    (accepted **and** superseded — the audit trail) + quarantine records. Governed
+    arms retain superseded and quarantined rows for traceability, so they grow
+    larger than ungoverned baselines that don't. Reported relative to the
+    text-only baseline (B0) as a growth factor. This is a row-count proxy, not a
+    byte measure, so it captures audit-trail growth but not per-row metadata size.
+    """
+    try:
+        assertions = len(list(container.repo.list_assertions()))  # all statuses
+        entities = len(list(container.repo.list_entities()))
+    except Exception:  # pragma: no cover - defensive
+        return 0
+    try:
+        quarantine = len(list(container.repo.list_quarantine()))
+    except Exception:  # pragma: no cover - defensive
+        quarantine = 0
+    return assertions + entities + quarantine
+
+
 def decisive_metrics(
     records: list[dict], constraint_violation_rate: Optional[float] = None
 ) -> dict[str, float]:
@@ -314,6 +336,9 @@ class MultiSeedResult:
     # superseded/quarantined/rejected). Shows whether an ablation changes what
     # the governed write path admits.
     write_outcomes: dict[str, dict[str, int]] = field(default_factory=dict)
+    # method -> efficiency accumulators (write/query latency, context tokens,
+    # durable rows) summed across seeds; means/ratios are formed for Table V.
+    efficiency: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 def run_multiseed(
@@ -354,6 +379,11 @@ def run_multiseed(
             "quarantined": 0,
             "rejected": 0,
         }
+        result.efficiency[method] = {
+            "write_ms": 0.0, "write_calls": 0.0,
+            "query_ms": 0.0, "query_calls": 0.0,
+            "context_tokens": 0.0, "storage_rows": 0.0, "seeds": 0.0,
+        }
 
     for seed in seeds:
         _seed_everything(seed)
@@ -379,10 +409,14 @@ def run_multiseed(
                     "candidates": 0, "accepted": 0, "superseded": 0,
                     "quarantined": 0, "rejected": 0,
                 }
+                write_ms = 0.0
+                write_calls = 0
                 for example in examples:
                     wc = runner._ingest_sessions(strategy, example)
                     for outcome_key in wo:
                         wo[outcome_key] += int(wc.get(outcome_key, 0))
+                    write_ms += float(wc.get("write_ms", 0.0))
+                    write_calls += int(wc.get("write_calls", 0))
                     for q_index, question in enumerate(example.questions):
                         records.append(
                             runner._run_question(
@@ -396,13 +430,29 @@ def run_multiseed(
                 cvr = (100.0 * dwv / n_resp) if n_resp else 0.0
                 dm = decisive_metrics(records, constraint_violation_rate=cvr)
                 cat = task_success_by_category(records)
-                ckpt.save(key, {"decisive": dm, "category": cat, "write_outcomes": wo})
+                eff = {
+                    "write_ms": write_ms,
+                    "write_calls": float(write_calls),
+                    "query_ms": sum(float(r.get("latency_ms", 0.0)) for r in records),
+                    "query_calls": float(n_resp),
+                    "context_tokens": sum(float(r.get("context_tokens", 0)) for r in records),
+                    "storage_rows": float(durable_row_count(strategy.container)),
+                    "seeds": 1.0,
+                }
+                ckpt.save(key, {
+                    "decisive": dm, "category": cat,
+                    "write_outcomes": wo, "efficiency": eff,
+                })
+            eff = (cached.get("efficiency", {}) if cached is not None else eff) or {}
             for metric, value in dm.items():
                 result.per_seed[method][metric].append(float(value))
             result.per_seed_category[method][seed] = cat
             for outcome_key, total in (wo or {}).items():
                 if outcome_key in result.write_outcomes[method]:
                     result.write_outcomes[method][outcome_key] += int(total)
+            for eff_key, eff_val in eff.items():
+                if eff_key in result.efficiency[method]:
+                    result.efficiency[method][eff_key] += float(eff_val)
     return result
 
 
@@ -416,6 +466,46 @@ def aggregate_methods(ms: MultiSeedResult) -> dict[str, dict[str, stats.MeanCI]]
         out[method] = {
             metric: stats.mean_ci(ms.per_seed[method][metric])
             for metric in DECISIVE_METRICS
+        }
+    return out
+
+
+def efficiency_table(ms: MultiSeedResult) -> dict[str, dict[str, Optional[float]]]:
+    """Per-method efficiency/overhead for Table V.
+
+    Forms mean write/query latency (ms) and mean per-response context tokens and
+    durable rows from the accumulators, then expresses token overhead (%) and
+    storage growth (×) relative to the text-only baseline B0 (the paper's 1.00×
+    reference). Returns ``None`` for the relative columns when B0 is absent.
+    """
+    means: dict[str, dict[str, float]] = {}
+    for method in ms.methods:
+        e = ms.efficiency.get(method, {})
+        write_calls = e.get("write_calls", 0.0) or 1.0
+        query_calls = e.get("query_calls", 0.0) or 1.0
+        seeds = e.get("seeds", 0.0) or 1.0
+        means[method] = {
+            "write_latency_ms": e.get("write_ms", 0.0) / write_calls,
+            "query_latency_ms": e.get("query_ms", 0.0) / query_calls,
+            "context_tokens": e.get("context_tokens", 0.0) / query_calls,
+            "storage_rows": e.get("storage_rows", 0.0) / seeds,
+        }
+    base = means.get("B0")
+    out: dict[str, dict[str, Optional[float]]] = {}
+    for method, v in means.items():
+        token_overhead = (
+            100.0 * (v["context_tokens"] - base["context_tokens"]) / base["context_tokens"]
+            if base and base["context_tokens"] else None
+        )
+        storage_growth = (
+            v["storage_rows"] / base["storage_rows"]
+            if base and base["storage_rows"] else None
+        )
+        out[method] = {
+            "write_latency_ms": v["write_latency_ms"],
+            "query_latency_ms": v["query_latency_ms"],
+            "token_overhead_pct": token_overhead,
+            "storage_growth_x": storage_growth,
         }
     return out
 
@@ -735,6 +825,7 @@ def run_full_suite(
         },
         "significance_vs_best_baseline": significance,
         "write_outcomes": ms.write_outcomes,
+        "efficiency": efficiency_table(ms),
         "threshold_sweep": sweep,
         "stress": stress,
     }
@@ -795,3 +886,17 @@ def print_report(report: dict[str, Any]) -> None:
     er = report["stress"]["entity_resolution"]
     print(f"  entity-resolution F1={er['entity_resolution_f1']:.3f} "
           f"false_merge_rate={er['false_merge_rate']:.3f} (n={int(er['n_examples'])})")
+
+    efficiency = report.get("efficiency")
+    if efficiency:
+        print("\n=== Efficiency and systems overhead (Table V) ===")
+        print(f"{'Method':<22}{'WriteLat ms':<14}{'QueryLat ms':<14}"
+              f"{'TokenOvhd %':<14}{'StorageGrowth':<14}")
+        for method in report["methods"]:
+            e = efficiency.get(method, {})
+            def _f(v: Any, suffix: str = "") -> str:
+                return f"{v:.2f}{suffix}" if isinstance(v, (int, float)) else "n/a"
+            print(f"{method:<22}{_f(e.get('write_latency_ms')):<14}"
+                  f"{_f(e.get('query_latency_ms')):<14}"
+                  f"{_f(e.get('token_overhead_pct')):<14}"
+                  f"{_f(e.get('storage_growth_x'), 'x'):<14}")

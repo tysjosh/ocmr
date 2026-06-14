@@ -58,10 +58,10 @@ TS = datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 # delta) to be routed to supersede, so the seed is drawn from a lower band than
 # the correction.
 seed_conf_strategy = st.floats(
-    min_value=0.81, max_value=0.90, allow_nan=False, allow_infinity=False
+    min_value=0.81, max_value=0.84, allow_nan=False, allow_infinity=False
 )
 correction_conf_strategy = st.floats(
-    min_value=0.91, max_value=1.0, allow_nan=False, allow_infinity=False
+    min_value=0.96, max_value=1.0, allow_nan=False, allow_infinity=False
 )
 
 # Distinct person id suffixes so the correction always points at a *different*

@@ -111,7 +111,8 @@ def test_decisive_metrics_shapes():
     records = []
     for ex in examples:
         wc = runner._ingest_sessions(strat, ex)
-        assert set(wc) == {"candidates", "accepted", "superseded", "quarantined", "rejected"}
+        assert {"candidates", "accepted", "superseded", "quarantined", "rejected"} <= set(wc)
+        assert "write_ms" in wc and "write_calls" in wc
         for i, question in enumerate(ex.questions):
             records.append(
                 runner._run_question(

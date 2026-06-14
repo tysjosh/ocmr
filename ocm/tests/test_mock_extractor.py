@@ -86,7 +86,7 @@ def test_correction_keyword_sets_write_intent() -> None:
 
 def test_default_confidence_is_high() -> None:
     result = MockExtractor().extract("Alice owns Project Orion.", "doc::1")
-    assert all(r["confidence"] == 0.95 for r in result.relations)
+    assert all(r["confidence"] == 0.85 for r in result.relations)
 
 
 def test_t1_scenario_three_writes() -> None:

@@ -79,11 +79,12 @@ class Settings(BaseModel):
     # when it is more confident than the incumbent by a margin ``delta`` and
     # carries at least ``e_min`` units of supporting evidence; otherwise the
     # conflict is quarantined. ``supersede_margin`` is delta in
-    # ``c(a) - c(a_old) > delta`` (default 0.0 ⇒ strictly more confident, so a
-    # tie favors the incumbent). ``supersede_evidence_min`` is e_min, where an
-    # assertion's evidence is its provenance (a present ``source_ref``) plus any
-    # accepted ``EVIDENCE_FOR`` edges into its subject.
-    supersede_margin: float = 0.0
+    # ``c(a) - c(a_old) > delta`` (default 0.1, per the paper's Algorithm 1: a
+    # correction must beat the incumbent by 0.1 to supersede, else quarantine).
+    # ``supersede_evidence_min`` is e_min, operationalized as an integer count of
+    # evidence units (a present ``source_ref`` plus accepted ``EVIDENCE_FOR``
+    # edges into the subject), not a [0,1] completeness fraction.
+    supersede_margin: float = 0.1
     supersede_evidence_min: int = 1
 
     # --- Write-time governance ablation switches (paper §IV-D) -------------

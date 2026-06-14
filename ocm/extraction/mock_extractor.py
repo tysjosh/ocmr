@@ -50,9 +50,12 @@ from ocm.extraction.base import ExtractionError
 from ocm.memory.contracts import ExtractionResult
 
 # --- Determinism knobs ------------------------------------------------------
-#: Default confidence assigned to extracted claims/relations. High (> 0.8) so
-#: the contradiction gate (C7) treats mock-extracted facts as strong.
-DEFAULT_CONFIDENCE: float = 0.95
+#: Default confidence assigned to extracted claims/relations. Above the
+#: contradiction high-confidence threshold (0.8) so the gate (C7) treats
+#: mock-extracted facts as strong, while low enough that a ``correction`` at
+#: ``CORRECTION_CONFIDENCE`` clears the Algorithm 1 supersede margin (delta=0.1)
+#: over an incumbent at this confidence (0.97 - 0.85 = 0.12 > 0.1).
+DEFAULT_CONFIDENCE: float = 0.85
 
 #: Confidence for a relation asserted as a *correction*. Deliberately higher than
 #: ``DEFAULT_CONFIDENCE`` so a correction dominates the fact it revises by a

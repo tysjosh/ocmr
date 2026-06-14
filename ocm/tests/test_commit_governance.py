@@ -42,7 +42,9 @@ from ocm.ontology.models import Person, Task
 from ocm.validation.constraints import ConstraintValidator
 
 TS = datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
-HIGH = 0.95  # strictly above the default contradiction_high_confidence (0.8)
+# Incumbent confidence: above the contradiction threshold (0.8) but low enough
+# that a dominating correction (>= 0.96) clears the Algorithm 1 margin (0.1).
+HIGH = 0.85
 
 
 @pytest.fixture

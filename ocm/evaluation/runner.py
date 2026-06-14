@@ -169,10 +169,15 @@ class BaselineRunner:
             "superseded": 0,
             "quarantined": 0,
             "rejected": 0,
+            "write_ms": 0.0,
+            "write_calls": 0,
         }
         for session in example.sessions:
             source_ref = f"{example.id}:{session.session_id}"
+            _t0 = time.perf_counter()
             result = strategy.write(session.input, source_ref)
+            counts["write_ms"] += (time.perf_counter() - _t0) * 1000.0
+            counts["write_calls"] += 1
             summary = result.summary
             counts["candidates"] += int(getattr(summary, "num_candidates", 0) or 0)
             counts["accepted"] += int(getattr(summary, "num_accepted", 0) or 0)
@@ -265,6 +270,7 @@ class BaselineRunner:
             "answer_score": answer_score,
             "answer_correct": answer_correct,
             "surfaced_violation": bool(surfaced_violation),
+            "context_tokens": self._context_tokens(package),
             "package_confidence": float(package.confidence),
             "write_quarantined": int(write_quarantined),
             "conflict_correct": conflict_correct,
@@ -287,6 +293,33 @@ class BaselineRunner:
         haystack = BaselineRunner._haystack(package).lower()
         hits = sum(1 for token in expected if str(token).lower() in haystack)
         return hits / len(expected)
+
+    @staticmethod
+    def _context_tokens(package: EvidencePackage) -> int:
+        """Whitespace-token count of the context a method would feed downstream.
+
+        A proxy for prompt/context size used by the efficiency table's token-
+        overhead column (paper Table V): the rendered answer plus the text of
+        every retrieved item, surfaced conflict, and provenance source the
+        package carries. Governed arms add provenance/conflict annotations, so
+        their context is larger — this quantifies that overhead relative to a
+        bare baseline.
+        """
+        parts: list[str] = []
+        if package.answer:
+            parts.append(str(package.answer))
+        for item in package.retrieved_items:
+            if getattr(item, "text", None):
+                parts.append(str(item.text))
+        for conflict in package.conflicts:
+            for value in (getattr(conflict, "text", None), getattr(conflict, "reason", None)):
+                if value:
+                    parts.append(str(value))
+        for source in package.supporting_sources:
+            ref = getattr(source, "source_ref", None)
+            if ref:
+                parts.append(str(ref))
+        return len(" ".join(parts).split())
 
     @staticmethod
     def _haystack(package: EvidencePackage) -> str:
