@@ -110,9 +110,14 @@ def test_decisive_metrics_shapes():
     strat = build_baseline("B3", CoreContainer(_settings()))
     records = []
     for ex in examples:
-        q = runner._ingest_sessions(strat, ex)
+        wc = runner._ingest_sessions(strat, ex)
+        assert set(wc) == {"candidates", "accepted", "superseded", "quarantined", "rejected"}
         for i, question in enumerate(ex.questions):
-            records.append(runner._run_question("B3", strat, ex, i, question, write_quarantined=q))
+            records.append(
+                runner._run_question(
+                    "B3", strat, ex, i, question, write_quarantined=wc["quarantined"]
+                )
+            )
     dm = exp.decisive_metrics(records)
     assert set(dm) == {"task_success", "contradiction_rate", "constraint_violations"}
     assert all(0.0 <= v <= 100.0 for v in dm.values())

@@ -128,11 +128,11 @@ class BaselineRunner:
             container = CoreContainer(self._settings_factory())
             strategy = build_baseline(baseline_name, container)
             for example in examples:
-                quarantined = self._ingest_sessions(strategy, example)
+                wc = self._ingest_sessions(strategy, example)
                 for q_index, question in enumerate(example.questions):
                     record = self._run_question(
                         baseline_name, strategy, example, q_index, question,
-                        write_quarantined=quarantined,
+                        write_quarantined=wc["quarantined"],
                     )
                     records.append(record)
         return records
@@ -144,18 +144,35 @@ class BaselineRunner:
     # ------------------------------------------------------------------ #
     # Internals
     # ------------------------------------------------------------------ #
-    def _ingest_sessions(self, strategy: MemoryStrategy, example: BenchmarkExample) -> int:
+    def _ingest_sessions(
+        self, strategy: MemoryStrategy, example: BenchmarkExample
+    ) -> dict[str, int]:
         """Write every session of ``example`` through the governed pipeline.
 
-        Returns the total number of candidates quarantined during ingestion (a
-        write-side signal used to estimate false-quarantine behavior).
+        Returns a dict of write-outcome counts summed across the example's
+        sessions: ``candidates``, ``accepted``, ``superseded``, ``quarantined``,
+        ``rejected``. These per-arm write-side counts let the harness show
+        whether an ablation actually changes what the governed write path admits
+        (divergence) or merely fires a different gate for the same net outcome
+        (redundancy), rather than leaving identical decisive metrics unexplained.
         """
-        quarantined = 0
+        counts = {
+            "candidates": 0,
+            "accepted": 0,
+            "superseded": 0,
+            "quarantined": 0,
+            "rejected": 0,
+        }
         for session in example.sessions:
             source_ref = f"{example.id}:{session.session_id}"
             result = strategy.write(session.input, source_ref)
-            quarantined += int(getattr(result.summary, "num_quarantined", 0) or 0)
-        return quarantined
+            summary = result.summary
+            counts["candidates"] += int(getattr(summary, "num_candidates", 0) or 0)
+            counts["accepted"] += int(getattr(summary, "num_accepted", 0) or 0)
+            counts["superseded"] += int(getattr(summary, "num_superseded", 0) or 0)
+            counts["quarantined"] += int(getattr(summary, "num_quarantined", 0) or 0)
+            counts["rejected"] += int(getattr(summary, "num_rejected", 0) or 0)
+        return counts
 
     def _run_question(
         self,

@@ -258,6 +258,10 @@ class MultiSeedResult:
     per_seed: dict[str, dict[str, list[float]]] = field(default_factory=dict)
     # method -> seed -> category -> success
     per_seed_category: dict[str, dict[int, dict[str, float]]] = field(default_factory=dict)
+    # method -> write-outcome counts summed across seeds (candidates/accepted/
+    # superseded/quarantined/rejected). Shows whether an ablation changes what
+    # the governed write path admits.
+    write_outcomes: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 def run_multiseed(
@@ -291,6 +295,13 @@ def run_multiseed(
     for method in methods:
         result.per_seed[method] = {m: [] for m in DECISIVE_METRICS}
         result.per_seed_category[method] = {}
+        result.write_outcomes[method] = {
+            "candidates": 0,
+            "accepted": 0,
+            "superseded": 0,
+            "quarantined": 0,
+            "rejected": 0,
+        }
 
     for seed in seeds:
         _seed_everything(seed)
@@ -301,6 +312,7 @@ def run_multiseed(
             if cached is not None:
                 dm = cached["decisive"]
                 cat = cached.get("category", {})
+                wo = cached.get("write_outcomes", {})
             else:
                 if examples is None:
                     examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
@@ -311,21 +323,30 @@ def run_multiseed(
                     method, settings_factory, extractor=extractor, embeddings=embeddings
                 )
                 records: list[dict] = []
+                wo = {
+                    "candidates": 0, "accepted": 0, "superseded": 0,
+                    "quarantined": 0, "rejected": 0,
+                }
                 for example in examples:
-                    quarantined = runner._ingest_sessions(strategy, example)
+                    wc = runner._ingest_sessions(strategy, example)
+                    for outcome_key in wo:
+                        wo[outcome_key] += int(wc.get(outcome_key, 0))
                     for q_index, question in enumerate(example.questions):
                         records.append(
                             runner._run_question(
                                 method, strategy, example, q_index, question,
-                                write_quarantined=quarantined,
+                                write_quarantined=wc["quarantined"],
                             )
                         )
                 dm = decisive_metrics(records)
                 cat = task_success_by_category(records)
-                ckpt.save(key, {"decisive": dm, "category": cat})
+                ckpt.save(key, {"decisive": dm, "category": cat, "write_outcomes": wo})
             for metric, value in dm.items():
                 result.per_seed[method][metric].append(float(value))
             result.per_seed_category[method][seed] = cat
+            for outcome_key, total in (wo or {}).items():
+                if outcome_key in result.write_outcomes[method]:
+                    result.write_outcomes[method][outcome_key] += int(total)
     return result
 
 
@@ -469,12 +490,12 @@ def threshold_sweep(
         )
         records: list[dict] = []
         for example in examples:
-            quarantined = runner._ingest_sessions(strategy, example)
+            wc = runner._ingest_sessions(strategy, example)
             for q_index, question in enumerate(example.questions):
                 records.append(
                     runner._run_question(
                         method, strategy, example, q_index, question,
-                        write_quarantined=quarantined,
+                        write_quarantined=wc["quarantined"],
                     )
                 )
         dm = decisive_metrics(records)
@@ -549,11 +570,11 @@ def stress_by_intensity(
             )
             by_level: dict[str, list[float]] = {lvl: [] for lvl in INTENSITY_LEVELS}
             for example in examples:
-                quarantined = runner._ingest_sessions(strategy, example)
+                wc = runner._ingest_sessions(strategy, example)
                 for q_index, question in enumerate(example.questions):
                     rec = runner._run_question(
                         method, strategy, example, q_index, question,
-                        write_quarantined=quarantined,
+                        write_quarantined=wc["quarantined"],
                     )
                     lvl = rec.get("intensity") or "low"
                     by_level.setdefault(lvl, []).append(float(rec.get("score", 0.0)))
@@ -657,6 +678,7 @@ def run_full_suite(
             for method in aggregated
         },
         "significance_vs_best_baseline": significance,
+        "write_outcomes": ms.write_outcomes,
         "threshold_sweep": sweep,
         "stress": stress,
     }
@@ -690,6 +712,17 @@ def print_report(report: dict[str, Any]) -> None:
         print(f"  {metric:<22} vs {t['vs_baseline']:<4} {t['test']:<14} "
               f"corrected_p={t['corrected_p']:.4f} reject={t['reject_null']} "
               f"{t['effect_name']}={eff_s}")
+
+    write_outcomes = report.get("write_outcomes")
+    if write_outcomes:
+        print("\n=== Write outcomes by arm (summed across seeds) ===")
+        print("  Shows whether an arm changes what the governed write path admits "
+              "(divergence) or ties the full system (redundancy).")
+        print(f"{'Method':<22}{'cand':<8}{'accept':<8}{'supers':<8}{'quar':<8}{'reject':<8}")
+        for method in report["methods"]:
+            w = write_outcomes.get(method, {})
+            print(f"{method:<22}{w.get('candidates', 0):<8}{w.get('accepted', 0):<8}"
+                  f"{w.get('superseded', 0):<8}{w.get('quarantined', 0):<8}{w.get('rejected', 0):<8}")
 
     print("\n=== Threshold sweep (tau) + calibration ===")
     print(f"{'tau':<8}{'ContrRate':<12}{'FalseQuar':<12}{'ECE':<10}{'Brier':<10}{'J(tau)':<10}")
