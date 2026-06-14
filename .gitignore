@@ -26,3 +26,7 @@ vllm.log
 # OS / editor
 .DS_Store
 .ipynb_checkpoints/
+
+# Research paper (kept locally, not committed)
+Ontology_Constrained_Memory_for_Agent_Reasoning.pdf
+Ontology_Constrained_Memory_for_Agent_Reasoning.txt
