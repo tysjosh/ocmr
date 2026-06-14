@@ -20,9 +20,14 @@ Computed per (method, seed) from the runner's question-level records:
 * ``contradiction_rate`` (↓) — per 100 responses, the rate at which a *known*
   contradiction was **not** surfaced (a governance miss that leaks a
   contradiction into the response).
-* ``constraint_violations`` (↓) — per 100 responses, the wrong-answer rate
-  (answer not fully correct), i.e. responses where contaminated/ungoverned
-  state produced an incorrect answer.
+* ``constraint_violations`` (↓) — durable-write constraint violation rate per
+  100 responses: the rate at which a response surfaces constraint-violating
+  durable state (a quarantined / superseded / contradicted item) **without**
+  flagging it as a conflict. Because every arm shares the governed write path,
+  the durable store is identical across arms; the governance difference shows up
+  in what each *surfaces* at answer time — ungoverned baselines fold
+  constraint-violating items into results unflagged, while governed arms exclude
+  or flag them.
 
 These are offline proxies over the deterministic mock pipeline; the harness
 reports the *system's own* measured values, not the paper's illustrative
@@ -40,7 +45,7 @@ from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
 from ocm.evaluation import stats
 from ocm.evaluation.ablations import DEFAULT_ABLATIONS, build_ablation_strategy
-from ocm.evaluation.baselines import build_baseline
+from ocm.evaluation.baselines import build_baseline, baseline_settings_overrides
 from ocm.evaluation.benchmark import BenchmarkGenerator
 from ocm.evaluation.runner import BaselineRunner
 from ocm.evaluation.strategies import MemoryStrategy
@@ -192,7 +197,38 @@ def make_settings_factory(
 # --------------------------------------------------------------------------- #
 # Decisive metrics from question-level records
 # --------------------------------------------------------------------------- #
-def decisive_metrics(records: list[dict]) -> dict[str, float]:
+def durable_constraint_violations(container: Any) -> tuple[int, int]:
+    """Count mutually-contradictory accepted state in a method's durable store.
+
+    A durable constraint violation is contradictory state left *accepted* in
+    memory: a single-valued relation (cardinality 1:1 or m:1 — e.g. ``HAS_STATUS``,
+    ``ASSIGNED_TO``) with two or more **distinct** accepted objects for the same
+    subject. A governed arm gates such conflicts at write time (the losing side
+    is quarantined), so it has ~0; an ungoverned arm (contradiction gate off)
+    leaves both sides accepted, accumulating violations.
+
+    Returns ``(violation_count, accepted_count)``.
+    """
+    from ocm.ontology.relations import RELATION_SIGNATURES, Cardinality
+
+    single_valued = {Cardinality.ONE_TO_ONE, Cardinality.M_TO_ONE}
+    try:
+        accepted = list(container.repo.list_assertions("accepted"))
+    except Exception:  # pragma: no cover - defensive
+        return 0, 0
+    groups: dict[tuple[str, str], set[str]] = {}
+    for a in accepted:
+        sig = RELATION_SIGNATURES.get(a.predicate)
+        if sig is None or sig.cardinality not in single_valued:
+            continue
+        groups.setdefault((a.subject_id, a.predicate), set()).add(a.object_id)
+    violations = sum(max(0, len(objs) - 1) for objs in groups.values())
+    return violations, len(accepted)
+
+
+def decisive_metrics(
+    records: list[dict], constraint_violation_rate: Optional[float] = None
+) -> dict[str, float]:
     """Compute the three decisive metrics for one method/seed record set."""
     n = len(records)
     if n == 0:
@@ -202,9 +238,20 @@ def decisive_metrics(records: list[dict]) -> dict[str, float]:
         1 for r in records
         if r.get("expected_conflict") and not r.get("conflict_surfaced")
     )
-    wrong_answers = sum(1 for r in records if not r.get("answer_correct"))
+    # Durable-write constraint violation rate (paper §IV-B): per 100 responses,
+    # contradictory state left accepted in durable memory. When the caller
+    # supplies the rate (computed from the arm's durable store via
+    # ``durable_constraint_violations``) we use it directly; otherwise we fall
+    # back to the response-surfaced-violation flag, then (legacy) wrong-answers.
+    if constraint_violation_rate is not None:
+        constraint_violations = float(constraint_violation_rate)
+    elif any("surfaced_violation" in r for r in records):
+        violations = sum(1 for r in records if r.get("surfaced_violation"))
+        constraint_violations = 100.0 * violations / n
+    else:  # pragma: no cover - legacy records without the flag
+        wrong = sum(1 for r in records if not r.get("answer_correct"))
+        constraint_violations = 100.0 * wrong / n
     contradiction_rate = 100.0 * missed_contradiction / n
-    constraint_violations = 100.0 * wrong_answers / n
     return {
         "task_success": task_success,
         "contradiction_rate": contradiction_rate,
@@ -236,8 +283,11 @@ def _build_strategy(
     container so a heavy model is not reloaded per arm.
     """
     if method.startswith("B"):
+        settings = settings_factory().model_copy(
+            update=baseline_settings_overrides(method)
+        )
         container = CoreContainer(
-            settings_factory(), extractor=extractor, embeddings=embeddings
+            settings, extractor=extractor, embeddings=embeddings
         )
         return build_baseline(method, container)
     return build_ablation_strategy(
@@ -338,7 +388,11 @@ def run_multiseed(
                                 write_quarantined=wc["quarantined"],
                             )
                         )
-                dm = decisive_metrics(records)
+                # Durable-write constraint violations from this arm's store.
+                n_resp = len(records)
+                dwv, _acc = durable_constraint_violations(strategy.container)
+                cvr = (100.0 * dwv / n_resp) if n_resp else 0.0
+                dm = decisive_metrics(records, constraint_violation_rate=cvr)
                 cat = task_success_by_category(records)
                 ckpt.save(key, {"decisive": dm, "category": cat, "write_outcomes": wo})
             for metric, value in dm.items():

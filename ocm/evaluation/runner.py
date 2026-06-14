@@ -41,7 +41,11 @@ from typing import Any, Iterable, Optional
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
 from ocm.core.logging import ResearchLogger
-from ocm.evaluation.baselines import DEFAULT_RUN_BASELINES, build_baseline
+from ocm.evaluation.baselines import (
+    DEFAULT_RUN_BASELINES,
+    baseline_settings_overrides,
+    build_baseline,
+)
 from ocm.evaluation.benchmark import BenchmarkExample
 from ocm.evaluation.strategies import MemoryStrategy
 from ocm.retrieval.evidence_packager import EvidencePackage
@@ -125,7 +129,10 @@ class BaselineRunner:
         """
         records: list[dict] = []
         for baseline_name in baselines:
-            container = CoreContainer(self._settings_factory())
+            settings = self._settings_factory().model_copy(
+                update=baseline_settings_overrides(baseline_name)
+            )
+            container = CoreContainer(settings)
             strategy = build_baseline(baseline_name, container)
             for example in examples:
                 wc = self._ingest_sessions(strategy, example)
@@ -196,6 +203,24 @@ class BaselineRunner:
         conflict_surfaced = bool(package.conflicts)
         answer = package.answer or ""
 
+        # Durable-write constraint-violation exposure (decisive metric, paper
+        # §IV-B). All arms share the governed write path, so the *durable store*
+        # is identical; governance differs in what each surfaces at answer time.
+        # We count a response as exposing a constraint violation when it surfaces
+        # a constraint-violating durable item — one whose status is not
+        # ``accepted`` (e.g. quarantined/superseded) or that is contradicted —
+        # WITHOUT flagging it as a conflict. Governed baselines (B3) exclude or
+        # flag such state; ungoverned baselines (B0–B2) fold it in unflagged.
+        flagged_conflicts = set(conflict_ids)
+        surfaced_violation = any(
+            (
+                str(getattr(item, "status", "accepted")) != "accepted"
+                or bool(getattr(item, "contradicted", False))
+            )
+            and getattr(item, "memory_id", None) not in flagged_conflicts
+            for item in package.retrieved_items
+        )
+
         answer_score = self._answer_score(question, package)
         conflict_correct = conflict_surfaced == bool(question.expected_conflict)
         # Pragmatic blended score: half answer-token recall, half conflict match.
@@ -233,6 +258,7 @@ class BaselineRunner:
             "expected_supporting_ids": list(question.expected_supporting_ids or []),
             "answer_score": answer_score,
             "answer_correct": answer_correct,
+            "surfaced_violation": bool(surfaced_violation),
             "package_confidence": float(package.confidence),
             "write_quarantined": int(write_quarantined),
             "conflict_correct": conflict_correct,

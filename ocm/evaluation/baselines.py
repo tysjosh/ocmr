@@ -102,6 +102,32 @@ BASELINE_DESCRIPTIONS: Dict[str, str] = {
     "B4": "B3 + Answer_Policy (Req 22.5)",
 }
 
+#: Per-baseline **write-time** governance settings overrides (paper §IV-A).
+#: The baselines are not only retrieval ablations — they also differ in how much
+#: write-time governance gates durable state, matching the paper's "text-only /
+#: ontology-only / hybrid-no-governance / OCMR" gradient. Ungoverned baselines
+#: leave constraint-violating (mutually contradictory) state in durable memory,
+#: which is what the durable-write constraint-violation metric measures.
+#:
+#: ``enable_schema_validation`` gates W5 structural checks; ``enable_contradiction_gate``
+#: gates W7/C7 (contradiction quarantining). C9 domain/range (W6) always runs.
+BASELINE_SETTINGS: Dict[str, Dict[str, bool]] = {
+    # text-only memory: no write-time governance.
+    "B0": {"enable_schema_validation": False, "enable_contradiction_gate": False},
+    # ontology-only memory: typed schema, but no contradiction gating.
+    "B1": {"enable_schema_validation": True, "enable_contradiction_gate": False},
+    # hybrid, no governance: neither write-time gate.
+    "B2": {"enable_schema_validation": False, "enable_contradiction_gate": False},
+    # full OCMR: all write-time governance on.
+    "B3": {"enable_schema_validation": True, "enable_contradiction_gate": True},
+    "B4": {"enable_schema_validation": True, "enable_contradiction_gate": True},
+}
+
+
+def baseline_settings_overrides(name: str) -> Dict[str, bool]:
+    """Return the write-time ``Settings`` overrides for baseline ``name`` (may be empty)."""
+    return dict(BASELINE_SETTINGS.get(name, {}))
+
 
 def _make_factory(name: str, toggles: StrategyToggles) -> BaselineFactory:
     """Build a factory closure that constructs baseline ``name``."""
