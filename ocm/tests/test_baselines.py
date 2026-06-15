@@ -64,8 +64,12 @@ def _seed_assignment_conflict(strategy: MemoryStrategy) -> None:
 # Registry / construction
 # --------------------------------------------------------------------------- #
 def test_registry_defines_b0_through_b4():
-    assert set(BASELINE_REGISTRY) == {"B0", "B1", "B2", "B3", "B4"}
-    assert set(BASELINE_TOGGLES) == {"B0", "B1", "B2", "B3", "B4"}
+    canonical = {"B0", "B1", "B2", "B3", "B4"}
+    # The canonical B-suite is always present; extended comparison baselines
+    # (RAG-only, retrieval-time contradiction filter) are additional opt-ins.
+    assert canonical <= set(BASELINE_REGISTRY)
+    assert canonical <= set(BASELINE_TOGGLES)
+    assert {"Brag", "Brtcf"} <= set(BASELINE_REGISTRY)
 
 
 def test_toggle_matrix_matches_design():

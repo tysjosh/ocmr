@@ -285,6 +285,47 @@ where a "merge" means two mentions resolved to the same node; `false_merges`
 counts distinct-entity pairs (different gold groups, same example) wrongly
 merged.
 
+### Comparison baselines (extended)
+
+Beyond the canonical B0–B4 toggle matrix, two extended baselines isolate
+alternative designs (opt-in via `baselines=(..., "Brag", "Brtcf")`;
+`ocm/evaluation/baselines.py`). All baselines share the governed write pipeline;
+these differ in retrieval composition and write-time gating.
+
+- **`Brag` — RAG-only.** Vectors-only similarity retrieval with the answer read
+  **only from retrieved text** (the evidence package is built without the
+  Graph_Store, so no graph-assisted structural answer is derived), and no
+  write-time governance. This is the vanilla retrieval-augmented baseline. It is
+  deliberately distinct from B0, which is also vectors-only but derives exact
+  structural answers from the graph — hence Brag scores lower on the structured
+  benchmark (e.g. task success ≈ 38 vs B0 ≈ 73 at seed 1337, `per_category=6`),
+  the gap attributable to graph-assisted answering.
+
+- **`Brtcf` — retrieval-time contradiction filter.** Full hybrid retrieval with
+  the **write-time contradiction gate off** (durable memory accumulates
+  conflicting accepted state, like B2), but contradictions are detected **at
+  query time**: a live scan of accepted single-valued relations
+  (`MemoryStrategy._read_time_contradicted_ids`) flags every conflicting group so
+  the reranker excludes them from confident support and the packager surfaces
+  them. This isolates "filter at read time" against OCMR's "gate at write time".
+
+  The headline contrast (seed 1337, `per_category=6`):
+
+  | Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
+  |--------|---------------|-----------------|------------------|
+  | B2 (no governance)     | 74.5 | 20.0 | 23.6 |
+  | **Brtcf** (read-time)  | 74.5 | **1.8** | **23.6** |
+  | B3 (write-time gate)   | 76.4 | 3.6  | **0.0**  |
+
+  The read-time filter cuts the contradiction rate to (here, below) the
+  write-time gate's level — it *can* avoid surfacing contradictions in answers —
+  **but constraint violations stay at the ungoverned-baseline level (23.6)**
+  because the durable store is never repaired. Only write-time governance (B3)
+  achieves both a low contradiction rate **and** zero durable violations. Any
+  downstream consumer that does not re-run the same read-time filter sees the
+  corrupted state; this is the core argument for gating at write time.
+
+
 ### Statistics
 
 Multi-seed (default 5 seeds: `1337, 7, 42, 99, 2024`). Per-metric aggregates use a

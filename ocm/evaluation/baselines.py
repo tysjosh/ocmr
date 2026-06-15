@@ -91,6 +91,34 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
         use_provenance=True,
         use_answer_policy=True,
     ),
+    # Brag — RAG-only: vectors-only similarity retrieval, answers read only from
+    # retrieved text (no graph-assisted structural answer), no governance. A
+    # vanilla retrieval-augmented baseline; distinct from B0, which is also
+    # vectors-only but derives structural answers from the graph.
+    "Brag": StrategyToggles(
+        use_ontology=False,
+        use_graph=False,
+        use_vectors=True,
+        use_contradiction=False,
+        use_quarantine=False,
+        use_provenance=False,
+        use_answer_policy=False,
+        use_structured_answer=False,
+    ),
+    # Brtcf — retrieval-time contradiction filter: full hybrid retrieval and NO
+    # write-time governance (durable memory accumulates contradictions), but
+    # contradictions are detected/filtered at query time. Isolates "filter at
+    # read time" against OCMR's "gate at write time".
+    "Brtcf": StrategyToggles(
+        use_ontology=True,
+        use_graph=True,
+        use_vectors=True,
+        use_contradiction=False,
+        use_quarantine=False,
+        use_provenance=False,
+        use_answer_policy=False,
+        use_read_time_filter=True,
+    ),
 }
 
 #: Human-readable description per baseline (used in metrics/reporting).
@@ -100,6 +128,8 @@ BASELINE_DESCRIPTIONS: Dict[str, str] = {
     "B2": "Graph + semantic, no contradiction/quarantine/provenance (Req 22.3)",
     "B3": "Full hybrid + contradiction + quarantine + provenance (Req 22.4)",
     "B4": "B3 + Answer_Policy (Req 22.5)",
+    "Brag": "RAG-only: vectors-only retrieval, answer from text, no governance",
+    "Brtcf": "Retrieval-time contradiction filter: no write gate, filter at read",
 }
 
 #: Per-baseline **write-time** governance settings overrides (paper §IV-A).
@@ -121,6 +151,11 @@ BASELINE_SETTINGS: Dict[str, Dict[str, bool]] = {
     # full OCMR: all write-time governance on.
     "B3": {"enable_schema_validation": True, "enable_contradiction_gate": True},
     "B4": {"enable_schema_validation": True, "enable_contradiction_gate": True},
+    # RAG-only: no write-time governance (text-only memory behaviour).
+    "Brag": {"enable_schema_validation": False, "enable_contradiction_gate": False},
+    # Retrieval-time filter: typed schema on, but write-time contradiction gate
+    # OFF so conflicts accumulate durably and are caught only at read time.
+    "Brtcf": {"enable_schema_validation": True, "enable_contradiction_gate": False},
 }
 
 
@@ -152,6 +187,11 @@ BASELINE_REGISTRY: Dict[str, BaselineFactory] = {
 #: (B0–B3); B4 layers the Answer_Policy on B3 for the answer-quality comparison.
 DEFAULT_RUN_BASELINES: tuple[str, ...] = ("B0", "B1", "B2", "B3")
 
+#: The canonical B-suite (the design's toggle matrix). Extended comparison
+#: baselines (e.g. ``Brag``, ``Brtcf``) live in the registry but are opt-in via
+#: an explicit ``baselines=`` list, so they never alter the canonical suite.
+CANONICAL_BASELINES: tuple[str, ...] = ("B0", "B1", "B2", "B3", "B4")
+
 
 def build_baseline(name: str, container: CoreContainer) -> MemoryStrategy:
     """Construct a single baseline strategy by name over ``container``.
@@ -175,8 +215,10 @@ def build_baseline(name: str, container: CoreContainer) -> MemoryStrategy:
 
 
 def build_all_baselines(container: CoreContainer) -> Dict[str, MemoryStrategy]:
-    """Construct every baseline (B0–B4) over a shared ``container``.
+    """Construct every canonical baseline (B0–B4) over a shared ``container``.
 
-    Returns a name → :class:`MemoryStrategy` map in B0…B4 order.
+    Returns a name → :class:`MemoryStrategy` map in B0…B4 order. Extended
+    comparison baselines (``Brag``, ``Brtcf``) are excluded here and built
+    explicitly by name via :func:`build_baseline` when needed.
     """
-    return {name: build_baseline(name, container) for name in BASELINE_TOGGLES}
+    return {name: build_baseline(name, container) for name in CANONICAL_BASELINES}

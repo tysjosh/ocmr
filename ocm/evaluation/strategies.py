@@ -84,6 +84,18 @@ class StrategyToggles:
     use_quarantine: bool = True
     use_provenance: bool = True
     use_answer_policy: bool = False
+    #: When False, the evidence package is built without the Graph_Store, so no
+    #: graph-assisted (structural) answer is derived and the result is read only
+    #: from retrieved text — modelling a vanilla RAG system (the RAG-only
+    #: baseline). Defaults True so B0–B4 keep their structural answer derivation.
+    use_structured_answer: bool = True
+    #: When True, contradictions are detected **at retrieval time** by scanning
+    #: accepted memory for single-valued-relation conflicts (rather than gated at
+    #: write time). Models the "filter at read time" alternative to write-time
+    #: governance. Independent of ``use_contradiction`` (which reads write-time
+    #: quarantine records); used by the retrieval-time-contradiction-filter
+    #: baseline, which leaves the write gate off.
+    use_read_time_filter: bool = False
 
     # -- convenience aliases -------------------------------------------- #
     @property
@@ -211,8 +223,19 @@ class MemoryStrategy:
                 include_conflicts=want_conflicts,
             )
 
-        # Contradiction signal: only honoured when the contradiction gate is on.
-        contradicted_ids = self._contradicted_ids() if t.use_contradiction else set()
+        # Contradiction signal. Two governance regimes:
+        # * write-time (``use_contradiction``): honour the write gate's quarantine
+        #   records (B3/B4).
+        # * read-time (``use_read_time_filter``): detect single-valued-relation
+        #   conflicts live in accepted memory at query time, since an arm with the
+        #   write gate off has no quarantine records (the retrieval-time filter
+        #   baseline).
+        if t.use_contradiction:
+            contradicted_ids = self._contradicted_ids()
+        elif t.use_read_time_filter:
+            contradicted_ids = self._read_time_contradicted_ids()
+        else:
+            contradicted_ids = set()
 
         # R3 — rerank the selected hits into one ordered candidate set.
         weights = getattr(c.settings, "rerank_weights", None)
@@ -224,13 +247,16 @@ class MemoryStrategy:
         )
 
         # R4 — package. Provenance and quarantine awareness are gated by toggles.
+        # A RAG-only arm (``use_structured_answer`` off) is packaged without the
+        # graph so the answer is read only from retrieved text.
         provenance_tracker = c.provenance_tracker if t.use_provenance else None
         quarantine_store = c.quarantine_store if t.use_quarantine else None
+        answer_graph = c.graph if t.use_structured_answer else None
         package = c.evidence_packager.package(
             query_text,
             classification,
             ranked,
-            graph=c.graph,
+            graph=answer_graph,
             provenance_tracker=provenance_tracker,
             quarantine_store=quarantine_store,
         )
@@ -256,6 +282,43 @@ class MemoryStrategy:
             records = []
         for record in records or []:
             contradicted.update(getattr(record, "conflicting_ids", []) or [])
+        return contradicted
+
+    def _read_time_contradicted_ids(self) -> set[str]:
+        """Detect single-valued-relation conflicts in accepted memory at read time.
+
+        The retrieval-time-contradiction-filter baseline leaves the write gate
+        off, so durable memory accumulates mutually contradictory accepted state
+        and there are no quarantine records to consult. This scans the accepted
+        assertions and, for every single-valued relation (cardinality 1:1 or m:1,
+        e.g. ``HAS_STATUS`` / ``ASSIGNED_TO``) with two or more **distinct**
+        accepted objects for the same subject, marks **all** assertions in that
+        conflicting group as contradicted. The reranker then excludes them from
+        confident support and the packager surfaces them as conflicts — the
+        read-time analogue of write-time quarantining. Because no single side can
+        be declared the winner after the fact, the whole group is flagged (the
+        defensible conservative choice for a read-time filter).
+        """
+        from ocm.ontology.relations import RELATION_SIGNATURES, Cardinality
+
+        single_valued = {Cardinality.ONE_TO_ONE, Cardinality.M_TO_ONE}
+        try:
+            accepted = list(self.container.repo.list_assertions("accepted"))
+        except Exception:  # pragma: no cover - defensive
+            return set()
+        # (subject, predicate) -> {object_id: [assertion_id, ...]}
+        groups: dict[tuple[str, str], dict[str, list[str]]] = {}
+        for a in accepted:
+            sig = RELATION_SIGNATURES.get(a.predicate)
+            if sig is None or sig.cardinality not in single_valued:
+                continue
+            by_obj = groups.setdefault((a.subject_id, a.predicate), {})
+            by_obj.setdefault(a.object_id, []).append(a.id)
+        contradicted: set[str] = set()
+        for by_obj in groups.values():
+            if len(by_obj) > 1:  # >= 2 distinct objects for one subject => conflict
+                for aids in by_obj.values():
+                    contradicted.update(aids)
         return contradicted
 
     def _build_answer_policy(self) -> Optional[Any]:
