@@ -1046,6 +1046,8 @@ def print_report(report: dict[str, Any]) -> None:
                 cells = " ".join(f"{v:6.1f}" for v in vals)
                 flat = " (flat: zero-width CI / degenerate test)" if vals and len(set(vals)) == 1 else ""
                 print(f"    {method:<22}{cells}{flat}")
+
+    by_cat = report.get("task_success_by_category")
     if by_cat:
         categories = sorted({c for m in by_cat.values() for c in m})
         print("\n=== Task success by scenario (mean [95% CI] across seeds; task-success only) ===")
