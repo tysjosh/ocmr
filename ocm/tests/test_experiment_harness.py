@@ -211,3 +211,28 @@ def test_shared_extractor_is_injected_into_every_arm():
     # The one shared extractor handled writes for every arm (proves reuse).
     assert calls["n"] > 0
     assert set(ms.methods) == {"B0", "B3"}
+
+
+# --------------------------------------------------------------------------- #
+# Latency warmup (Table V cold-run anomaly fix)
+# --------------------------------------------------------------------------- #
+def test_warmup_is_timing_only_and_does_not_change_results():
+    # The warmup runs a throwaway write+query on a discarded store, so decisive
+    # metrics and write outcomes must be byte-identical whether it runs or not.
+    methods = list(exp.DEFAULT_BASELINES)
+    warm = exp.run_multiseed(methods, seeds=(1337,), per_category=4, warmup=True)
+    cold = exp.run_multiseed(methods, seeds=(1337,), per_category=4, warmup=False)
+    assert warm.per_seed == cold.per_seed
+    assert warm.write_outcomes == cold.write_outcomes
+    assert warm.per_seed_category == cold.per_seed_category
+
+
+def test_fully_cached_run_does_not_require_warmup(tmp_path):
+    # First pass populates the checkpoint; second pass is fully cached and must
+    # reproduce identical decisive metrics without re-timing (warmup is skipped
+    # because there is no uncached arm to time).
+    ckpt = str(tmp_path / "ckpt")
+    methods = list(exp.DEFAULT_BASELINES)
+    first = exp.run_multiseed(methods, seeds=(1337,), per_category=3, checkpoint_dir=ckpt)
+    second = exp.run_multiseed(methods, seeds=(1337,), per_category=3, checkpoint_dir=ckpt)
+    assert first.per_seed == second.per_seed

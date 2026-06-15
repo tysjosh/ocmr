@@ -39,6 +39,7 @@ figures.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional
@@ -319,6 +320,37 @@ def _build_strategy(
     )
 
 
+def _warmup_stack(
+    settings_factory: Callable[[], Settings],
+    *,
+    extractor: object | None = None,
+    embeddings: object | None = None,
+) -> None:
+    """Pay one-time, process-global lazy-init costs *before* any timed write.
+
+    The first write/query of a cold run triggers lazy initialization that is
+    process-global, not per-arm: the tokenizer/model's first forward pass, torch
+    kernel autotuning, the embedding model's first encode, etc. Because arms run
+    in a fixed order (B0 first), that one-time cost is misattributed entirely to
+    B0, inflating its mean write latency by orders of magnitude on a cold run
+    (the well-known "first iteration is slow" artifact) while a warm re-run shows
+    the true steady-state value.
+
+    Running one throwaway write **and** query on a discarded B0 strategy here
+    amortizes those costs up front so every *measured* write/query is timed in
+    steady state. The warmup container is local and never observed. Any failure
+    is swallowed — warmup is an optimization, never a correctness requirement.
+    """
+    try:
+        strategy = _build_strategy(
+            "B0", settings_factory, extractor=extractor, embeddings=embeddings
+        )
+        strategy.write("Alice owns Project Orion.", "warmup:s1")
+        strategy.query("Who owns Project Orion?", top_k=5)
+    except Exception:  # pragma: no cover - warmup must never break a run
+        logging.getLogger(__name__).debug("Warmup write/query failed", exc_info=True)
+
+
 # --------------------------------------------------------------------------- #
 # Multi-seed runs
 # --------------------------------------------------------------------------- #
@@ -354,6 +386,7 @@ def run_multiseed(
     checkpoint_dir: Optional[str] = None,
     token_counter: Optional[Any] = None,
     key_suffix: str = "",
+    warmup: bool = True,
 ) -> MultiSeedResult:
     """Run ``methods`` across ``seeds`` and collect decisive metrics per seed.
 
@@ -373,6 +406,7 @@ def run_multiseed(
     seeds = list(seeds)
     ckpt = _Checkpoint(checkpoint_dir)
     result = MultiSeedResult(methods=methods, seeds=seeds)
+    warmed = not warmup  # when warmup is disabled, treat as already warmed
     for method in methods:
         result.per_seed[method] = {m: [] for m in DECISIVE_METRICS}
         result.per_seed_category[method] = {}
@@ -400,6 +434,13 @@ def run_multiseed(
                 cat = cached.get("category", {})
                 wo = cached.get("write_outcomes", {})
             else:
+                if not warmed:
+                    # Amortize one-time process-global lazy init *before* the
+                    # first timed write so no single arm (B0) absorbs it.
+                    _warmup_stack(
+                        settings_factory, extractor=extractor, embeddings=embeddings
+                    )
+                    warmed = True
                 if examples is None:
                     examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
                     if limit is not None:
@@ -853,6 +894,7 @@ def run_full_suite(
     checkpoint_dir: Optional[str] = None,
     out_path: Optional[str] = None,
     token_counter: Optional[Any] = None,
+    warmup: bool = True,
 ) -> dict[str, Any]:
     """Run the **entire** research protocol and return a structured result.
 
@@ -886,6 +928,14 @@ def run_full_suite(
     silently loading stale \u03c4=0.8 checkpoints. The \u03c4-sweep is unaffected (it
     overrides \u03c4 per row regardless). When ``None`` the configured default
     (0.8) is used and checkpoint keys are unchanged (backward compatible).
+
+    ``warmup`` (default ``True``) runs one throwaway write+query before the first
+    *timed* arm so the one-time, process-global lazy-init cost (model first
+    forward pass, torch kernel autotuning, first embed) is amortized up front
+    rather than misattributed to whichever arm runs first (B0). This removes the
+    cold-run B0 write-latency spike in Table V so its numbers reflect steady
+    state. It runs only when there is at least one uncached arm to time, so a
+    fully cached/resumed run pays nothing.
     """
     seeds = list(seeds)
     baselines = list(baselines)
@@ -908,6 +958,7 @@ def run_full_suite(
         methods, seeds=seeds, per_category=per_category,
         settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
         checkpoint_dir=checkpoint_dir, token_counter=token_counter, key_suffix=key_suffix,
+        warmup=warmup,
     )
     aggregated = aggregate_methods(ms)
     bootstrap = bootstrap_methods(ms)
