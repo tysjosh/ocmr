@@ -477,6 +477,29 @@ def aggregate_methods(ms: MultiSeedResult) -> dict[str, dict[str, stats.MeanCI]]
     return out
 
 
+def aggregate_task_success_by_category(
+    ms: MultiSeedResult,
+) -> dict[str, dict[str, stats.MeanCI]]:
+    """Per-method, per-scenario **task success** mean ± 95% CI across seeds.
+
+    Restores the per-scenario breakdown table (Recall / Contradiction-heavy /
+    Temporal / Planning / Evidence): for each method and benchmark category, the
+    mean and 95% CI of task success over seeds, computed from the same per-seed
+    category values the harness already records (``per_seed_category``). Only
+    **task success** is available per scenario — contradiction-rate and
+    constraint-violations are aggregated globally, not per category — so callers
+    must label any derived table as task-success-only.
+    """
+    out: dict[str, dict[str, stats.MeanCI]] = {}
+    for method in ms.methods:
+        by_cat: dict[str, list[float]] = {}
+        for _seed, cat_map in (ms.per_seed_category.get(method) or {}).items():
+            for category, value in (cat_map or {}).items():
+                by_cat.setdefault(str(category), []).append(float(value))
+        out[method] = {cat: stats.mean_ci(vals) for cat, vals in sorted(by_cat.items())}
+    return out
+
+
 def efficiency_table(ms: MultiSeedResult) -> dict[str, dict[str, Optional[float]]]:
     """Per-method efficiency/overhead for Table V.
 
@@ -845,6 +868,7 @@ def run_full_suite(
         checkpoint_dir=checkpoint_dir, token_counter=token_counter, key_suffix=key_suffix,
     )
     aggregated = aggregate_methods(ms)
+    task_success_by_category = aggregate_task_success_by_category(ms)
     non_ocmr = [b for b in baselines if b != "B3"]
     significance = significance_vs_best_baseline(ms, "B3", non_ocmr or baselines)
     sweep = threshold_sweep(
@@ -865,6 +889,10 @@ def run_full_suite(
         "decisive_metrics": {
             method: {metric: aggregated[method][metric].__dict__ for metric in aggregated[method]}
             for method in aggregated
+        },
+        "task_success_by_category": {
+            method: {cat: ci.__dict__ for cat, ci in task_success_by_category[method].items()}
+            for method in task_success_by_category
         },
         "significance_vs_best_baseline": significance,
         "write_outcomes": ms.write_outcomes,
@@ -894,6 +922,21 @@ def print_report(report: dict[str, Any]) -> None:
             d = m[metric]
             return f"{d['mean']:.1f} [{d['low']:.1f},{d['high']:.1f}]"
         print(f"{method:<22}{ci('task_success'):<22}{ci('contradiction_rate'):<22}{ci('constraint_violations'):<22}")
+
+    by_cat = report.get("task_success_by_category")
+    if by_cat:
+        categories = sorted({c for m in by_cat.values() for c in m})
+        print("\n=== Task success by scenario (mean [95% CI] across seeds; task-success only) ===")
+        header = f"{'Method':<22}" + "".join(f"{c[:20]:<22}" for c in categories)
+        print(header)
+        for method in report["methods"]:
+            row = by_cat.get(method, {})
+            cells = ""
+            for c in categories:
+                d = row.get(c)
+                cells += (f"{d['mean']:.1f} [{d['low']:.1f},{d['high']:.1f}]"
+                          if d else "-").ljust(22)
+            print(f"{method:<22}{cells}")
 
     print("\n=== Significance: B3 vs strongest non-OCMR baseline (Holm-Bonferroni) ===")
     for metric, t in report["significance_vs_best_baseline"]["metric_tests"].items():
