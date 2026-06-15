@@ -82,11 +82,12 @@ contradictory memory.
 
 The false-quarantine reduction that drives J toward τ = 0.95 is also partly
 illusory: as shown in the false-quarantine reconciliation below (W6 / M7,
-governed-write replay, `ocm/evaluation/replay_governed_writes.py`), ≈ 53% of the
-false quarantines counted at τ ≤ 0.9 are *correct* single-valued cardinality
-enforcements on identifiers the benchmark reuses across examples; raising τ
-"fixes" them only by ceasing to enforce the constraint at all (isolating each
-example drives the within-example false-quarantine rate to 0.0 [0.0, 0.0]).
+governed-write replay, `ocm/evaluation/replay_governed_writes.py`), the
+quarantines counted at τ ≤ 0.9 are dominated by *correct* single-valued
+cardinality enforcement — on the real-LLM run 835 of 1,198 (69.7%) quarantines
+fall in non-conflict-labeled examples, every one because the task already has a
+different accepted assignee. Raising τ "fixes" them only by ceasing to enforce
+the constraint at all.
 
 ### Decision
 
@@ -117,42 +118,49 @@ no longer retrievable, the deliberate price of a durably consistent store.
 
 The threshold sweep (Table VI) reports a write-time false-quarantine rate that,
 on its face, suggests the governed system rejects a large share of benign
-updates. A governed-write replay
-(`ocm/evaluation/replay_governed_writes.py`) shows this figure is dominated by a
-benchmark-construction artifact rather than over-aggressive governance.
+updates. A governed-write replay (`ocm/evaluation/replay_governed_writes.py`)
+shows the quarantines are overwhelmingly **correct 1:1 cardinality enforcement**
+on a benchmark where many tasks receive multiple distinct assignees, not
+rejection of consistent updates.
 
-Under the harness protocol — all examples ingested into one shared governed
-store — write-time quarantines that fall in examples not labeled
-conflict-expected account for **53.5% [52.0, 54.9]** of all quarantines (mean and
-95% CI over five seeds, 25 examples per category; 59.4 [56.8, 62.0] of
-111.0 [108.7, 113.3] quarantines per seed). Tracing each such quarantine to the
-assertion it conflicts with shows that **every** single-valued `ASSIGNED_TO`
-quarantine conflicts with an assignment accepted in a *different* example, never
-within the same one. The cause is that the synthetic generator reuses a small
-pool of task identifiers (`T1`, `T2`, …) across examples; entity resolution
-correctly merges two mentions of "Task T6", so a later example assigning a
-different person to it legitimately violates the relation's 1:1 cardinality and
-is quarantined. These are therefore **correct cardinality-enforcement actions**
-on identifiers the benchmark unintentionally aliases, not false positives.
+**Real-LLM run (Qwen2.5-14B + real embeddings, 5 seeds, `per_category=25`,
+τ=0.8), totals summed across seeds.** Under the harness protocol — all examples
+ingested into one shared governed store — write-time quarantines that fall in
+examples not labeled conflict-expected are **835 of 1,198 (69.7%)**. Every such
+quarantine carries the same reason: the task already has a different *accepted*
+`ASSIGNED_TO` target, so the later, conflicting assignment (ingested under
+`new_fact` intent) is quarantined — exactly what the single-valued cardinality
+rule is for. The label "false quarantine" here is a heuristic (any quarantine in
+a non-conflict-labeled example); it does **not** mean the governance was wrong.
 
-To quantify the residual, we re-ran the replay with each example isolated in its
-own store (`isolate_per_example=True`): the within-example false-quarantine count
-drops to **0.0 [0.0, 0.0]** across all five seeds while accepted writes rise from
-1,461 to 2,315, confirming that the shared-store false quarantines are entirely
-cross-example collisions. We retain the shared-store protocol because it stresses
-entity resolution and longitudinal cross-session recall under realistic
-identifier reuse, but the reported false-quarantine rate should be read as an
-**upper bound whose within-example component is effectively zero**.
+**Where the conflicting assignments come from.** Re-running with each example
+isolated in its own store (`isolate_per_example=True`) reduces total quarantines
+from **1,198 to 434** and false quarantines from **835 to 299** — so
+**cross-example identifier reuse accounts for ≈ 64% of all quarantines** (the
+synthetic generator recycles a small task-id pool `T1…T16` across examples, which
+entity resolution then merges). Crucially, unlike the deterministic offline mock
+(where isolation drives within-example false quarantines to zero), a substantial
+**within-example residual remains on the real stack: 299 of 434 (68.9%)**. This
+residual is real extraction / entity-resolution behaviour — the LLM emits, or
+real embeddings merge mentions into, more than one distinct assignee for a task
+*within a single example* — which the gate then correctly quarantines under
+`new_fact`. Partitioning the residual precisely into extractor over-generation
+vs. alias over-merge requires a per-example extraction audit (cf.
+`validate_anchor_extractions.py`) and is left to future work.
 
-**Compact footnote variant.** The write-time false-quarantine rate in Table VI is
-an upper bound. A governed-write replay (5 seeds) shows false quarantines are
-53.5% [52.0, 54.9] of all quarantines under the shared-store protocol, but every
-single-valued `ASSIGNED_TO` quarantine conflicts with an assignment from a
-*different* example — an artifact of reusing task identifiers (`T1`, `T2`, …)
-across examples ingested into one store. Entity resolution correctly merges the
-aliased tasks, so these are correct cardinality-enforcement actions. Isolating
-each example in its own store drives the within-example false-quarantine count to
-0.0 [0.0, 0.0] across all seeds.
+**What this means for the reported rate.** The write-time false-quarantine rate
+is an **upper bound** that conflates three things, none of which is wrongful
+rejection of a consistent update: (i) cross-example identifier reuse (≈ 64% of
+volume, a benchmark-construction artifact), (ii) real-extractor multiplicity
+within an example, and (iii) genuine reassignments that, under `new_fact` intent,
+are quarantined rather than superseded. A deployment that issued reassignments
+under `correction`/`update` intent would supersede instead of quarantine; the
+benchmark uses `new_fact` uniformly, which maximises quarantines by construction.
+
+> **Honest correction.** An earlier draft of this section reported isolation
+> driving the within-example false-quarantine rate to *0.0* — that holds only for
+> the deterministic offline mock, **not** for the real-LLM run (68.9%). The
+> offline figure must not be cited for the LLM configuration.
 
 **Reproduction.**
 
@@ -163,16 +171,16 @@ python -m ocm.evaluation.replay_governed_writes --per-category 25 --seed 1337 --
 ```
 
 ```python
-# multi-seed CIs (shared vs isolated)
+# multi-seed totals (shared vs isolated), real extractor/embeddings
 from ocm.evaluation.replay_governed_writes import replay_governed_writes
-replay_governed_writes(per_category=25, seeds=(1337, 7, 42, 99, 2024), isolate_per_example=False)
-replay_governed_writes(per_category=25, seeds=(1337, 7, 42, 99, 2024), isolate_per_example=True)
+replay_governed_writes(per_category=25, seeds=(1337, 7, 42, 99, 2024),
+                       extractor=qwen_extractor, embeddings=real_embeddings,
+                       isolate_per_example=False)  # 835/1198 false-quar
+replay_governed_writes(per_category=25, seeds=(1337, 7, 42, 99, 2024),
+                       extractor=qwen_extractor, embeddings=real_embeddings,
+                       isolate_per_example=True)   # 299/434 false-quar
 ```
 
-**Scope caveat (honest framing).** The 0.0 within-example figure means *zero
-false quarantines on this benchmark's within-example content* — it is **not** a
-claim that the system never false-quarantines in general. The text says
-"effectively zero" and scopes it to the benchmark, which is the defensible claim.
 
 ---
 
