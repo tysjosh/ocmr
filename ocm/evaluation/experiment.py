@@ -776,6 +776,7 @@ def run_full_suite(
     extractor: object | None = None,
     embeddings: object | None = None,
     stress_per_class: int = 30,
+    stress_extractor: object | None = None,
     taus: Iterable[float] = (0.6, 0.7, 0.8, 0.9, 0.95),
     checkpoint_dir: Optional[str] = None,
     out_path: Optional[str] = None,
@@ -797,6 +798,14 @@ def run_full_suite(
     progress so a crashed/refreshed session resumes instead of restarting; the
     final report is written to ``out_path`` (defaulting to
     ``<checkpoint_dir>/report.json`` when a checkpoint dir is given).
+
+    The stress suite (Tables VIII\u2013IX) uses ``stress_extractor`` for its W1
+    stage, which **defaults to the offline mock extractor** (``None`` \u21d2
+    ``MockExtractor`` via the container). The stress session text is templated
+    specifically for the mock (see ``ocm.evaluation.stress``), so the LLM adds
+    no extraction signal there \u2014 only cost and nondeterminism. Holding
+    extraction perfect also isolates the governance behaviour the stress tables
+    measure. Pass ``stress_extractor=extractor`` to force LLM-extracted stress.
     """
     seeds = list(seeds)
     baselines = list(baselines)
@@ -817,7 +826,7 @@ def run_full_suite(
     )
     stress = stress_by_intensity(
         methods=baselines, seeds=seeds[:1], per_class=stress_per_class,
-        settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+        settings_factory=settings_factory, extractor=stress_extractor, embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
     )
     report = {
