@@ -152,18 +152,29 @@ def replay_governed_writes(
     settings_factory: Callable[[], Settings] = _default_settings,
     extractor: object | None = None,
     embeddings: object | None = None,
+    isolate_per_example: bool = False,
     max_rows_per_bucket: int = 12,
     out_path: Optional[str] = None,
     verbose: bool = True,
 ) -> dict[str, Any]:
     """Replay the benchmark through the governed write path and collect outcomes.
 
-    Builds the ``method`` strategy (default B3, the full governed system) once
-    per seed, writes every session, and buckets each :class:`WriteOutcome` by its
-    governing decision with full provenance context. Returns a structured report
-    with per-bucket totals, sampled example rows, a quarantine-reason histogram,
-    and a ``false_quarantine`` sample (write-time quarantines inside no-conflict
-    examples).
+    Builds the ``method`` strategy (default B3, the full governed system), writes
+    every session, and buckets each :class:`WriteOutcome` by its governing
+    decision with full provenance context. Returns a structured report with
+    per-bucket totals, per-seed totals (for mean ± CI), sampled example rows, a
+    quarantine-reason histogram, and a ``false_quarantine`` sample (write-time
+    quarantines inside no-conflict examples).
+
+    By default the strategy is built **once per seed** and every example is
+    ingested into one shared governed store — the scored harness's protocol,
+    which stresses entity resolution under cross-example identifier reuse. Set
+    ``isolate_per_example=True`` to build a **fresh** store per example: this
+    removes cross-example identifier collisions (e.g. two examples reusing
+    "Task T6"), so the residual quarantines are only those a single example
+    actually plants. Comparing the two modes quantifies how much of the
+    write-time false-quarantine rate is a benchmark-construction artifact versus
+    genuine within-example governance.
 
     A shared ``extractor`` / ``embeddings`` is injected so a real (cached) Qwen +
     sentence-transformers stack is reused rather than reloaded; with the defaults
@@ -173,17 +184,29 @@ def replay_governed_writes(
     totals: dict[str, int] = {b: 0 for b in _BUCKETS}
     samples: dict[str, list[dict[str, Any]]] = {b: [] for b in _BUCKETS}
     false_quarantine: list[dict[str, Any]] = []
+    false_quarantine_total = 0
     reason_hist: dict[str, int] = {}
+    per_seed_totals: list[dict[str, Any]] = []
     n_examples = 0
 
     for seed in seeds:
         _seed_everything(seed)
         examples = BenchmarkGenerator(seed=seed).generate(per_category=per_category)
-        strategy = _build_strategy(
-            method, settings_factory, extractor=extractor, embeddings=embeddings
+        # Shared-store protocol: one strategy for the whole seed. Isolation
+        # builds a fresh strategy per example (below) instead.
+        seed_strategy = (
+            None if isolate_per_example
+            else _build_strategy(
+                method, settings_factory, extractor=extractor, embeddings=embeddings
+            )
         )
+        seed_counts: dict[str, int] = {b: 0 for b in _BUCKETS}
+        seed_fq = 0
         for example in examples:
             n_examples += 1
+            strategy = seed_strategy or _build_strategy(
+                method, settings_factory, extractor=extractor, embeddings=embeddings
+            )
             example_expects_conflict = any(
                 bool(getattr(q, "expected_conflict", False)) for q in example.questions
             )
@@ -207,6 +230,7 @@ def replay_governed_writes(
                 for bucket, outcomes in buckets.items():
                     for outcome in outcomes:
                         totals[bucket] += 1
+                        seed_counts[bucket] += 1
                         row = _outcome_row(
                             outcome,
                             example_id=example.id,
@@ -220,6 +244,8 @@ def replay_governed_writes(
                             key = (row.get("reason") or "?").strip()
                             reason_hist[key] = reason_hist.get(key, 0) + 1
                             if not example_expects_conflict:
+                                false_quarantine_total += 1
+                                seed_fq += 1
                                 fq = dict(row)
                                 fq["note"] = (
                                     "write-time quarantine in a no-conflict example "
@@ -229,13 +255,21 @@ def replay_governed_writes(
                                     false_quarantine.append(fq)
                         if len(samples[bucket]) < max_rows_per_bucket:
                             samples[bucket].append(row)
+        per_seed_totals.append({
+            "seed": seed,
+            **seed_counts,
+            "false_quarantine": seed_fq,
+        })
 
     report: dict[str, Any] = {
         "method": method,
         "seeds": seeds,
         "per_category": per_category,
+        "isolate_per_example": isolate_per_example,
         "n_examples": n_examples,
         "totals": totals,
+        "false_quarantine_total": false_quarantine_total,
+        "per_seed_totals": per_seed_totals,
         "quarantine_reason_histogram": dict(
             sorted(reason_hist.items(), key=lambda kv: kv[1], reverse=True)
         ),
@@ -256,10 +290,17 @@ def _print_report(report: dict[str, Any]) -> None:
     """Print a readable governance audit from a :func:`replay_governed_writes` report."""
     print(f"Governed-write replay — method={report['method']} "
           f"seeds={report['seeds']} per_category={report['per_category']}")
+    mode = "isolated per-example" if report.get("isolate_per_example") else "shared store (harness protocol)"
+    print(f"  store mode: {mode}")
     print(f"  examples replayed: {report['n_examples']}")
     t = report["totals"]
+    fq_total = report.get("false_quarantine_total", len(report.get("false_quarantine", [])))
+    q = t["quarantined"] or 0
+    fq_pct = (100.0 * fq_total / q) if q else 0.0
     print(f"  outcomes: accepted={t['accepted']} superseded={t['superseded']} "
           f"quarantined={t['quarantined']} rejected={t['rejected']}")
+    print(f"  false-quarantine (no-conflict examples): {fq_total} "
+          f"({fq_pct:.1f}% of quarantines)")
     print("=" * 90)
 
     hist = report.get("quarantine_reason_histogram") or {}
@@ -313,12 +354,16 @@ def main() -> None:
     parser.add_argument("--max-rows", type=int, default=12,
                         help="Max example rows captured per bucket.")
     parser.add_argument("--out", default=None, help="Optional path to write the JSON report.")
+    parser.add_argument("--isolate-per-example", action="store_true",
+                        help="Build a fresh store per example (removes cross-example "
+                             "identifier collisions; measures within-example governance).")
     args = parser.parse_args()
     replay_governed_writes(
         method=args.method,
         seeds=(args.seed,),
         per_category=args.per_category,
         max_rows_per_bucket=args.max_rows,
+        isolate_per_example=args.isolate_per_example,
         out_path=args.out,
     )
 

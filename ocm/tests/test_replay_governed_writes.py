@@ -55,3 +55,32 @@ def test_replay_is_deterministic_for_a_seed():
     b = replay_governed_writes(per_category=3, seeds=(1337,), verbose=False)
     assert a["totals"] == b["totals"]
     assert a["quarantine_reason_histogram"] == b["quarantine_reason_histogram"]
+
+
+def test_per_seed_totals_sum_to_aggregate():
+    report = replay_governed_writes(
+        per_category=4, seeds=(1337, 7), max_rows_per_bucket=0, verbose=False
+    )
+    ps = report["per_seed_totals"]
+    assert [p["seed"] for p in ps] == [1337, 7]
+    for bucket in ("accepted", "superseded", "quarantined", "rejected"):
+        assert sum(p[bucket] for p in ps) == report["totals"][bucket]
+    assert sum(p["false_quarantine"] for p in ps) == report["false_quarantine_total"]
+
+
+def test_isolation_removes_cross_example_false_quarantines():
+    # Cross-example identifier reuse (shared store) drives most false
+    # quarantines; isolating each example in its own store must drive the
+    # within-example false-quarantine count to zero, while accepting more.
+    shared = replay_governed_writes(
+        per_category=8, seeds=(1337,), isolate_per_example=False,
+        max_rows_per_bucket=0, verbose=False,
+    )
+    isolated = replay_governed_writes(
+        per_category=8, seeds=(1337,), isolate_per_example=True,
+        max_rows_per_bucket=0, verbose=False,
+    )
+    assert shared["false_quarantine_total"] > 0
+    assert isolated["false_quarantine_total"] == 0
+    assert isolated["totals"]["accepted"] > shared["totals"]["accepted"]
+    assert isolated["isolate_per_example"] is True
