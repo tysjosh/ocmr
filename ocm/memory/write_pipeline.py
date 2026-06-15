@@ -406,10 +406,10 @@ class WritePipeline:
                 continue
             model = Event(
                 id=event_id,
-                type=ev.get("type", "event"),
+                type=ev.get("type") or "event",
                 timestamp_start=_coerce_optional_datetime(ev.get("timestamp_start")) or now,
                 timestamp_end=_coerce_optional_datetime(ev.get("timestamp_end")),
-                description=ev.get("description", name),
+                description=ev.get("description") or name or "",
             )
             self._persist_node("Event", model, name=name)
             self.provenance_tracker.record(
@@ -454,8 +454,11 @@ class WritePipeline:
     ) -> None:
         """Persist every extracted document and embed it (Req 16.6)."""
         for doc in extraction.documents:
-            path = doc.get("path_or_url", "")
-            title = doc.get("title", path)
+            path = doc.get("path_or_url") or ""
+            title = doc.get("title") or path or ""
+            if not (path or title):
+                # Nothing identifiable to store (LLM emitted an empty/null doc).
+                continue
             doc_id = self.ids.generic_id("doc", path or title, source_ref)
             model = Document(
                 id=doc_id,
@@ -500,8 +503,11 @@ class WritePipeline:
         evidence is quarantined and its mirrored node retracted.
         """
         for dec in extraction.decisions:
-            summary = dec.get("summary", "")
+            summary = dec.get("summary") or ""
             topic = dec.get("topic") or summary
+            if not topic:
+                # No decision content to identify/store (empty/null decision).
+                continue
             normalized_topic = " ".join(str(topic).lower().split())
             dec_id = self.ids.stable_id("dec", normalized_topic)
             status = dec.get("status") or DecisionStatus.draft.value

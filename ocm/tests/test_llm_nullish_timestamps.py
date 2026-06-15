@@ -142,3 +142,35 @@ def test_claim_with_nullish_created_at_does_not_crash():
     # The claim persisted with a defaulted created_at rather than crashing.
     # (Lookup by re-deriving the id is unnecessary; absence of exception + a
     # stored row is the regression guard.)
+
+
+def test_null_event_description_and_doc_decision_fields_do_not_crash():
+    """LLMs emit explicit JSON null for required string fields; the pipeline
+    must coerce them rather than fail Pydantic validation."""
+    extraction = ExtractionResult(
+        entities=[],
+        events=[
+            # description is null and type is null (Qwen-style)
+            {"name": "Kickoff", "type": None, "timestamp_start": None,
+             "timestamp_end": None, "description": None}
+        ],
+        claims=[],
+        documents=[
+            # path_or_url and title null -> skipped, no crash
+            {"title": None, "path_or_url": None, "tags": None},
+            # a usable doc still persists
+            {"title": "Spec", "path_or_url": "http://x/y", "tags": []},
+        ],
+        decisions=[
+            # null summary -> skipped, no crash
+            {"summary": None, "status": None, "timestamp": None},
+        ],
+        relations=[],
+        extractor_version="stub-1",
+    )
+    wp = _pipeline(_StubExtractor(extraction))
+    # Must not raise pydantic ValidationError.
+    wp.run("Kickoff happened; see the spec.", "src-null-fields")
+
+    types = [t for (t, _p) in wp.repo.list_entities()]
+    assert "Event" in types  # event persisted with defaulted description
