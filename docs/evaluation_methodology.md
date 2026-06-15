@@ -98,9 +98,13 @@ We treat the τ-sweep as a **sensitivity frontier, not a selector**:
   holds *both* safety metrics (contradiction rate and constraint violations) at
   their floor.
 
-We adopt **τ = 0.8**, accepting a measured ~13-point task-success cost that the
-per-scenario breakdown localizes to the contradiction-heavy category, where
-conservative, conflict-aware answering is the intended behavior.
+We adopt **τ = 0.8**, accepting a measured task-success cost (B3 60.0 vs the
+text-only B0 77.2, ≈ 17 points on the full real-LLM run). The per-scenario
+breakdown shows this cost does **not** fall in the contradiction-heavy category
+(where every arm floors near 3.7) but in the planning, longitudinal, and
+temporal categories — the *mechanism's* signature: B3 quarantines conflicting
+writes at ingest (1,198 vs 556 quarantined), so the losing side of a conflict is
+no longer retrievable, the deliberate price of a durably consistent store.
 
 > **Optional, recommended:** make the objective violation-aware,
 > `J'(τ) = ContrRate + λ_q·FalseQuar + λ_c·ECE + λ_v·ConstraintViol`. With any
