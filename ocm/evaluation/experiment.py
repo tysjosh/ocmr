@@ -477,6 +477,48 @@ def aggregate_methods(ms: MultiSeedResult) -> dict[str, dict[str, stats.MeanCI]]
     return out
 
 
+def per_seed_raw(ms: MultiSeedResult) -> dict[str, dict[str, list[float]]]:
+    """Raw per-seed decisive-metric values per method (no aggregation).
+
+    Exposes exactly what the multi-seed run observed — one value per seed, per
+    method, per decisive metric — so a reviewer can inspect the spread behind the
+    aggregated mean ± CI rather than trusting a summary. Pairs the seeds with the
+    values so degenerate (zero-variance) cases are auditable: a metric that reads
+    identically across seeds shows up here as a flat list, which is *why* the
+    Student-t CI collapses to zero width and a paired test returns p=0 or p=1.
+    """
+    return {
+        method: {
+            metric: list(ms.per_seed[method][metric])
+            for metric in DECISIVE_METRICS
+        }
+        for method in ms.methods
+    }
+
+
+def bootstrap_methods(
+    ms: MultiSeedResult, *, n_resamples: int = 10000, seed: int = 1234
+) -> dict[str, dict[str, stats.MeanCI]]:
+    """Nonparametric bootstrap CI per method per decisive metric.
+
+    A robustness companion to :func:`aggregate_methods` (which uses a Student-t
+    interval). The percentile bootstrap makes no normality assumption, so for the
+    small multi-seed samples here it is the more defensible interval to report
+    alongside the t-based one. The resampling RNG is seeded for reproducibility.
+    """
+    return {
+        method: {
+            metric: stats.bootstrap_mean_ci(
+                ms.per_seed[method][metric],
+                n_resamples=n_resamples,
+                seed=seed,
+            )
+            for metric in DECISIVE_METRICS
+        }
+        for method in ms.methods
+    }
+
+
 def aggregate_task_success_by_category(
     ms: MultiSeedResult,
 ) -> dict[str, dict[str, stats.MeanCI]]:
@@ -868,6 +910,8 @@ def run_full_suite(
         checkpoint_dir=checkpoint_dir, token_counter=token_counter, key_suffix=key_suffix,
     )
     aggregated = aggregate_methods(ms)
+    bootstrap = bootstrap_methods(ms)
+    raw = per_seed_raw(ms)
     task_success_by_category = aggregate_task_success_by_category(ms)
     non_ocmr = [b for b in baselines if b != "B3"]
     significance = significance_vs_best_baseline(ms, "B3", non_ocmr or baselines)
@@ -890,6 +934,11 @@ def run_full_suite(
             method: {metric: aggregated[method][metric].__dict__ for metric in aggregated[method]}
             for method in aggregated
         },
+        "decisive_metrics_bootstrap": {
+            method: {metric: bootstrap[method][metric].__dict__ for metric in bootstrap[method]}
+            for method in bootstrap
+        },
+        "per_seed_raw": raw,
         "task_success_by_category": {
             method: {cat: ci.__dict__ for cat, ci in task_success_by_category[method].items()}
             for method in task_success_by_category
@@ -923,7 +972,29 @@ def print_report(report: dict[str, Any]) -> None:
             return f"{d['mean']:.1f} [{d['low']:.1f},{d['high']:.1f}]"
         print(f"{method:<22}{ci('task_success'):<22}{ci('contradiction_rate'):<22}{ci('constraint_violations'):<22}")
 
-    by_cat = report.get("task_success_by_category")
+    boot = report.get("decisive_metrics_bootstrap")
+    if boot:
+        print("\n=== Decisive metrics (bootstrap 95% CI; nonparametric, no normality assumption) ===")
+        print(f"{'Method':<22}{'TaskSuccess up':<22}{'Contradiction dn':<22}{'ConstraintViol dn':<22}")
+        for method in report["methods"]:
+            m = boot[method]
+            def bci(metric: str) -> str:
+                d = m[metric]
+                return f"{d['mean']:.1f} [{d['low']:.1f},{d['high']:.1f}]"
+            print(f"{method:<22}{bci('task_success'):<22}{bci('contradiction_rate'):<22}{bci('constraint_violations'):<22}")
+
+    raw = report.get("per_seed_raw")
+    seeds = report.get("seeds")
+    if raw and seeds:
+        print("\n=== Per-seed raw decisive metrics (one value per seed; audit of CI width) ===")
+        print(f"  seeds = {seeds}")
+        for metric in ("task_success", "contradiction_rate", "constraint_violations"):
+            print(f"  [{metric}]")
+            for method in report["methods"]:
+                vals = (raw.get(method, {}) or {}).get(metric, [])
+                cells = " ".join(f"{v:6.1f}" for v in vals)
+                flat = " (flat: zero-width CI / degenerate test)" if vals and len(set(vals)) == 1 else ""
+                print(f"    {method:<22}{cells}{flat}")
     if by_cat:
         categories = sorted({c for m in by_cat.values() for c in m})
         print("\n=== Task success by scenario (mean [95% CI] across seeds; task-success only) ===")

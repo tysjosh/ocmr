@@ -159,6 +159,66 @@ def mean_ci(values: Sequence[float], confidence: float = 0.95) -> MeanCI:
     return MeanCI(mean, mean - half, mean + half, half, n)
 
 
+def _percentile(sorted_vals: Sequence[float], q: float) -> float:
+    """Linear-interpolated percentile of an already-sorted sequence.
+
+    ``q`` is in ``[0, 1]``. Matches numpy's default ('linear') interpolation so
+    the bootstrap interval endpoints are reproducible without a numpy dependency.
+    """
+    n = len(sorted_vals)
+    if n == 0:
+        return 0.0
+    if n == 1:
+        return float(sorted_vals[0])
+    pos = q * (n - 1)
+    lo = int(math.floor(pos))
+    hi = int(math.ceil(pos))
+    if lo == hi:
+        return float(sorted_vals[lo])
+    frac = pos - lo
+    return float(sorted_vals[lo]) * (1.0 - frac) + float(sorted_vals[hi]) * frac
+
+
+def bootstrap_mean_ci(
+    values: Sequence[float],
+    confidence: float = 0.95,
+    n_resamples: int = 10000,
+    seed: int = 1234,
+) -> MeanCI:
+    """Percentile bootstrap CI for the mean of ``values`` (no normality assumption).
+
+    Complements :func:`mean_ci`: where the Student-t interval assumes the
+    sampling distribution of the mean is normal (questionable for a handful of
+    seeds over a near-deterministic proxy), the nonparametric bootstrap resamples
+    the observed seeds with replacement ``n_resamples`` times and reports the
+    empirical 2.5/97.5 percentiles of the resampled means. The resampling RNG is
+    seeded so the interval is fully reproducible.
+
+    With a single value the interval collapses to the point (a degenerate
+    bootstrap); with none it is all zeros. The ``half_width`` is reported as half
+    the (generally asymmetric) interval span for table compatibility.
+    """
+    import random as _random
+
+    vals = [float(v) for v in values]
+    n = len(vals)
+    if n == 0:
+        return MeanCI(0.0, 0.0, 0.0, 0.0, 0)
+    mean = sum(vals) / n
+    if n == 1:
+        return MeanCI(mean, mean, mean, 0.0, 1)
+    rng = _random.Random(seed)
+    means: list[float] = []
+    for _ in range(n_resamples):
+        resample = [vals[rng.randrange(n)] for _ in range(n)]
+        means.append(sum(resample) / n)
+    means.sort()
+    alpha = (1.0 - confidence) / 2.0
+    low = _percentile(means, alpha)
+    high = _percentile(means, 1.0 - alpha)
+    return MeanCI(mean, low, high, (high - low) / 2.0, n)
+
+
 # --------------------------------------------------------------------------- #
 # Paired significance tests
 # --------------------------------------------------------------------------- #

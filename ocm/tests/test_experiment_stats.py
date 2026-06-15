@@ -69,3 +69,35 @@ def test_perfect_calibration_has_low_error():
     correct = [True, True, False, False]
     assert stats.expected_calibration_error(conf, correct) == 0.0
     assert stats.brier_score(conf, correct) == 0.0
+
+
+def test_bootstrap_mean_ci_brackets_mean_and_is_reproducible():
+    vals = [77.0, 76.5, 77.5, 76.8, 77.2]
+    a = stats.bootstrap_mean_ci(vals)
+    b = stats.bootstrap_mean_ci(vals)
+    assert abs(a.mean - 77.0) < 1e-9
+    assert a.low <= a.mean <= a.high
+    assert a.n == 5
+    # Same seed -> identical interval (reproducibility for the paper).
+    assert a.as_tuple() == b.as_tuple()
+
+
+def test_bootstrap_mean_ci_flat_input_has_zero_width():
+    # A degenerate (zero-variance) metric -> the bootstrap interval collapses,
+    # mirroring the Student-t interval and exposing why a paired test is p=0/1.
+    ci = stats.bootstrap_mean_ci([14.5, 14.5, 14.5, 14.5, 14.5])
+    assert ci.mean == 14.5
+    assert ci.low == 14.5 and ci.high == 14.5
+    assert ci.half_width == 0.0
+
+
+def test_bootstrap_mean_ci_edge_cases():
+    assert stats.bootstrap_mean_ci([]).as_tuple() == (0.0, 0.0, 0.0)
+    one = stats.bootstrap_mean_ci([42.0])
+    assert one.mean == 42.0 and one.half_width == 0.0
+
+
+def test_percentile_linear_interpolation():
+    assert stats._percentile([1.0, 2.0, 3.0, 4.0], 0.0) == 1.0
+    assert stats._percentile([1.0, 2.0, 3.0, 4.0], 1.0) == 4.0
+    assert stats._percentile([1.0, 2.0, 3.0, 4.0], 0.5) == 2.5
