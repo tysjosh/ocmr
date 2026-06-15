@@ -353,6 +353,7 @@ def run_multiseed(
     embeddings: object | None = None,
     checkpoint_dir: Optional[str] = None,
     token_counter: Optional[Any] = None,
+    key_suffix: str = "",
 ) -> MultiSeedResult:
     """Run ``methods`` across ``seeds`` and collect decisive metrics per seed.
 
@@ -364,7 +365,9 @@ def run_multiseed(
 
     When ``checkpoint_dir`` is set, each completed ``(method, seed)`` is persisted
     there and skipped on a resumed run \u2014 so a Colab crash/refresh loses at most
-    the in-flight arm, not the whole run.
+    the in-flight arm, not the whole run. ``key_suffix`` is appended to each
+    checkpoint key so a configuration change (e.g. a different contradiction
+    threshold \u03c4) recomputes instead of silently loading a stale result.
     """
     methods = list(methods)
     seeds = list(seeds)
@@ -390,7 +393,7 @@ def run_multiseed(
         _seed_everything(seed)
         examples = None  # generated lazily; skipped entirely if all arms cached
         for method in methods:
-            key = f"ms__{method}__seed{seed}__pc{per_category}"
+            key = f"ms__{method}__seed{seed}__pc{per_category}{key_suffix}"
             cached = ckpt.load(key)
             if cached is not None:
                 dm = cached["decisive"]
@@ -681,13 +684,16 @@ def stress_by_intensity(
     extractor: object | None = None,
     embeddings: object | None = None,
     checkpoint_dir: Optional[str] = None,
+    key_suffix: str = "",
 ) -> dict[str, Any]:
     """Aggregate task success by perturbation intensity and entity-resolution.
 
     Returns, per method, mean task success at low/medium/high intensity (Table
     IX), and the entity-resolution F1 / false-merge over alias scenarios (Table
     VIII). Each ``(method, seed)`` and the entity-resolution pass are
-    checkpointed to ``checkpoint_dir`` and skipped on resume.
+    checkpointed to ``checkpoint_dir`` and skipped on resume. ``key_suffix`` is
+    appended to each checkpoint key so a config change (e.g. \u03c4) recomputes
+    rather than loading a stale result.
     """
     from ocm.evaluation.stress import (
         INTENSITY_LEVELS,
@@ -705,7 +711,7 @@ def stress_by_intensity(
         _seed_everything(seed)
         examples = None
         for method in methods:
-            key = f"stress__{method}__seed{seed}__pc{per_class}"
+            key = f"stress__{method}__seed{seed}__pc{per_class}{key_suffix}"
             cached = ckpt.load(key)
             if cached is not None:
                 for lvl in INTENSITY_LEVELS:
@@ -777,6 +783,7 @@ def run_full_suite(
     embeddings: object | None = None,
     stress_per_class: int = 30,
     stress_extractor: object | None = None,
+    tau: Optional[float] = None,
     taus: Iterable[float] = (0.6, 0.7, 0.8, 0.9, 0.95),
     checkpoint_dir: Optional[str] = None,
     out_path: Optional[str] = None,
@@ -806,15 +813,36 @@ def run_full_suite(
     no extraction signal there \u2014 only cost and nondeterminism. Holding
     extraction perfect also isolates the governance behaviour the stress tables
     measure. Pass ``stress_extractor=extractor`` to force LLM-extracted stress.
+
+    ``tau`` overrides the contradiction-gate confidence threshold
+    (``contradiction_high_confidence``) for the decisive-metrics and stress
+    blocks. When set, it is also folded into their checkpoint keys
+    (``...__tau{tau}``) so a threshold change recomputes those arms instead of
+    silently loading stale \u03c4=0.8 checkpoints. The \u03c4-sweep is unaffected (it
+    overrides \u03c4 per row regardless). When ``None`` the configured default
+    (0.8) is used and checkpoint keys are unchanged (backward compatible).
     """
     seeds = list(seeds)
     baselines = list(baselines)
     methods = baselines + [a for a in DEFAULT_ABLATIONS if a != "full"]
 
+    # Optional contradiction-threshold override (\u03c4) for the governed arms.
+    if tau is not None:
+        _base_factory = settings_factory
+
+        def settings_factory() -> Settings:  # type: ignore[misc]
+            return _base_factory().model_copy(
+                update={"contradiction_high_confidence": float(tau)}
+            )
+
+        key_suffix = f"__tau{tau}"
+    else:
+        key_suffix = ""
+
     ms = run_multiseed(
         methods, seeds=seeds, per_category=per_category,
         settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
-        checkpoint_dir=checkpoint_dir, token_counter=token_counter,
+        checkpoint_dir=checkpoint_dir, token_counter=token_counter, key_suffix=key_suffix,
     )
     aggregated = aggregate_methods(ms)
     non_ocmr = [b for b in baselines if b != "B3"]
@@ -827,12 +855,13 @@ def run_full_suite(
     stress = stress_by_intensity(
         methods=baselines, seeds=seeds[:1], per_class=stress_per_class,
         settings_factory=settings_factory, extractor=stress_extractor, embeddings=embeddings,
-        checkpoint_dir=checkpoint_dir,
+        checkpoint_dir=checkpoint_dir, key_suffix=key_suffix,
     )
     report = {
         "methods": methods,
         "seeds": seeds,
         "per_category": per_category,
+        "tau": tau,
         "decisive_metrics": {
             method: {metric: aggregated[method][metric].__dict__ for metric in aggregated[method]}
             for method in aggregated
