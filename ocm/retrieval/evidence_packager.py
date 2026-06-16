@@ -489,6 +489,14 @@ class EvidencePackager:
         qtype = getattr(classification, "query_type", None)
         entity_ids = _resolve_entity_ids(graph, getattr(classification, "entities", []) or [])
 
+        # 0) Slot value intent: a "value of <slot>" query addressed by the slot's
+        #    (qualified) key returns the slot's current accepted HAS_VALUE — the
+        #    MultiWOZ dialogue-state recall probe.
+        if "value of" in q or "slot" in q:
+            slot_answer = self._slot_value_answer(graph, query)
+            if slot_answer is not None:
+                return slot_answer
+
         # 1) Status intent takes precedence: a status question about a Task whose
         #    accepted status is "done" must answer "done", not its assignee.
         if "status" in q or "state of" in q:
@@ -527,6 +535,42 @@ class EvidencePackager:
             status_answer = self._status_answer(graph, entity_ids)
             if status_answer is not None:
                 return status_answer
+        return None
+
+    @staticmethod
+    def _slot_value_answer(graph: Any | None, query: str) -> Optional[str]:
+        """Answer a slot-value query from the slot's current accepted HAS_VALUE.
+
+        Matches a ``Slot`` node whose (qualified) name appears in the query
+        (the MultiWOZ questions address a slot by its ``<dialogue>:<slot>`` key),
+        then returns its current value. When more than one HAS_VALUE is accepted
+        for the slot — which only happens on an ungoverned arm that failed to
+        supersede — the most recent value is returned, so recall is measured
+        against the *current* gold value regardless of arm; the difference
+        between arms surfaces in constraint_violations, not here.
+        """
+        if graph is None:
+            return None
+        qn = _norm(query)
+        if not qn:
+            return None
+        for node_id in graph.node_ids():
+            if graph.get_entity_type(node_id) != "Slot":
+                continue
+            payload = graph.get_entity_payload(node_id) or {}
+            slot_name = payload.get("name") or ""
+            if not slot_name or _norm(slot_name) not in qn:
+                continue
+            values: list[tuple[Any, str]] = []
+            for _s, obj, _k, data in graph.out_edges(node_id, "HAS_VALUE"):
+                vp = graph.get_entity_payload(obj) or {}
+                value = vp.get("value") or vp.get("name") or obj
+                values.append((data.get("created_at"), str(value)))
+            if not values:
+                continue
+            # Most-recent value (stable: fall back to insertion order on ties).
+            values.sort(key=lambda cv: (cv[0] is not None, str(cv[0])))
+            return f"{slot_name}: {values[-1][1]}"
         return None
 
     @staticmethod

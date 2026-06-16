@@ -41,10 +41,11 @@ def _accepted_has_value(container) -> dict[str, set[str]]:
 def test_build_from_dialogues_shapes_examples_and_oracle():
     examples, oracle = build_from_dialogues(sample_dialogues())
     assert [e.id for e in examples] == ["mwz-0001", "mwz-0002", "mwz-0003"]
-    # mwz-0001 has one slot that changed -> its question is conflict-flagged.
+    # mwz-0001's first slot recalls the current (post-change) value; MultiWOZ
+    # models supersession, not contradiction-surfacing, so expected_conflict=False.
     d1 = examples[0]
     assert d1.questions[0].expected_answer_contains == ["south"]
-    assert d1.questions[0].expected_conflict is True
+    assert d1.questions[0].expected_conflict is False
     # The oracle knows the per-turn writes.
     assert oracle.extract("", "mwz-0001:t0").relations[0]["write_intent"] == "new_fact"
     assert oracle.extract("", "mwz-0001:t1").relations[0]["write_intent"] == "correction"
@@ -118,9 +119,13 @@ def test_run_multiwoz_suite_governed_beats_ungoverned_on_violations():
     report = run_multiwoz_suite(sample_dialogues(), baselines=("B0", "B2", "B3"), seeds=(1337,))
     dm = report["decisive_metrics"]
     v = lambda m: dm[m]["constraint_violations"]["mean"]
+    ts = lambda m: dm[m]["task_success"]["mean"]
     # Ungoverned arms accumulate single-valued violations; the governed full
     # system supersedes changed slots to zero.
     assert v("B3") == 0.0
     assert v("B0") > 0.0 and v("B2") > 0.0
     # B3 supersedes (changed slots) where ungoverned arms do not.
     assert report["write_outcomes"]["B3"]["superseded"] > report["write_outcomes"]["B0"]["superseded"]
+    # The HAS_VALUE answer-derivation rule makes task success meaningful: the
+    # governed arm recalls the current slot value (no tradeoff on supersession).
+    assert ts("B3") > 0.0

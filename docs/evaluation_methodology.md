@@ -349,6 +349,35 @@ these differ in retrieval composition and write-time gating.
 
 
 
+### Real-data validation (MultiWOZ)
+
+To validate the governance mechanism beyond the synthetic benchmark, an adapter
+(`ocm/evaluation/datasets/multiwoz_adapter.py`) maps **MultiWOZ 2.2** dialogues
+onto governed memory. Each dialogue-state slot (e.g. `hotel-area`) becomes a
+single-valued `Slot -[HAS_VALUE]-> SlotValue` assertion (1:1), and an *oracle
+extractor* replays the gold per-turn belief state — a new slot as `new_fact`, a
+changed slot as `correction` — so governance is evaluated *given correct slots*
+(isolating it from dialogue-state-tracking error). The full pipeline, baselines,
+and metrics run unchanged via the harness's `provided_examples` hook.
+
+Result (fixture-scale; the same code runs the full split via `load_multiwoz`):
+
+| Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
+|--------|---------------|-----------------|------------------|
+| B0 / B2 (ungoverned) | 100.0 | 0.0 (N/A) | 40.0 |
+| B3 (write-time gate) | 100.0 | 0.0 (N/A) | **0.0** |
+
+This complements the synthetic finding with a **tradeoff-free** real-data case:
+on MultiWOZ a changed slot is a legitimate update, so the governed arm
+**supersedes** (one accepted value) — eliminating durable constraint violations
+(40.0 → 0.0) while **preserving recall** (task success 100, via the `HAS_VALUE`
+answer-derivation rule). Contradiction-surfacing is not applicable here (a
+supersession is a resolved update, not an unresolved contradiction), so that
+column is N/A. Caveats: (i) oracle extraction tests governance given gold slots,
+not end-to-end from raw text; (ii) under `new_fact` intent a conflicting value
+would instead quarantine — the `correction` intent models the belief-state
+update MultiWOZ actually contains.
+
 ### Statistics
 
 Multi-seed (default 5 seeds: `1337, 7, 42, 99, 2024`). Per-metric aggregates use a

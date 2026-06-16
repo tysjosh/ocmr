@@ -122,7 +122,6 @@ def build_from_dialogues(
     for dialogue in dialogues:
         did = str(dialogue["dialogue_id"])
         prev_state: dict[str, str] = {}
-        changed_slots: set[str] = set()
         sessions: list[Session] = []
 
         for i, turn in enumerate(dialogue.get("turns", [])):
@@ -133,8 +132,6 @@ def build_from_dialogues(
                 if prev_state.get(slot) == value:
                     continue  # unchanged this turn — no write
                 is_change = slot in prev_state
-                if is_change:
-                    changed_slots.add(slot)
                 intent = "correction" if is_change else "new_fact"
                 conf = CORRECTION_CONFIDENCE if is_change else NEW_FACT_CONFIDENCE
                 slot_name = _slot_key(did, slot)
@@ -156,14 +153,17 @@ def build_from_dialogues(
             sessions.append(Session(session_id=f"t{i}", input=utterance))
             prev_state = dict(state)
 
-        # Questions: recall the *final* value of each slot. A slot that changed
-        # during the dialogue is flagged expected_conflict (a stale value exists
-        # that a governed reader must not surface).
+        # Questions: recall the *final* (current) value of each slot, addressed
+        # by the slot's qualified key (``<dialogue_id>:<slot>``) so it resolves
+        # unambiguously in a shared multi-dialogue store. ``expected_conflict`` is
+        # False: a changed slot is a *resolved* supersession, not an unresolved
+        # contradiction to surface — MultiWOZ exercises constraint integrity and
+        # recall, not contradiction-surfacing (that axis is N/A here).
         questions = [
             Question(
-                query=f"What is the value of {slot}?",
+                query=f"What is the current value of slot {_slot_key(did, slot)}?",
                 expected_answer_contains=[value],
-                expected_conflict=(slot in changed_slots),
+                expected_conflict=False,
             )
             for slot, value in sorted(prev_state.items())
         ]
