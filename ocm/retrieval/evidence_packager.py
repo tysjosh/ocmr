@@ -36,6 +36,7 @@ Requirements: 18.1, 18.2, 18.3, 18.4, 18.5 (and 12.2 for provenance).
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
@@ -541,36 +542,51 @@ class EvidencePackager:
     def _slot_value_answer(graph: Any | None, query: str) -> Optional[str]:
         """Answer a slot-value query from the slot's current accepted HAS_VALUE.
 
-        Matches a ``Slot`` node whose (qualified) name appears in the query
-        (the MultiWOZ questions address a slot by its ``<dialogue>:<slot>`` key),
-        then returns its current value. When more than one HAS_VALUE is accepted
-        for the slot — which only happens on an ungoverned arm that failed to
-        supersede — the most recent value is returned, so recall is measured
-        against the *current* gold value regardless of arm; the difference
-        between arms surfaces in constraint_violations, not here.
+        The query addresses a slot by its qualified key inside a ``[[key]]``
+        marker (e.g. ``[[mwz-0001:hotel-area]]``); the key is matched **exactly**
+        (normalized) against ``Slot`` nodes, so a slot key that is a substring of
+        another never mis-resolves at full dataset scale. When no marker is
+        present we fall back to a substring scan (legacy/robustness).
+
+        When more than one HAS_VALUE is accepted for the slot — which only
+        happens on an ungoverned arm that failed to supersede — the most recent
+        value is returned, so recall is measured against the *current* gold value
+        regardless of arm; the difference between arms surfaces in
+        constraint_violations, not here.
         """
         if graph is None:
             return None
         qn = _norm(query)
         if not qn:
             return None
-        for node_id in graph.node_ids():
-            if graph.get_entity_type(node_id) != "Slot":
-                continue
-            payload = graph.get_entity_payload(node_id) or {}
-            slot_name = payload.get("name") or ""
-            if not slot_name or _norm(slot_name) not in qn:
-                continue
+        marker = re.search(r"\[\[(.+?)\]\]", query)
+        key_norm = _norm(marker.group(1)) if marker else None
+
+        def _current_value(node_id: str) -> Optional[str]:
             values: list[tuple[Any, str]] = []
             for _s, obj, _k, data in graph.out_edges(node_id, "HAS_VALUE"):
                 vp = graph.get_entity_payload(obj) or {}
                 value = vp.get("value") or vp.get("name") or obj
                 values.append((data.get("created_at"), str(value)))
             if not values:
-                continue
-            # Most-recent value (stable: fall back to insertion order on ties).
+                return None
             values.sort(key=lambda cv: (cv[0] is not None, str(cv[0])))
-            return f"{slot_name}: {values[-1][1]}"
+            return values[-1][1]
+
+        for node_id in graph.node_ids():
+            if graph.get_entity_type(node_id) != "Slot":
+                continue
+            payload = graph.get_entity_payload(node_id) or {}
+            slot_name = payload.get("name") or ""
+            if not slot_name:
+                continue
+            name_norm = _norm(slot_name)
+            matched = (name_norm == key_norm) if key_norm else (name_norm in qn)
+            if not matched:
+                continue
+            value = _current_value(node_id)
+            if value is not None:
+                return f"{slot_name}: {value}"
         return None
 
     @staticmethod

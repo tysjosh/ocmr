@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
+from ocm.evaluation.baselines import build_baseline
 from ocm.evaluation.datasets.multiwoz_adapter import (
     build_from_dialogues,
     normalize_hf_multiwoz,
@@ -129,3 +130,29 @@ def test_run_multiwoz_suite_governed_beats_ungoverned_on_violations():
     # The HAS_VALUE answer-derivation rule makes task success meaningful: the
     # governed arm recalls the current slot value (no tradeoff on supersession).
     assert ts("B3") > 0.0
+
+
+def test_slot_key_exact_match_disambiguates_substring_keys():
+    # Two slots where one key is a substring of the other, set to different
+    # values; the [[key]] marker must resolve each to its OWN value, not the
+    # substring sibling's.
+    dialogues = [{
+        "dialogue_id": "d",
+        "turns": [
+            {"utterance": "set both",
+             "state": {"hotel-area": "centre", "hotel-area-code": "CB1"}},
+        ],
+    }]
+    examples, oracle = build_from_dialogues(dialogues)
+    container = CoreContainer(
+        Settings(deterministic_test_mode=True, chroma_mode="memory"), extractor=oracle
+    )
+    ex = examples[0]
+    for s in ex.sessions:
+        container.write_pipeline.run(s.input, f"{ex.id}:{s.session_id}")
+    # Query the shorter key explicitly; answer must be its value, not "CB1".
+    pkg = build_baseline("B3", container).query(
+        "What is the current value of slot [[d:hotel-area]]?", top_k=10
+    )
+    assert pkg.answer is not None and "centre" in pkg.answer
+    assert "CB1" not in pkg.answer

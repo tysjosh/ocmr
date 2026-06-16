@@ -161,7 +161,7 @@ def build_from_dialogues(
         # recall, not contradiction-surfacing (that axis is N/A here).
         questions = [
             Question(
-                query=f"What is the current value of slot {_slot_key(did, slot)}?",
+                query=f"What is the current value of slot [[{_slot_key(did, slot)}]]?",
                 expected_answer_contains=[value],
                 expected_conflict=False,
             )
