@@ -111,6 +111,33 @@ class Decision(StatusDefaultMixin):
     status: DecisionStatus = DecisionStatus.unknown
 
 
+class Slot(BaseModel):  # no status field — it *is* a keyed slot node
+    """A typed, single-valued key whose current value is a HAS_VALUE assertion.
+
+    Maps an external single-valued field (e.g. a MultiWOZ dialogue-state slot
+    like ``hotel-area``) onto governed memory: ``Slot -[HAS_VALUE]-> SlotValue``
+    is 1:1, so a changed value supersedes (under ``correction``) and a
+    conflicting one is quarantined (under ``new_fact``). ``name`` is the slot's
+    qualified key (e.g. ``<dialogue_id>:hotel-area``).
+    """
+
+    id: str
+    name: str
+
+
+class SlotValue(BaseModel):  # no status field — it *is* a value node
+    """A first-class value node, the object of a HAS_VALUE assertion.
+
+    Mirrors :class:`StatusValue`: ``id`` is a canonical ``val:<value>`` node id
+    shared across slots taking the same value; ``name`` mirrors ``value`` for
+    label lookups.
+    """
+
+    id: str
+    value: str
+    name: str = ""
+
+
 class StatusValue(BaseModel):  # no status field — it *is* a status value node
     """A first-class status value node (e.g. ``done``), the object of HAS_STATUS.
 

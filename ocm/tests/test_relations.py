@@ -43,12 +43,13 @@ EXPECTED_PREDICATES = {
     "POSSIBLY_SAME_AS",
     "SUPERSEDES",
     "HAS_STATUS",
+    "HAS_VALUE",
 }
 
 
 def test_all_thirteen_relations_registered() -> None:
-    """The registry declares exactly the 14 design relations (Req 2.1-2.13 + HAS_STATUS)."""
-    assert len(RELATION_SIGNATURES) == 14
+    """The registry declares exactly the 15 relations (Req 2.1-2.13 + HAS_STATUS + HAS_VALUE)."""
+    assert len(RELATION_SIGNATURES) == 15
     assert set(RELATION_SIGNATURES) == EXPECTED_PREDICATES
 
 

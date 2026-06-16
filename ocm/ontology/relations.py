@@ -133,6 +133,13 @@ RELATION_SIGNATURES: dict[str, RelationSignature] = {
         {"StatusValue"},
         Cardinality.M_TO_ONE,
     ),
+    # HAS_VALUE assigns a single current value to a Slot (a typed key, e.g. a
+    # dialogue-state field such as ``hotel-area``). 1:1 — a slot holds exactly
+    # one accepted value at a time, so a new conflicting value is a single-valued
+    # contradiction (quarantine under ``new_fact``, supersede under
+    # ``correction``). Used by the MultiWOZ real-data adapter to map dialogue
+    # belief-state slots onto governed, single-valued memory.
+    "HAS_VALUE": _sig("HAS_VALUE", {"Slot"}, {"SlotValue"}, Cardinality.ONE_TO_ONE),
 }
 
 

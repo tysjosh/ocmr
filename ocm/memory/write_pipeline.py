@@ -75,6 +75,8 @@ from ocm.ontology.models import (
     Organization,
     Person,
     Project,
+    Slot,
+    SlotValue,
     StatusValue,
     Task,
 )
@@ -165,6 +167,8 @@ _ENTITY_MODELS: dict[str, tuple[type[BaseModel], str]] = {
     "Project": (Project, "name"),
     "Task": (Task, "title"),
     "Decision": (Decision, "summary"),
+    "Slot": (Slot, "name"),
+    "SlotValue": (SlotValue, "name"),
 }
 
 
@@ -903,6 +907,11 @@ class WritePipeline:
                 timestamp=fields.get("timestamp") or datetime.now(timezone.utc),
                 **present("made_by", "status"),
             )
+        if etype == "Slot":
+            return Slot(id=entity_id, name=name)
+        if etype == "SlotValue":
+            value = fields.get("value") or name
+            return SlotValue(id=entity_id, value=value, name=name or value)
         raise ValueError(f"Unsupported entity type {etype!r}")
 
     @staticmethod
