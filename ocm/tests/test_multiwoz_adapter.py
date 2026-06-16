@@ -18,6 +18,7 @@ from ocm.evaluation.baselines import build_baseline
 from ocm.evaluation.datasets.multiwoz_adapter import (
     build_from_dialogues,
     normalize_hf_multiwoz,
+    normalize_raw_multiwoz,
     run_multiwoz_suite,
     sample_dialogues,
 )
@@ -86,6 +87,25 @@ def test_ungoverned_accumulates_violation_on_changed_slot():
     # With the gate off, the changed slots keep both values -> violations > 0.
     violations, _ = durable_constraint_violations(container)
     assert violations >= 1
+
+
+def test_normalize_raw_multiwoz_extracts_user_state():
+    # Official MultiWOZ 2.2 JSON shape: speaker USER/SYSTEM, frames[].state.slot_values.
+    raw = {
+        "dialogue_id": "MUL0001.json",
+        "turns": [
+            {"speaker": "USER", "utterance": "centre please",
+             "frames": [{"state": {"slot_values": {"hotel-area": ["centre"]}}}]},
+            {"speaker": "SYSTEM", "utterance": "ok", "frames": []},
+            {"speaker": "USER", "utterance": "make it south",
+             "frames": [{"state": {"slot_values": {"hotel-area": ["south"]}}}]},
+        ],
+    }
+    norm = normalize_raw_multiwoz(raw)
+    assert norm["dialogue_id"] == "MUL0001.json"
+    assert [t["state"] for t in norm["turns"]] == [
+        {"hotel-area": "centre"}, {"hotel-area": "south"}
+    ]
 
 
 def test_normalize_hf_multiwoz_extracts_user_state():

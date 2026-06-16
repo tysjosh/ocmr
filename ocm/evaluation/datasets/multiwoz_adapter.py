@@ -286,14 +286,80 @@ def normalize_hf_multiwoz(hf_dialogue: dict[str, Any]) -> dict[str, Any]:
     return {"dialogue_id": str(hf_dialogue.get("dialogue_id", "")), "turns": norm_turns}
 
 
+def normalize_raw_multiwoz(raw_dialogue: dict[str, Any]) -> dict[str, Any]:
+    """Normalize one **raw MultiWOZ 2.2 JSON** dialogue to ``{dialogue_id, turns}``.
+
+    The official JSON shape differs from the HF columnar form: each turn has
+    ``speaker`` in ``{"USER","SYSTEM"}`` and ``frames[].state.slot_values`` =
+    ``{slot: [values]}``. We keep user turns and take the first listed value as
+    the cumulative gold state.
+    """
+    norm_turns: list[dict[str, Any]] = []
+    for turn in raw_dialogue.get("turns", []) or []:
+        if str(turn.get("speaker", "")).upper() != "USER":
+            continue
+        state: dict[str, str] = {}
+        for frame in turn.get("frames", []) or []:
+            slot_values = (frame.get("state") or {}).get("slot_values") or {}
+            for slot, vals in slot_values.items():
+                if vals:
+                    state[str(slot)] = str(vals[0])
+        norm_turns.append({"utterance": str(turn.get("utterance", "")), "state": state})
+    return {"dialogue_id": str(raw_dialogue.get("dialogue_id", "")), "turns": norm_turns}
+
+
 def load_multiwoz(
     split: str = "validation", limit: Optional[int] = None
 ) -> list[dict[str, Any]]:
-    """Load + normalize a MultiWOZ 2.2 split via HuggingFace ``datasets``.
+    """Load + normalize MultiWOZ 2.2 from the official GitHub JSON shards.
 
-    Imported lazily so the package has no hard ``datasets`` dependency. Returns a
-    list of normalized dialogues ready for :func:`build_from_dialogues`. Confirm
-    the dataset's license before use.
+    HuggingFace's ``multi_woz_v22`` is a *script-based* dataset, which recent
+    ``datasets`` versions refuse to load. To stay version-independent we read the
+    raw 2.2 dialogue JSON directly from the upstream repo
+    (``budzianowski/multiwoz``), probing ``dialogues_001.json``,
+    ``dialogues_002.json``, … until a shard is missing. ``split`` accepts
+    ``"validation"`` (= MultiWOZ ``dev``), ``"train"``, or ``"test"``. Returns
+    normalized dialogues ready for :func:`build_from_dialogues`. Requires network
+    access (Colab has it); confirm the dataset license before use.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    split_dir = {"validation": "dev", "train": "train", "test": "test"}.get(split, split)
+    base = (
+        "https://raw.githubusercontent.com/budzianowski/multiwoz/master/"
+        f"data/MultiWOZ_2.2/{split_dir}"
+    )
+    out: list[dict[str, Any]] = []
+    shard = 1
+    while True:
+        url = f"{base}/dialogues_{shard:03d}.json"
+        try:
+            with urllib.request.urlopen(url) as resp:  # noqa: S310 (trusted host)
+                payload = _json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404 and shard > 1:
+                break  # no more shards
+            raise FileNotFoundError(
+                f"Could not fetch MultiWOZ 2.2 shard {url!r} (HTTP {exc.code}). "
+                "Check the split name and network access."
+            ) from exc
+        for raw in payload:
+            out.append(normalize_raw_multiwoz(raw))
+            if limit is not None and len(out) >= limit:
+                return out
+        shard += 1
+    return out
+
+
+def load_multiwoz_hf(
+    split: str = "validation", limit: Optional[int] = None
+) -> list[dict[str, Any]]:
+    """Legacy HuggingFace loader (kept for reference).
+
+    Only works on ``datasets`` versions that still permit script-based datasets;
+    newer versions reject ``multi_woz_v22``. Prefer :func:`load_multiwoz`.
     """
     from datasets import load_dataset  # lazy import
 
