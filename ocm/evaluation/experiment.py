@@ -387,6 +387,7 @@ def run_multiseed(
     token_counter: Optional[Any] = None,
     key_suffix: str = "",
     warmup: bool = True,
+    provided_examples: Optional[list] = None,
 ) -> MultiSeedResult:
     """Run ``methods`` across ``seeds`` and collect decisive metrics per seed.
 
@@ -401,6 +402,10 @@ def run_multiseed(
     the in-flight arm, not the whole run. ``key_suffix`` is appended to each
     checkpoint key so a configuration change (e.g. a different contradiction
     threshold \u03c4) recomputes instead of silently loading a stale result.
+    ``provided_examples`` injects a fixed external benchmark (e.g. the MultiWOZ
+    adapter's examples) used for every seed instead of generating one per seed;
+    pair it with a dataset-specific ``key_suffix`` so its checkpoints stay
+    separate from the synthetic benchmark's.
     """
     methods = list(methods)
     seeds = list(seeds)
@@ -425,7 +430,9 @@ def run_multiseed(
 
     for seed in seeds:
         _seed_everything(seed)
-        examples = None  # generated lazily; skipped entirely if all arms cached
+        # An external dataset (e.g. MultiWOZ) supplies a fixed example list used
+        # for every seed; otherwise examples are generated lazily per seed.
+        examples = list(provided_examples) if provided_examples is not None else None
         for method in methods:
             key = f"ms__{method}__seed{seed}__pc{per_category}{key_suffix}"
             cached = ckpt.load(key)

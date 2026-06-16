@@ -213,3 +213,151 @@ def sample_dialogues() -> list[dict[str, Any]]:
             ],
         },
     ]
+
+
+# --------------------------------------------------------------------------- #
+# MultiWOZ 2.2 (HuggingFace ``multi_woz_v22``) loader / normalizer
+# --------------------------------------------------------------------------- #
+#: HF speaker code for a user turn (system turns carry no belief state).
+_HF_USER_SPEAKER = 0
+
+
+def _collect_slot_values(state_entries: Any) -> dict[str, str]:
+    """Pull ``{slot: value}`` from a turn's ``frames[].state`` (HF 2.2 shape).
+
+    MultiWOZ 2.2 stores per-service state with ``slots_values`` =
+    ``{"slots_values_name": [...], "slots_values_list": [[...], ...]}``. Slot
+    names are already domain-qualified (e.g. ``hotel-area``); we take the first
+    listed value (the canonical surface form). Defensive to both list-of-dicts
+    and the columnar dict-of-lists nesting HF sometimes uses.
+    """
+    out: dict[str, str] = {}
+
+    def _ingest_slots_values(sv: Any) -> None:
+        if not isinstance(sv, dict):
+            return
+        names = sv.get("slots_values_name") or []
+        values = sv.get("slots_values_list") or []
+        for name, vlist in zip(names, values):
+            if vlist:
+                first = vlist[0] if isinstance(vlist, (list, tuple)) else vlist
+                if first not in (None, ""):
+                    out[str(name)] = str(first)
+
+    # Shape A: list of state dicts (one per service).
+    if isinstance(state_entries, list):
+        for st in state_entries:
+            if isinstance(st, dict):
+                _ingest_slots_values(st.get("slots_values"))
+    # Shape B: columnar dict with a parallel "slots_values" list.
+    elif isinstance(state_entries, dict):
+        svs = state_entries.get("slots_values")
+        if isinstance(svs, list):
+            for sv in svs:
+                _ingest_slots_values(sv)
+        else:
+            _ingest_slots_values(svs)
+    return out
+
+
+def normalize_hf_multiwoz(hf_dialogue: dict[str, Any]) -> dict[str, Any]:
+    """Normalize one HF ``multi_woz_v22`` dialogue to ``{dialogue_id, turns}``.
+
+    Keeps only **user** turns (they carry the belief state); each normalized turn
+    is ``{"utterance": str, "state": {slot: value}}`` with the *cumulative* gold
+    state at that turn, ready for :func:`build_from_dialogues`.
+    """
+    turns = hf_dialogue.get("turns", {}) or {}
+    speakers = turns.get("speaker", []) or []
+    utterances = turns.get("utterance", []) or []
+    frames = turns.get("frames", []) or []
+
+    norm_turns: list[dict[str, Any]] = []
+    for i, speaker in enumerate(speakers):
+        if int(speaker) != _HF_USER_SPEAKER:
+            continue
+        frame = frames[i] if i < len(frames) else {}
+        # frame is typically {"service": [...], "state": [...], "slots": [...]}.
+        state_entries = frame.get("state") if isinstance(frame, dict) else None
+        state = _collect_slot_values(state_entries)
+        utterance = utterances[i] if i < len(utterances) else ""
+        norm_turns.append({"utterance": str(utterance), "state": state})
+
+    return {"dialogue_id": str(hf_dialogue.get("dialogue_id", "")), "turns": norm_turns}
+
+
+def load_multiwoz(
+    split: str = "validation", limit: Optional[int] = None
+) -> list[dict[str, Any]]:
+    """Load + normalize a MultiWOZ 2.2 split via HuggingFace ``datasets``.
+
+    Imported lazily so the package has no hard ``datasets`` dependency. Returns a
+    list of normalized dialogues ready for :func:`build_from_dialogues`. Confirm
+    the dataset's license before use.
+    """
+    from datasets import load_dataset  # lazy import
+
+    ds = load_dataset("multi_woz_v22", split=split, trust_remote_code=True)
+    out: list[dict[str, Any]] = []
+    for i, d in enumerate(ds):
+        if limit is not None and i >= limit:
+            break
+        out.append(normalize_hf_multiwoz(d))
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Suite runner (reuses the multi-seed harness + stats)
+# --------------------------------------------------------------------------- #
+def run_multiwoz_suite(
+    dialogues: Iterable[dict[str, Any]],
+    *,
+    baselines: Iterable[str] = ("B0", "B2", "B3"),
+    seeds: Iterable[int] = (1337,),
+    settings_factory: Any = None,
+    embeddings: object | None = None,
+    checkpoint_dir: Optional[str] = None,
+) -> dict[str, Any]:
+    """Run the governed vs ungoverned comparison on MultiWOZ and aggregate.
+
+    Builds examples + the oracle extractor from ``dialogues``, runs the selected
+    baselines through the multi-seed harness (the oracle is the W1 extractor, so
+    governance is evaluated given gold slots), and returns decisive metrics
+    (mean ± 95% CI) plus write outcomes. The headline is ``constraint_violations``:
+    governed arms (B3) supersede a changed slot to zero; ungoverned arms
+    (B0/B2, contradiction gate off) accumulate single-valued violations.
+
+    Note: ``task_success`` here is a recall proxy over retrieved slot text; a
+    dedicated HAS_VALUE answer-derivation rule is not yet wired, so read the
+    governance metrics (violations, write outcomes) as the primary result.
+    """
+    from ocm.evaluation.experiment import (
+        _default_settings,
+        aggregate_methods,
+        run_multiseed,
+    )
+
+    settings_factory = settings_factory or _default_settings
+    examples, oracle = build_from_dialogues(dialogues)
+    methods = list(baselines)
+    ms = run_multiseed(
+        methods,
+        seeds=seeds,
+        settings_factory=settings_factory,
+        extractor=oracle,
+        embeddings=embeddings,
+        checkpoint_dir=checkpoint_dir,
+        key_suffix="__multiwoz",
+        provided_examples=examples,
+    )
+    agg = aggregate_methods(ms)
+    return {
+        "dataset": "multiwoz",
+        "methods": methods,
+        "seeds": list(seeds),
+        "n_examples": len(examples),
+        "decisive_metrics": {
+            m: {metric: agg[m][metric].__dict__ for metric in agg[m]} for m in agg
+        },
+        "write_outcomes": ms.write_outcomes,
+    }

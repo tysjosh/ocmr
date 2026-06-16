@@ -16,6 +16,8 @@ from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
 from ocm.evaluation.datasets.multiwoz_adapter import (
     build_from_dialogues,
+    normalize_hf_multiwoz,
+    run_multiwoz_suite,
     sample_dialogues,
 )
 from ocm.evaluation.experiment import durable_constraint_violations
@@ -82,3 +84,43 @@ def test_ungoverned_accumulates_violation_on_changed_slot():
     # With the gate off, the changed slots keep both values -> violations > 0.
     violations, _ = durable_constraint_violations(container)
     assert violations >= 1
+
+
+def test_normalize_hf_multiwoz_extracts_user_state():
+    # A faithful mini HF multi_woz_v22-shaped record (columnar turns).
+    hf = {
+        "dialogue_id": "PMUL0001.json",
+        "turns": {
+            "speaker": [0, 1, 0],
+            "utterance": ["a hotel in the centre", "sure", "make it south"],
+            "frames": [
+                {"state": [
+                    {"slots_values": {"slots_values_name": ["hotel-area"],
+                                       "slots_values_list": [["centre"]]}}
+                ]},
+                {"state": []},
+                {"state": [
+                    {"slots_values": {"slots_values_name": ["hotel-area"],
+                                       "slots_values_list": [["south"]]}}
+                ]},
+            ],
+        },
+    }
+    norm = normalize_hf_multiwoz(hf)
+    assert norm["dialogue_id"] == "PMUL0001.json"
+    # Only the two USER turns are kept, with their cumulative state.
+    assert [t["state"] for t in norm["turns"]] == [
+        {"hotel-area": "centre"}, {"hotel-area": "south"}
+    ]
+
+
+def test_run_multiwoz_suite_governed_beats_ungoverned_on_violations():
+    report = run_multiwoz_suite(sample_dialogues(), baselines=("B0", "B2", "B3"), seeds=(1337,))
+    dm = report["decisive_metrics"]
+    v = lambda m: dm[m]["constraint_violations"]["mean"]
+    # Ungoverned arms accumulate single-valued violations; the governed full
+    # system supersedes changed slots to zero.
+    assert v("B3") == 0.0
+    assert v("B0") > 0.0 and v("B2") > 0.0
+    # B3 supersedes (changed slots) where ungoverned arms do not.
+    assert report["write_outcomes"]["B3"]["superseded"] > report["write_outcomes"]["B0"]["superseded"]
