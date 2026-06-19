@@ -72,6 +72,37 @@ def test_governed_supersedes_changed_slot_zero_violations():
     assert violations == 0
 
 
+def test_multidomain_reappearing_slot_is_update_not_new_fact():
+    # MultiWOZ is multi-domain: a slot leaves the per-turn state when the user
+    # switches topic, then reappears changed. It must be classified as an
+    # authoritative update (supersede), not a new_fact (which would quarantine).
+    dialogues = [{
+        "dialogue_id": "X.json",
+        "turns": [
+            {"utterance": "t0", "state": {"hotel-area": "centre"}},
+            {"utterance": "t1", "state": {"train-day": "monday"}},   # hotel absent
+            {"utterance": "t2", "state": {"hotel-area": "south"}},   # hotel returns changed
+        ],
+    }]
+    examples, oracle = build_from_dialogues(dialogues)
+    # The reappearing changed slot is emitted as 'update'.
+    assert oracle.extract("", "X.json:t2").relations[0]["write_intent"] == "update"
+    container = CoreContainer(
+        Settings(deterministic_test_mode=True, chroma_mode="memory",
+                 authoritative_update_supersede=True),
+        extractor=oracle,
+    )
+    ex = examples[0]
+    quarantined = superseded = 0
+    for s in ex.sessions:
+        r = container.write_pipeline.run(s.input, f"{ex.id}:{s.session_id}")
+        quarantined += len(r.quarantined)
+        superseded += len(r.superseded)
+    assert quarantined == 0 and superseded == 1
+    # Final cumulative belief is recalled: hotel-area=south, train-day=monday.
+    assert durable_constraint_violations(container)[0] == 0
+
+
 def test_authoritative_update_supersedes_serial_changes():
     # A slot changed three times: the latest value must win (supersede each
     # time), not quarantine after the first change. Zero violations, no

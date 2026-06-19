@@ -121,7 +121,14 @@ def build_from_dialogues(
 
     for dialogue in dialogues:
         did = str(dialogue["dialogue_id"])
-        prev_state: dict[str, str] = {}
+        # Running cumulative belief across the whole dialogue. MultiWOZ is
+        # multi-domain: a service's slots appear only in turns where it is
+        # active, so a per-turn state DROPS slots when the user switches topic.
+        # Comparing against the previous *turn* would then misread a reappearing
+        # slot as a new_fact (and quarantine its conflict). We instead accumulate
+        # a belief dict that never drops slots, so a changed slot is always an
+        # ``update``.
+        belief: dict[str, str] = {}
         sessions: list[Session] = []
 
         for i, turn in enumerate(dialogue.get("turns", [])):
@@ -129,14 +136,9 @@ def build_from_dialogues(
             state = {str(k): str(v) for k, v in (turn.get("state") or {}).items()}
             tw = _TurnWrites()
             for slot, value in sorted(state.items()):
-                if prev_state.get(slot) == value:
-                    continue  # unchanged this turn — no write
-                is_change = slot in prev_state
-                # A new slot is a new_fact; a *changed* slot is an authoritative
-                # ``update`` (the user's latest state), which supersedes the
-                # incumbent under the authoritative-update policy. Confidence is
-                # uniform (above the gate threshold so the conflict is detected);
-                # the update path does not rely on a confidence margin.
+                if belief.get(slot) == value:
+                    continue  # unchanged vs cumulative belief — no write
+                is_change = slot in belief
                 intent = "update" if is_change else "new_fact"
                 conf = UPDATE_CONFIDENCE if is_change else NEW_FACT_CONFIDENCE
                 slot_name = _slot_key(did, slot)
@@ -153,24 +155,23 @@ def build_from_dialogues(
                         "write_intent": intent,
                     }
                 )
+                belief[slot] = value  # fold into the cumulative belief
             source_ref = f"{did}:t{i}"
             writes_by_ref[source_ref] = tw
             sessions.append(Session(session_id=f"t{i}", input=utterance))
-            prev_state = dict(state)
 
-        # Questions: recall the *final* (current) value of each slot, addressed
-        # by the slot's qualified key (``<dialogue_id>:<slot>``) so it resolves
-        # unambiguously in a shared multi-dialogue store. ``expected_conflict`` is
-        # False: a changed slot is a *resolved* supersession, not an unresolved
-        # contradiction to surface — MultiWOZ exercises constraint integrity and
-        # recall, not contradiction-surfacing (that axis is N/A here).
+        # Questions: recall the final cumulative value of every slot, addressed
+        # by the slot's qualified key so it resolves in a shared multi-dialogue
+        # store. expected_conflict=False: a changed slot is a resolved
+        # supersession, not an unresolved contradiction (contradiction-surfacing
+        # is N/A for MultiWOZ).
         questions = [
             Question(
                 query=f"What is the current value of slot [[{_slot_key(did, slot)}]]?",
                 expected_answer_contains=[value],
                 expected_conflict=False,
             )
-            for slot, value in sorted(prev_state.items())
+            for slot, value in sorted(belief.items())
         ]
         examples.append(
             BenchmarkExample(
@@ -426,7 +427,7 @@ def run_multiwoz_suite(
         extractor=oracle,
         embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
-        key_suffix="__multiwoz",
+        key_suffix="__multiwoz_v2",  # belief-tracking fix changes writes for all arms
         provided_examples=examples,
     )
     agg = aggregate_methods(ms)
