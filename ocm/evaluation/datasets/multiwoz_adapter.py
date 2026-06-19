@@ -426,7 +426,7 @@ def run_multiwoz_suite(
         extractor=oracle,
         embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
-        key_suffix="__multiwoz_v2",  # bumped: authoritative-update policy changes outcomes
+        key_suffix="__multiwoz",
         provided_examples=examples,
     )
     agg = aggregate_methods(ms)
