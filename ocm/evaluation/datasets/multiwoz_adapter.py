@@ -54,10 +54,10 @@ from ocm.memory.contracts import ExtractionResult
 #: extractor's default so the contradiction gate treats it as a strong fact.
 NEW_FACT_CONFIDENCE: float = 0.85
 
-#: Confidence for a *changed* slot value, emitted as a ``correction`` so it
-#: dominates the prior value by the Algorithm-1 supersede margin (0.97 - 0.85 =
-#: 0.12 > 0.1) and routes to supersede rather than quarantine.
-CORRECTION_CONFIDENCE: float = 0.97
+#: Confidence for a *changed* slot value. Kept above the gate threshold so the
+#: single-valued conflict is detected; the authoritative-``update`` supersede
+#: path does not depend on a confidence margin (the latest value wins).
+UPDATE_CONFIDENCE: float = 0.85
 
 #: Benchmark category label for MultiWOZ-derived examples.
 CATEGORY: str = "dialogue_state_slots"
@@ -132,8 +132,13 @@ def build_from_dialogues(
                 if prev_state.get(slot) == value:
                     continue  # unchanged this turn — no write
                 is_change = slot in prev_state
-                intent = "correction" if is_change else "new_fact"
-                conf = CORRECTION_CONFIDENCE if is_change else NEW_FACT_CONFIDENCE
+                # A new slot is a new_fact; a *changed* slot is an authoritative
+                # ``update`` (the user's latest state), which supersedes the
+                # incumbent under the authoritative-update policy. Confidence is
+                # uniform (above the gate threshold so the conflict is detected);
+                # the update path does not rely on a confidence margin.
+                intent = "update" if is_change else "new_fact"
+                conf = UPDATE_CONFIDENCE if is_change else NEW_FACT_CONFIDENCE
                 slot_name = _slot_key(did, slot)
                 tw.entities.append({"type": "Slot", "name": slot_name})
                 tw.entities.append(
@@ -397,13 +402,21 @@ def run_multiwoz_suite(
     dedicated HAS_VALUE answer-derivation rule is not yet wired, so read the
     governance metrics (violations, write outcomes) as the primary result.
     """
-    from ocm.evaluation.experiment import (
-        _default_settings,
-        aggregate_methods,
-        run_multiseed,
-    )
+    from ocm.core.config import Settings
+    from ocm.evaluation.experiment import aggregate_methods, run_multiseed
 
-    settings_factory = settings_factory or _default_settings
+    if settings_factory is None:
+        # MultiWOZ slots are authoritative single-valued state: a changed slot
+        # should supersede the prior value (latest wins), not quarantine. Enable
+        # the authoritative-update policy by default for this dataset.
+        def settings_factory() -> Settings:  # type: ignore[misc]
+            return Settings(
+                deterministic_test_mode=True,
+                chroma_mode="memory",
+                extractor="mock",
+                authoritative_update_supersede=True,
+            )
+
     examples, oracle = build_from_dialogues(dialogues)
     methods = list(baselines)
     ms = run_multiseed(
@@ -413,7 +426,7 @@ def run_multiwoz_suite(
         extractor=oracle,
         embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
-        key_suffix="__multiwoz",
+        key_suffix="__multiwoz_v2",  # bumped: authoritative-update policy changes outcomes
         provided_examples=examples,
     )
     agg = aggregate_methods(ms)

@@ -376,7 +376,21 @@ def c7_contradiction_gate(
     # the incumbent — strictly more confident by ``delta`` — and is grounded by
     # at least ``e_min`` units of evidence. A correction that ties/loses on
     # confidence (incumbent dominates) or lacks evidence is quarantined.
-    if candidate.write_intent == WriteIntent.correction:
+    if (
+        candidate.write_intent == WriteIntent.update
+        and bool(getattr(settings, "authoritative_update_supersede", False))
+    ):
+        # Authoritative single-valued state update from a trusted source: the
+        # latest value replaces the incumbent unconditionally (no margin /
+        # evidence gate). This is the correct semantics for trusted state (e.g.
+        # a dialogue-state slot the user just changed), as opposed to a
+        # ``correction`` that must dominate an untrusted incumbent.
+        action = "supersede"
+        reason = (
+            "authoritative update supersedes incumbent assertion(s) "
+            f"{conflict_ids} (single-valued state replacement)"
+        )
+    elif candidate.write_intent == WriteIntent.correction:
         delta = float(getattr(settings, "supersede_margin", 0.0))
         e_min = int(getattr(settings, "supersede_evidence_min", 1))
         incumbent_conf = max(

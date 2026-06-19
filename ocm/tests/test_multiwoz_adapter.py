@@ -50,13 +50,14 @@ def test_build_from_dialogues_shapes_examples_and_oracle():
     assert d1.questions[0].expected_conflict is False
     # The oracle knows the per-turn writes.
     assert oracle.extract("", "mwz-0001:t0").relations[0]["write_intent"] == "new_fact"
-    assert oracle.extract("", "mwz-0001:t1").relations[0]["write_intent"] == "correction"
+    assert oracle.extract("", "mwz-0001:t1").relations[0]["write_intent"] == "update"
 
 
 def test_governed_supersedes_changed_slot_zero_violations():
     examples, oracle = build_from_dialogues(sample_dialogues())
     container = CoreContainer(
-        Settings(deterministic_test_mode=True, chroma_mode="memory"),
+        Settings(deterministic_test_mode=True, chroma_mode="memory",
+                 authoritative_update_supersede=True),
         extractor=oracle,
     )
     for ex in examples:
@@ -69,6 +70,65 @@ def test_governed_supersedes_changed_slot_zero_violations():
     # And no durable single-valued constraint violations remain.
     violations, _ = durable_constraint_violations(container)
     assert violations == 0
+
+
+def test_authoritative_update_supersedes_serial_changes():
+    # A slot changed three times: the latest value must win (supersede each
+    # time), not quarantine after the first change. Zero violations, no
+    # quarantines, and the current value is retained.
+    dialogues = [{
+        "dialogue_id": "d",
+        "turns": [
+            {"utterance": "centre", "state": {"hotel-area": "centre"}},
+            {"utterance": "south", "state": {"hotel-area": "south"}},
+            {"utterance": "north", "state": {"hotel-area": "north"}},
+            {"utterance": "east", "state": {"hotel-area": "east"}},
+        ],
+    }]
+    examples, oracle = build_from_dialogues(dialogues)
+    container = CoreContainer(
+        Settings(deterministic_test_mode=True, chroma_mode="memory",
+                 authoritative_update_supersede=True),
+        extractor=oracle,
+    )
+    ex = examples[0]
+    superseded = quarantined = 0
+    for s in ex.sessions:
+        r = container.write_pipeline.run(s.input, f"{ex.id}:{s.session_id}")
+        superseded += len(r.superseded)
+        quarantined += len(r.quarantined)
+    assert superseded == 3 and quarantined == 0
+    # The accepted current value is the latest ("east").
+    values = {
+        (container.graph.get_entity_payload(o) or {}).get("value")
+        for _s, o, _k, _d in container.graph.find_edges_by_predicate("HAS_VALUE")
+    }
+    assert values == {"east"}
+    assert durable_constraint_violations(container)[0] == 0
+
+
+def test_without_policy_serial_updates_quarantine():
+    # Default (policy off): an ``update`` conflict is conservatively quarantined,
+    # so serial changes after the first do not supersede. This guards the
+    # default behavior and documents why MultiWOZ enables the policy.
+    dialogues = [{
+        "dialogue_id": "d",
+        "turns": [
+            {"utterance": "centre", "state": {"hotel-area": "centre"}},
+            {"utterance": "south", "state": {"hotel-area": "south"}},
+        ],
+    }]
+    examples, oracle = build_from_dialogues(dialogues)
+    container = CoreContainer(
+        Settings(deterministic_test_mode=True, chroma_mode="memory"),  # policy OFF
+        extractor=oracle,
+    )
+    ex = examples[0]
+    quarantined = 0
+    for s in ex.sessions:
+        r = container.write_pipeline.run(s.input, f"{ex.id}:{s.session_id}")
+        quarantined += len(r.quarantined)
+    assert quarantined >= 1  # the change is quarantined without the policy
 
 
 def test_ungoverned_accumulates_violation_on_changed_slot():

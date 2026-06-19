@@ -95,3 +95,11 @@ class Settings(BaseModel):
     # hybrid routing) are expressed via the baseline StrategyToggles.
     enable_schema_validation: bool = True
     enable_contradiction_gate: bool = True
+    # When True, a single-valued conflict from an ``update``-intent write
+    # (an *authoritative* state change, e.g. a trusted dialogue-state slot
+    # update) supersedes the incumbent **unconditionally** — no confidence
+    # margin / evidence requirement. This models "the latest authoritative value
+    # wins" for trusted sources, distinct from the ``correction`` path (which
+    # must dominate an untrusted incumbent by a margin). Off by default so the
+    # conservative contradiction-oriented behavior is unchanged (paper §IV-D).
+    authoritative_update_supersede: bool = False

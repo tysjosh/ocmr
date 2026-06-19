@@ -368,15 +368,31 @@ Result (fixture-scale; the same code runs the full split via `load_multiwoz`):
 | B3 (write-time gate) | 100.0 | 0.0 (N/A) | **0.0** |
 
 This complements the synthetic finding with a **tradeoff-free** real-data case:
-on MultiWOZ a changed slot is a legitimate update, so the governed arm
-**supersedes** (one accepted value) — eliminating durable constraint violations
-(40.0 → 0.0) while **preserving recall** (task success 100, via the `HAS_VALUE`
-answer-derivation rule). Contradiction-surfacing is not applicable here (a
-supersession is a resolved update, not an unresolved contradiction), so that
-column is N/A. Caveats: (i) oracle extraction tests governance given gold slots,
-not end-to-end from raw text; (ii) under `new_fact` intent a conflicting value
-would instead quarantine — the `correction` intent models the belief-state
-update MultiWOZ actually contains.
+on MultiWOZ a changed slot is a legitimate, authoritative update, so the
+governed arm **supersedes** (one accepted value) — eliminating durable
+constraint violations while **preserving recall** (task success 100, via the
+`HAS_VALUE` answer-derivation rule).
+
+**Authoritative-update policy.** Real dialogues change a slot *repeatedly*. OCMR's
+default supersession is contradiction-oriented: a `correction` may replace the
+incumbent only if it *dominates* by a confidence margin — appropriate when an
+untrusted extractor asserts conflicting facts, but wrong for serial authoritative
+updates of equal confidence (the 2nd, 3rd … change would tie the margin and be
+quarantined, leaving a stale value). MultiWOZ slots are *trusted* state, so the
+adapter ingests changes under the `update` intent and enables
+`authoritative_update_supersede` (off by default), under which a single-valued
+`update` conflict supersedes the incumbent **unconditionally** — the latest
+authoritative value wins. This is a deliberate, source-trust-dependent governance
+policy, not a benchmark-specific hack: contradiction-margin supersession for
+untrusted sources, authoritative supersession for trusted state. With the policy
+off, serial updates are conservatively quarantined (still zero violations, but a
+stale accepted value) — which is why the policy exists.
+
+Contradiction-surfacing is not applicable here (a supersession is a resolved
+update, not an unresolved contradiction to surface), so that column is N/A.
+Caveats: (i) oracle extraction tests governance given gold slots, not end-to-end
+from raw text; (ii) the result depends on the authoritative-update policy above,
+which is the correct semantics for trusted single-valued state.
 
 ### Statistics
 
