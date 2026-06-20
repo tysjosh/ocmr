@@ -216,3 +216,70 @@ def test_evaluate_abstention_governed_abstains_when_ungrounded():
     # With no grounded value, the governed system must abstain (100% on plumbing).
     assert res["B3"]["abstention_accuracy"] == 100.0
     assert res["B3"]["n"] == 1
+
+
+# -- concrete LLM annotator (model-agnostic, tested with a fake chat_fn) ----- #
+def test_parse_annotation_json_tolerates_prose():
+    from ocm.evaluation.datasets.longmemeval_annotate import parse_annotation_json
+
+    text = 'Sure! Here is the label:\n{"attribute": "residence", "values": ["NY", "SF"], "current_value": "SF"}\nDone.'
+    obj = parse_annotation_json(text)
+    assert obj == {"attribute": "residence", "values": ["NY", "SF"], "current_value": "SF"}
+    assert parse_annotation_json("no json here") is None
+
+
+def test_align_values_to_sessions_preserves_order():
+    from ocm.evaluation.datasets.longmemeval_annotate import align_values_to_sessions
+
+    inst = {
+        "question_id": "k",
+        "haystack_session_ids": ["s0", "s1", "s2"],
+        "haystack_sessions": [
+            [{"role": "user", "content": "I live in New York"}],
+            [{"role": "user", "content": "weather chat"}],
+            [{"role": "user", "content": "moved to San Francisco"}],
+        ],
+    }
+    traj = align_values_to_sessions(inst, ["New York", "San Francisco"])
+    assert traj == [
+        {"session_id": "s0", "value": "New York"},
+        {"session_id": "s2", "value": "San Francisco"},
+    ]
+    # Ungrounded values are skipped.
+    assert align_values_to_sessions(inst, ["Boston"]) == []
+
+
+def test_build_llm_annotate_fn_end_to_end_with_fake_model():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_from_kupdate_oracle,
+        sample_instances,
+    )
+    from ocm.evaluation.datasets.longmemeval_annotate import (
+        annotate_instances,
+        build_llm_annotate_fn,
+    )
+
+    # A fake "model" that returns the gold JSON for the fixture question.
+    def fake_chat(prompt: str) -> str:
+        return '{"attribute": "residence", "values": ["New York", "San Francisco"], "current_value": "San Francisco"}'
+
+    insts = sample_instances()
+    anns = annotate_instances(insts, build_llm_annotate_fn(fake_chat))
+    assert set(anns) == {"ku_0001"}
+    assert anns["ku_0001"]["attribute"] == "residence"
+    assert [t["value"] for t in anns["ku_0001"]["trajectory"]] == ["New York", "San Francisco"]
+    # And the produced annotation drives the oracle adapter correctly.
+    examples, oracle = build_from_kupdate_oracle(insts, anns)
+    assert oracle.extract("", "ku_0001:s0").relations[0]["write_intent"] == "new_fact"
+    assert oracle.extract("", "ku_0001:s2").relations[0]["write_intent"] == "update"
+
+
+def test_build_llm_annotate_fn_rejects_single_value():
+    from ocm.evaluation.datasets.longmemeval_adapter import sample_instances
+    from ocm.evaluation.datasets.longmemeval_annotate import build_llm_annotate_fn
+
+    def one_value(prompt: str) -> str:
+        return '{"attribute": "residence", "values": ["New York"], "current_value": "New York"}'
+
+    fn = build_llm_annotate_fn(one_value)
+    assert fn(sample_instances()[0]) is None  # a knowledge update needs >= 2 values
