@@ -116,7 +116,8 @@ class Slot(BaseModel):  # no status field — it *is* a keyed slot node
 
     Maps an external single-valued field (e.g. a MultiWOZ dialogue-state slot
     like ``hotel-area``) onto governed memory: ``Slot -[HAS_VALUE]-> SlotValue``
-    is 1:1, so a changed value supersedes (under ``correction``) and a
+    is m:1 (single-valued on the slot; a value may be shared across slots), so a
+    changed value supersedes (under ``update`` + authoritative policy) and a
     conflicting one is quarantined (under ``new_fact``). ``name`` is the slot's
     qualified key (e.g. ``<dialogue_id>:hotel-area``).
     """

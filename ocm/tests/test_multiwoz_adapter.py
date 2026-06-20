@@ -72,6 +72,33 @@ def test_governed_supersedes_changed_slot_zero_violations():
     assert violations == 0
 
 
+def test_shared_value_across_slots_is_not_a_conflict():
+    # Two DIFFERENT slots taking the SAME value must not conflict (HAS_VALUE is
+    # m:1, not a bijection): a value like "centre" can be shared across slots.
+    dialogues = [{
+        "dialogue_id": "d.json",
+        "turns": [
+            {"utterance": "centre for both",
+             "state": {"restaurant-area": "centre", "hotel-area": "centre"}},
+        ],
+    }]
+    examples, oracle = build_from_dialogues(dialogues)
+    container = CoreContainer(
+        Settings(deterministic_test_mode=True, chroma_mode="memory",
+                 authoritative_update_supersede=True),
+        extractor=oracle,
+    )
+    ex = examples[0]
+    quarantined = accepted = 0
+    for s in ex.sessions:
+        r = container.write_pipeline.run(s.input, f"{ex.id}:{s.session_id}")
+        quarantined += len(r.quarantined)
+        accepted += len(r.accepted)
+    # Both slots accept their (shared) value; neither quarantines.
+    assert quarantined == 0 and accepted == 2
+    assert durable_constraint_violations(container)[0] == 0
+
+
 def test_multidomain_reappearing_slot_is_update_not_new_fact():
     # MultiWOZ is multi-domain: a slot leaves the per-turn state when the user
     # switches topic, then reappears changed. It must be classified as an
