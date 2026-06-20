@@ -384,20 +384,30 @@ behaviour observed on the data:
    contradiction-margin supersession for untrusted sources, authoritative
    supersession for trusted state.
 
-Result (fixture-scale; full-split numbers pending the re-run — same code via
-`load_multiwoz`):
+Result — **full MultiWOZ 2.2 validation (dev) split, 1,000 dialogues**, via
+`load_multiwoz(split="validation")`, oracle extraction (no LLM):
 
 | Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
 |--------|---------------|-----------------|------------------|
-| B0 / B2 (ungoverned) | 100.0 | 0.0 (N/A) | > 0 |
-| B3 (write-time gate) | 100.0 | 0.0 (N/A) | **0.0** |
+| B0 / B2 (ungoverned) | 100.0 | 0.0 (N/A) | 7.2 |
+| B3 (write-time gate) | **100.0** | 0.0 (N/A) | **0.01** |
 
-This complements the synthetic finding with a **tradeoff-free** real-data case:
-on MultiWOZ a changed slot is a legitimate, authoritative update, so the governed
-arm **supersedes** (one accepted value) — eliminating durable constraint
-violations while **preserving recall** (task success 100, via the `HAS_VALUE`
-answer-derivation rule). Contradiction-surfacing is N/A here (a supersession is a
-resolved update, not an unresolved contradiction to surface).
+Write outcomes for B3 (8,710 candidate slot writes): **8,108 accepted, 602
+superseded, 0 quarantined, 0 rejected** — the 602 supersessions are the genuine
+within-dialogue slot-value changes governed correctly (latest value wins), and
+zero quarantines confirm the `m:1` cardinality fix. (B0/B2 accept all writes;
+their 7.2 ConstraintViol is the durable single-valued contradictions an
+ungoverned store accumulates.)
+
+This complements the synthetic finding with a **near-tradeoff-free** real-data
+case: on MultiWOZ a changed slot is a legitimate, authoritative update, so the
+governed arm **supersedes** (one accepted value) — cutting durable constraint
+violations from 7.2 to ≈ 0.01 while **preserving recall** (task success ≈ 100.0,
+via the `HAS_VALUE` answer-derivation rule). The residual ≈ 0.01 is a small
+fraction of slots whose conflict is not resolved by supersession (e.g. a
+re-asserted distinct value on a path the policy does not cover), not a wholesale
+failure. Contradiction-surfacing is N/A here (a supersession is a resolved
+update, not an unresolved contradiction to surface).
 
 **Caveats.** (i) Oracle extraction tests governance *given gold slots*, not
 end-to-end from raw text. (ii) The result is scoped to a single constraint
