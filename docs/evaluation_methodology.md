@@ -11,6 +11,81 @@ point at the source of truth so every claim is auditable.
 
 ---
 
+## Claims to make in the paper
+
+This section states the one **general claim** the paper defends and the
+**specific claims** the evidence supports, with the scope and caveats each must
+carry. The guiding principle is honest bounding: claim exactly what the data
+shows, no more.
+
+### General claim (the thesis)
+
+> **Enforcing ontology constraints at write time keeps an agent's long-term
+> memory durably self-consistent — driving constraint violations to (near) zero —
+> and the recall cost of doing so is incurred only when conflicting writes arrive
+> without correction intent; given correct intent, consistency is achieved at no
+> recall cost.**
+
+This is a claim about *governance*, not about answer quality in general. It says
+the mechanism (a) guarantees integrity and (b) has a cost profile that is
+understood and bounded, not a free lunch. State it as a controllability/safety
+property, not a leaderboard win.
+
+### Specific claims (what the evidence supports)
+
+1. **Integrity (primary, synthetic).** On the synthetic benchmark the write-time
+   gate (B3) reduces durable constraint violations to **zero**, and the advantage
+   over the ungoverned baseline is decisive (B3 vs B0, Holm-corrected
+   *p* < 0.0001, *d* = −22.6). *Scope:* this is the headline result; it is a
+   statement about constraint violations, not task success.
+
+2. **The cost is a deliberate, quantified tradeoff (synthetic).** B3's lower task
+   success (≈ 60 vs `Brtcf` 72.3) is the *mechanism's signature*, not a defect:
+   B3 quarantines the losing side of a conflict at ingest (1,198 vs 556
+   quarantined), so it is no longer retrievable. The cost falls in the planning /
+   longitudinal / temporal categories, **not** the contradiction-heavy category.
+   *Scope:* report this cost openly; do **not** claim Pareto dominance over
+   retrieval-time baselines.
+
+3. **The cost vanishes under correct conflict semantics (real data, MultiWOZ).**
+   On the full MultiWOZ 2.2 validation split (1,000 dialogues, oracle
+   extraction), where a changed slot is an *authoritative update* rather than a
+   conflicting `new_fact`, the governed arm **supersedes** the prior value:
+   constraint violations drop from 7.2 (ungoverned) to ≈ 0.01 **with no recall
+   cost** (task success ≈ 100). *Scope:* this validates that *constraint
+   governance generalizes to real dialogue* for the **single-valued cardinality**
+   constraint, evaluated **given gold slots** — not end-to-end extraction, and
+   not all constraints.
+
+4. **τ is selected by a principled objective, not tuned to results (M4).** The
+   threshold τ = 0.8 (headline config) is justified by the false-quarantine /
+   constraint-violation tradeoff and the gate mechanism, documented in the M4
+   section below.
+
+### What NOT to claim
+
+- **Do not claim higher general task success / QA accuracy.** The contribution is
+  integrity under governance, not better answers everywhere.
+- **Do not present the MultiWOZ ≈ 100 task success as evidence the gate raises
+  recall in general.** It is the *no-cost* case (authoritative updates); the
+  synthetic case is the *with-cost* case. Both are reported; the contrast is the
+  point.
+- **Do not cite the development-time ≈ 92% quarantine figure as policy-off
+  behaviour** — it was a mis-declared `1:1` cardinality bug (now `m:1`), see the
+  reviewer-defense reminder in the MultiWOZ section.
+- **Do not claim the real-data result covers extraction or multiple
+  constraints.** It is scoped to one constraint, given gold slots.
+
+### One-sentence version (for the abstract / intro)
+
+> Write-time ontology governance makes agent memory provably self-consistent;
+> on a synthetic stress benchmark this costs retrievability for the losing side
+> of unattributed conflicts (a deliberate, measured tradeoff), and on real
+> MultiWOZ dialogue — where conflicting writes are authoritative updates — the
+> same mechanism eliminates violations at no recall cost.
+
+---
+
 ## M4 — Selecting the contradiction threshold τ
 
 ### Mechanism
