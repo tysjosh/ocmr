@@ -293,3 +293,181 @@ def sample_annotations() -> dict[str, dict[str, Any]]:
             "current_value": "San Francisco",
         }
     }
+
+
+# --------------------------------------------------------------------------- #
+# Abstention arm — governed refusal instead of fabrication
+# --------------------------------------------------------------------------- #
+#: Sentinel attribute for an abstention probe: a fact the question asks about
+#: that was never grounded in memory, so a faithful system must abstain.
+_ABSTAIN_ATTR: str = "__ungrounded__"
+
+
+def build_abstention_examples(
+    instances: Iterable[dict[str, Any]],
+) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
+    """Build abstention probes: a question whose answer is **not** grounded.
+
+    For each ``_abs`` instance we ingest the haystack sessions as *context* but
+    emit **no** gold ``HAS_VALUE`` write for the queried fact (the question refers
+    to something never established). A faithful system must therefore **abstain**
+    — derive no current value — rather than fabricate one. The recall query
+    addresses an ungrounded slot key via the ``[[key]]`` marker so the
+    answer-derivation rule returns ``None`` when memory holds no accepted value.
+
+    Honest scope: in the **oracle** setting this validates the *governed-abstain
+    plumbing* (no grounded value → no answer). It is **not** discriminative across
+    baselines here, because no arm has a fabricated value to surface. The
+    discriminating result — a governed arm abstaining where an ungoverned arm
+    surfaces a distractor-derived false answer — requires the **end-to-end arm**
+    (real extraction + retrieval over the full haystack), wired in a later
+    increment. ``evaluate_abstention`` reports the plumbing metric for now.
+    """
+    examples: list[BenchmarkExample] = []
+    writes_by_ref: dict[str, _SessionWrites] = {}
+
+    for inst in instances:
+        qid = str(inst["question_id"])
+        slot_name = _slot_key(qid, _ABSTAIN_ATTR)
+        sessions: list[Session] = []
+        for idx, session in enumerate(inst.get("haystack_sessions", []) or []):
+            # Context only — no grounded write for the queried fact.
+            writes_by_ref[f"{qid}:s{idx}"] = _SessionWrites()
+            sessions.append(Session(session_id=f"s{idx}", input=_session_text(session)))
+        # expected_answer_contains is empty: correctness is "abstained", scored by
+        # evaluate_abstention (the standard token-recall metric does not apply).
+        question = Question(
+            query=f"{inst.get('question', '')} value of slot [[{slot_name}]]",
+            expected_answer_contains=[],
+            expected_conflict=False,
+        )
+        examples.append(
+            BenchmarkExample(
+                id=qid, category="abstention", sessions=sessions, questions=[question]
+            )
+        )
+    return examples, LongMemEvalOracleExtractor(writes_by_ref)
+
+
+def _answer_is_abstention(answer: Optional[str]) -> bool:
+    """True when an answer counts as an abstention (empty / explicit refusal)."""
+    if answer is None:
+        return True
+    text = str(answer).strip().lower()
+    if not text:
+        return True
+    refusals = ("i don't", "i do not", "no information", "not sure", "cannot",
+                "can't", "unknown", "no record", "not available")
+    return any(r in text for r in refusals)
+
+
+def evaluate_abstention(
+    instances: Iterable[dict[str, Any]],
+    *,
+    baselines: Iterable[str] = ("B0", "B2", "B3"),
+    settings_factory: Any = None,
+    embeddings: object | None = None,
+) -> dict[str, Any]:
+    """Score governed abstention on ``_abs`` probes (oracle plumbing metric).
+
+    For each baseline: ingest the haystack context, query the ungrounded fact,
+    and count the response as correct when the system **abstains**
+    (:func:`_answer_is_abstention`). Returns per-baseline abstention accuracy.
+
+    See :func:`build_abstention_examples` for the scope caveat: this is the
+    oracle plumbing check; cross-baseline divergence is an end-to-end result.
+    """
+    from ocm.core.config import Settings
+    from ocm.core.container import CoreContainer
+    from ocm.evaluation.baselines import build_baseline
+
+    if settings_factory is None:
+        def settings_factory() -> Settings:  # type: ignore[misc]
+            return Settings(
+                deterministic_test_mode=True, chroma_mode="memory", extractor="mock",
+                authoritative_update_supersede=True,
+            )
+
+    examples, oracle = build_abstention_examples(instances)
+    out: dict[str, Any] = {}
+    for method in baselines:
+        container = CoreContainer(settings_factory(), extractor=oracle, embeddings=embeddings)
+        for ex in examples:
+            for s in ex.sessions:
+                container.write_pipeline.run(s.input, f"{ex.id}:{s.session_id}")
+        baseline = build_baseline(method, container)
+        correct = 0
+        for ex in examples:
+            pkg = baseline.query(ex.questions[0].query, top_k=10)
+            if _answer_is_abstention(getattr(pkg, "answer", None)):
+                correct += 1
+        n = len(examples)
+        out[method] = {
+            "abstention_accuracy": (100.0 * correct / n) if n else 0.0,
+            "n": n,
+        }
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Suite runner (knowledge-update arm; reuses the multi-seed harness + stats)
+# --------------------------------------------------------------------------- #
+def run_longmemeval_suite(
+    instances: Iterable[dict[str, Any]],
+    annotations: dict[str, dict[str, Any]],
+    *,
+    baselines: Iterable[str] = ("B0", "B2", "B3"),
+    seeds: Iterable[int] = (1337,),
+    settings_factory: Any = None,
+    embeddings: object | None = None,
+    checkpoint_dir: Optional[str] = None,
+) -> dict[str, Any]:
+    """Run governed vs ungoverned on LongMemEval knowledge-update (Arm A / oracle).
+
+    Builds examples + the oracle extractor from ``instances`` + gold
+    ``annotations`` and runs the selected baselines through the multi-seed
+    harness (the oracle is the W1 extractor, so governance is evaluated *given*
+    gold facts). Returns decisive metrics (mean ± 95% CI) + write outcomes. The
+    headline mirrors MultiWOZ: B3 supersedes a changed fact (one accepted value,
+    zero durable violations); ungoverned arms accumulate single-valued
+    violations. Recall is preserved via the ``HAS_VALUE`` answer-derivation rule.
+
+    Use the dataset-specific ``key_suffix`` ``__lme_kupdate`` so checkpoints stay
+    separate from the synthetic and MultiWOZ runs.
+    """
+    from ocm.core.config import Settings
+    from ocm.evaluation.experiment import aggregate_methods, run_multiseed
+
+    if settings_factory is None:
+        # Knowledge updates are authoritative single-valued state (latest value
+        # wins), exactly like MultiWOZ slots — enable the policy by default.
+        def settings_factory() -> Settings:  # type: ignore[misc]
+            return Settings(
+                deterministic_test_mode=True, chroma_mode="memory", extractor="mock",
+                authoritative_update_supersede=True,
+            )
+
+    examples, oracle = build_from_kupdate_oracle(instances, annotations)
+    methods = list(baselines)
+    ms = run_multiseed(
+        methods,
+        seeds=seeds,
+        settings_factory=settings_factory,
+        extractor=oracle,
+        embeddings=embeddings,
+        checkpoint_dir=checkpoint_dir,
+        key_suffix="__lme_kupdate",
+        provided_examples=examples,
+    )
+    agg = aggregate_methods(ms)
+    return {
+        "dataset": "longmemeval",
+        "subset": "knowledge-update",
+        "methods": methods,
+        "seeds": list(seeds),
+        "n_examples": len(examples),
+        "decisive_metrics": {
+            m: {metric: agg[m][metric].__dict__ for metric in agg[m]} for m in agg
+        },
+        "write_outcomes": ms.write_outcomes,
+    }

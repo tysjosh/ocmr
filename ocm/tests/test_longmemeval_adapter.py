@@ -158,3 +158,61 @@ def test_annotate_instances_skips_invalid():
 
     assert set(annotate_instances(insts, good_fn)) == {"ku_0001"}
     assert annotate_instances(insts, bad_fn) == {}
+
+
+# -- suite runner (knowledge-update arm) ------------------------------------ #
+def test_run_longmemeval_suite_governed_beats_ungoverned():
+    from ocm.evaluation.datasets.longmemeval_adapter import run_longmemeval_suite
+
+    report = run_longmemeval_suite(
+        sample_instances(), sample_annotations(),
+        baselines=("B0", "B2", "B3"), seeds=(1337,),
+    )
+    assert report["dataset"] == "longmemeval"
+    assert report["subset"] == "knowledge-update"
+    dm = report["decisive_metrics"]
+    v = lambda m: dm[m]["constraint_violations"]["mean"]
+    ts = lambda m: dm[m]["task_success"]["mean"]
+    # Governed full system supersedes the changed fact to zero violations;
+    # ungoverned arms keep both values and accumulate a single-valued violation.
+    assert v("B3") == 0.0
+    assert v("B0") > 0.0 and v("B2") > 0.0
+    # B3 supersedes where ungoverned arms do not.
+    assert report["write_outcomes"]["B3"]["superseded"] > report["write_outcomes"]["B0"]["superseded"]
+    # Recall preserved: the governed arm recalls the current (latest) value.
+    assert ts("B3") > 0.0
+
+
+# -- abstention arm --------------------------------------------------------- #
+def test_build_abstention_examples_has_no_grounded_writes():
+    from ocm.evaluation.datasets.longmemeval_adapter import build_abstention_examples
+
+    insts = [{
+        "question_id": "ku_0001_abs",
+        "question_type": "knowledge-update",
+        "question": "What did the user say about owning a yacht?",
+        "haystack_session_ids": ["s0"],
+        "haystack_sessions": [[{"role": "user", "content": "I like sailing."}]],
+        "answer_session_ids": [],
+    }]
+    examples, oracle = build_abstention_examples(insts)
+    assert examples[0].category == "abstention"
+    # No grounded HAS_VALUE write for the ungrounded fact.
+    assert oracle.extract("", "ku_0001_abs:s0").relations == []
+
+
+def test_evaluate_abstention_governed_abstains_when_ungrounded():
+    from ocm.evaluation.datasets.longmemeval_adapter import evaluate_abstention
+
+    insts = [{
+        "question_id": "ku_0001_abs",
+        "question_type": "knowledge-update",
+        "question": "What is the user's frequent-flyer number?",
+        "haystack_session_ids": ["s0"],
+        "haystack_sessions": [[{"role": "user", "content": "I flew to Paris last week."}]],
+        "answer_session_ids": [],
+    }]
+    res = evaluate_abstention(insts, baselines=("B3",))
+    # With no grounded value, the governed system must abstain (100% on plumbing).
+    assert res["B3"]["abstention_accuracy"] == 100.0
+    assert res["B3"]["n"] == 1
