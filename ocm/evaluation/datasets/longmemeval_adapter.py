@@ -471,3 +471,228 @@ def run_longmemeval_suite(
         },
         "write_outcomes": ms.write_outcomes,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Arm B — end-to-end from text (real extraction, belief-tracked, cached)
+# --------------------------------------------------------------------------- #
+# Design: extract user facts ONCE with the real LLM, tracking a per-question
+# belief so a changed fact is emitted as an authoritative ``update`` (and a
+# repeated value is skipped); cache the writes per session ``source_ref`` and
+# replay them through the *stateless* oracle replayer. This (a) is genuinely
+# end-to-end from raw text, (b) keeps the LLM off the per-method/seed hot path
+# (extraction is not repeated per arm), and (c) reuses all of Arm A's machinery.
+# The entity-resolution stress lives in attribute normalization: the extractor
+# must map a fact's mentions across sessions to ONE stable slot key, or the
+# update is never detected as a single-valued conflict.
+
+#: Prompt a model to extract durable user facts from one message/session.
+FACT_EXTRACTION_PROMPT = """\
+Extract durable USER facts (stable attributes the user states about themselves,
+e.g. where they live, their job, preferences) from the message below.
+
+Message:
+{text}
+
+Respond with ONLY a JSON array, no prose. Each item:
+{{"attribute": "<short snake_case name, stable across messages>", "value": "<short value>"}}
+Use the SAME attribute name whenever the user refers to the same fact. If the
+message states no durable user fact, respond with [].
+"""
+
+
+def normalize_attribute(attribute: str) -> str:
+    """Normalize a free-text attribute to a stable snake_case slot key fragment."""
+    import re
+
+    s = str(attribute).strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    return s
+
+
+def parse_facts_json(text: str) -> list[dict[str, Any]]:
+    """Extract the first JSON array of objects from a model response (tolerant).
+
+    Returns a list of dicts (possibly empty). Accepts a bare array, or an object
+    with a ``"facts"`` list. Malformed responses yield ``[]``.
+    """
+    import json as _json
+
+    if not text:
+        return []
+    start = text.find("[")
+    while start != -1:
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "[":
+                depth += 1
+            elif text[i] == "]":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        arr = _json.loads(text[start : i + 1])
+                        if isinstance(arr, list):
+                            return [x for x in arr if isinstance(x, dict)]
+                    except _json.JSONDecodeError:
+                        break
+        start = text.find("[", start + 1)
+    # Fallback: an object with a "facts" array.
+    obj_start = text.find("{")
+    if obj_start != -1:
+        try:
+            obj = _json.loads(text[obj_start : text.rfind("}") + 1])
+            if isinstance(obj, dict) and isinstance(obj.get("facts"), list):
+                return [x for x in obj["facts"] if isinstance(x, dict)]
+        except _json.JSONDecodeError:
+            pass
+    return []
+
+
+#: A fact extractor maps one session's text → a list of ``{attribute, value}``.
+def build_fact_extract_fn(chat_fn) -> Any:
+    """Build a per-session fact extractor from a chat callable (``prompt -> text``)."""
+
+    def _extract(text: str) -> list[dict[str, Any]]:
+        return parse_facts_json(chat_fn(FACT_EXTRACTION_PROMPT.format(text=text)))
+
+    return _extract
+
+
+def build_e2e_from_extraction(
+    instances: Iterable[dict[str, Any]],
+    fact_extract_fn: Any,
+    *,
+    intent_mode: str = "auto",
+) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
+    """Build end-to-end examples by extracting facts from the haystack with an LLM.
+
+    ``fact_extract_fn`` maps one session's text → ``[{attribute, value}, ...]``
+    (see :func:`build_fact_extract_fn`). Per question we walk the sessions in
+    order, normalize each attribute to a stable slot key, and track a belief so a
+    changed value is emitted as an ``update`` (``intent_mode="auto"``) — or always
+    as ``new_fact`` (``intent_mode="new_fact"``, the conservative case where the
+    gate quarantines conflicts). Writes are cached per ``source_ref`` and replayed
+    via the stateless oracle, so the LLM runs once regardless of arms/seeds.
+
+    The recall question is the **natural** LongMemEval question (no slot marker);
+    the answer is scored against the gold ``answer`` via the harness's
+    token-containment metric over retrieved evidence. Returns
+    ``(examples, oracle_extractor)``.
+    """
+    if intent_mode not in ("auto", "new_fact"):
+        raise ValueError("intent_mode must be 'auto' or 'new_fact'")
+
+    examples: list[BenchmarkExample] = []
+    writes_by_ref: dict[str, _SessionWrites] = {}
+
+    for inst in instances:
+        qid = str(inst["question_id"])
+        belief: dict[str, str] = {}
+        sessions: list[Session] = []
+        for idx, session in enumerate(inst.get("haystack_sessions", []) or []):
+            text = _session_text(session)
+            sw = _SessionWrites()
+            for fact in fact_extract_fn(text):
+                attr = normalize_attribute(fact.get("attribute", ""))
+                value = str(fact.get("value", "")).strip()
+                if not attr or not value:
+                    continue
+                prev = belief.get(attr)
+                if prev == value:
+                    continue  # re-asserted same value — no write
+                if prev is None:
+                    intent, conf = "new_fact", NEW_FACT_CONFIDENCE
+                else:
+                    intent = "update" if intent_mode == "auto" else "new_fact"
+                    conf = UPDATE_CONFIDENCE
+                slot_name = _slot_key(qid, attr)
+                sw.entities.append({"type": "Slot", "name": slot_name})
+                sw.entities.append(
+                    {"type": "SlotValue", "name": value, "fields": {"value": value}}
+                )
+                sw.relations.append(
+                    {
+                        "subject": slot_name,
+                        "predicate": "HAS_VALUE",
+                        "object": value,
+                        "confidence": conf,
+                        "write_intent": intent,
+                    }
+                )
+                belief[attr] = value
+            writes_by_ref[f"{qid}:s{idx}"] = sw
+            sessions.append(Session(session_id=f"s{idx}", input=text))
+
+        question = Question(
+            query=str(inst.get("question", "")),
+            expected_answer_contains=[str(inst.get("answer", ""))],
+            expected_conflict=False,
+        )
+        examples.append(
+            BenchmarkExample(
+                id=qid, category="knowledge_update_e2e",
+                sessions=sessions, questions=[question],
+            )
+        )
+
+    return examples, LongMemEvalOracleExtractor(writes_by_ref)
+
+
+def run_longmemeval_e2e(
+    instances: Iterable[dict[str, Any]],
+    fact_extract_fn: Any,
+    *,
+    intent_mode: str = "auto",
+    baselines: Iterable[str] = ("B0", "B2", "B3"),
+    seeds: Iterable[int] = (1337,),
+    settings_factory: Any = None,
+    embeddings: object | None = None,
+    checkpoint_dir: Optional[str] = None,
+) -> dict[str, Any]:
+    """End-to-end LongMemEval knowledge-update run (Arm B): real extraction.
+
+    Extracts facts from the haystack with ``fact_extract_fn`` (belief-tracked,
+    cached per session), then runs the governed vs ungoverned comparison via the
+    multi-seed harness, replaying the cached writes through the stateless oracle.
+    Checkpoint suffix ``__lme_e2e`` keeps these separate from the Arm-A oracle
+    run. Unlike Arm A, recall is scored on the **natural** question via retrieval,
+    so it reflects real extraction + retrieval, not gold facts.
+    """
+    from ocm.core.config import Settings
+    from ocm.evaluation.experiment import aggregate_methods, run_multiseed
+
+    if settings_factory is None:
+        def settings_factory() -> Settings:  # type: ignore[misc]
+            return Settings(
+                deterministic_test_mode=True, chroma_mode="memory", extractor="mock",
+                authoritative_update_supersede=True,
+            )
+
+    examples, oracle = build_e2e_from_extraction(
+        instances, fact_extract_fn, intent_mode=intent_mode
+    )
+    methods = list(baselines)
+    ms = run_multiseed(
+        methods,
+        seeds=seeds,
+        settings_factory=settings_factory,
+        extractor=oracle,
+        embeddings=embeddings,
+        checkpoint_dir=checkpoint_dir,
+        key_suffix="__lme_e2e",
+        provided_examples=examples,
+    )
+    agg = aggregate_methods(ms)
+    return {
+        "dataset": "longmemeval",
+        "subset": "knowledge-update",
+        "arm": "end_to_end",
+        "intent_mode": intent_mode,
+        "methods": methods,
+        "seeds": list(seeds),
+        "n_examples": len(examples),
+        "decisive_metrics": {
+            m: {metric: agg[m][metric].__dict__ for metric in agg[m]} for m in agg
+        },
+        "write_outcomes": ms.write_outcomes,
+    }

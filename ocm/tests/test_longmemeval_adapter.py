@@ -283,3 +283,80 @@ def test_build_llm_annotate_fn_rejects_single_value():
 
     fn = build_llm_annotate_fn(one_value)
     assert fn(sample_instances()[0]) is None  # a knowledge update needs >= 2 values
+
+
+# -- Arm B: end-to-end from text (real extraction, fake model) -------------- #
+def _fake_fact_chat(prompt: str) -> str:
+    """A deterministic stand-in for an LLM fact extractor, keyed off content."""
+    text = prompt.lower()
+    if "new york" in text:
+        return '[{"attribute": "residence", "value": "New York"}]'
+    if "san francisco" in text:
+        return '[{"attribute": "residence", "value": "San Francisco"}]'
+    return "[]"
+
+
+def test_parse_facts_json_array_and_facts_object():
+    from ocm.evaluation.datasets.longmemeval_adapter import parse_facts_json
+
+    assert parse_facts_json('ok: [{"attribute":"a","value":"1"}] done') == [
+        {"attribute": "a", "value": "1"}]
+    assert parse_facts_json('{"facts": [{"attribute":"a","value":"1"}]}') == [
+        {"attribute": "a", "value": "1"}]
+    assert parse_facts_json("nothing") == []
+
+
+def test_normalize_attribute():
+    from ocm.evaluation.datasets.longmemeval_adapter import normalize_attribute
+
+    assert normalize_attribute("Where I Live!") == "where_i_live"
+    assert normalize_attribute("residence") == "residence"
+
+
+def test_build_e2e_belief_tracks_intent_and_caches_writes():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_e2e_from_extraction,
+        build_fact_extract_fn,
+    )
+
+    fx = build_fact_extract_fn(_fake_fact_chat)
+    examples, oracle = build_e2e_from_extraction(sample_instances(), fx)
+    # First mention is a new_fact; the later changed value is an update.
+    assert oracle.extract("", "ku_0001:s0").relations[0]["write_intent"] == "new_fact"
+    assert oracle.extract("", "ku_0001:s2").relations[0]["write_intent"] == "update"
+    # The filler session yields no facts.
+    assert oracle.extract("", "ku_0001:s1").relations == []
+    # The recall question is the natural question (no slot marker) + gold answer.
+    assert examples[0].questions[0].query == "Where does the user currently live?"
+    assert examples[0].questions[0].expected_answer_contains == ["San Francisco"]
+
+
+def test_build_e2e_new_fact_mode_does_not_emit_update():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_e2e_from_extraction,
+        build_fact_extract_fn,
+    )
+
+    fx = build_fact_extract_fn(_fake_fact_chat)
+    _, oracle = build_e2e_from_extraction(sample_instances(), fx, intent_mode="new_fact")
+    # Conservative mode: the changed value is still a new_fact (gate will quarantine).
+    assert oracle.extract("", "ku_0001:s2").relations[0]["write_intent"] == "new_fact"
+
+
+def test_run_longmemeval_e2e_governed_beats_ungoverned_on_violations():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_fact_extract_fn,
+        run_longmemeval_e2e,
+    )
+
+    fx = build_fact_extract_fn(_fake_fact_chat)
+    report = run_longmemeval_e2e(
+        sample_instances(), fx, baselines=("B0", "B2", "B3"), seeds=(1337,)
+    )
+    assert report["arm"] == "end_to_end"
+    dm = report["decisive_metrics"]
+    v = lambda m: dm[m]["constraint_violations"]["mean"]
+    # Governed supersede → 0 durable violations; ungoverned keep both values.
+    assert v("B3") == 0.0
+    assert v("B0") > 0.0 and v("B2") > 0.0
+    assert report["write_outcomes"]["B3"]["superseded"] >= 1
