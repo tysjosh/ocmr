@@ -374,8 +374,8 @@ merged.
 
 ### Comparison baselines (extended)
 
-Beyond the canonical B0–B4 toggle matrix, two extended baselines isolate
-alternative designs (opt-in via `baselines=(..., "Brag", "Brtcf")`;
+Beyond the canonical B0–B4 toggle matrix, extended baselines isolate
+alternative designs (opt-in via `baselines=(..., "Brag", "Brtcf", "Bsup")`;
 `ocm/evaluation/baselines.py`). All baselines share the governed write pipeline;
 these differ in retrieval composition and write-time gating.
 
@@ -396,31 +396,38 @@ these differ in retrieval composition and write-time gating.
   the reranker excludes them from confident support and the packager surfaces
   them. This isolates "filter at read time" against OCMR's "gate at write time".
 
-  Headline contrast — full real-LLM run (Qwen2.5-14B + real embeddings, 5 seeds,
-  `per_category=25`, τ=0.8), mean [95% CI]:
+- **`Bsup` — supersession-only.** Full hybrid retrieval with the broad write-time
+  governance stack disabled, plus one narrow rule: for
+  `Slot -[HAS_VALUE]-> SlotValue`, the newest accepted value supersedes any
+  active value for the same slot. This reviewer ablation isolates whether a
+  LongMemEval knowledge-update gain is merely "keep the latest value" rather
+  than ontology-constrained governance.
 
-  | Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
-  |--------|---------------|-----------------|------------------|
-  | B0 (text-only)          | 77.2 [76.5, 77.9] | 14.5 [14.5, 14.5] | 50.7 [47.9, 53.5] |
-  | B2 (hybrid, no governance) | 73.0 [72.1, 74.0] | 14.5 [14.5, 14.5] | 50.7 [47.9, 53.5] |
-  | `Brag` (RAG-only)       | 62.1 [61.4, 62.8] | 14.5 [14.5, 14.5] | 50.7 [47.9, 53.5] |
-  | `Brtcf` (read-time filter) | 72.3 [71.6, 73.0] | **1.4 [1.4, 1.4]** | 50.7 [47.9, 53.5] |
-  | B3 (write-time gate)    | 60.0 [57.2, 62.8] | 1.3 [0.9, 1.6] | **0.0 [0.0, 0.0]** |
+Headline contrast — full real-LLM run (Qwen2.5-14B + real embeddings, 5 seeds,
+`per_category=25`, τ=0.8), mean [95% CI]:
 
-  The read-time filter matches the write-time gate on **contradiction
-  surfacing** — B3 vs `Brtcf` on contradiction rate is **not significant**
-  (paired t-test, Holm-corrected p = 0.178, d = −0.73) — **but constraint
-  violations stay at the ungoverned-baseline level (50.7)** because the durable
-  store is never repaired. Only write-time governance (B3) drives durable
-  violations to zero, and that advantage is decisive (B3 vs B0, Holm-corrected
-  p < 0.0001, d = −22.6). The task-success cost of B3 (60.0 vs `Brtcf` 72.3) is
-  the *mechanism's* signature: B3 quarantines conflicting writes at ingest (1,198
-  vs 556 quarantined), so they are not retrievable, whereas `Brtcf` keeps the
-  full store and filters only the answer. The design choice is therefore explicit
-  — durable integrity (and protection of any consumer that does not re-run the
-  read-time filter) in exchange for conservative, conflict-aware answering. Any
-  downstream consumer that does not re-run the same read-time filter sees the
-  corrupted state; this is the core argument for gating at write time.
+| Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
+|--------|---------------|-----------------|------------------|
+| B0 (text-only)          | 77.2 [76.5, 77.9] | 14.5 [14.5, 14.5] | 50.7 [47.9, 53.5] |
+| B2 (hybrid, no governance) | 73.0 [72.1, 74.0] | 14.5 [14.5, 14.5] | 50.7 [47.9, 53.5] |
+| `Brag` (RAG-only)       | 62.1 [61.4, 62.8] | 14.5 [14.5, 14.5] | 50.7 [47.9, 53.5] |
+| `Brtcf` (read-time filter) | 72.3 [71.6, 73.0] | **1.4 [1.4, 1.4]** | 50.7 [47.9, 53.5] |
+| B3 (write-time gate)    | 60.0 [57.2, 62.8] | 1.3 [0.9, 1.6] | **0.0 [0.0, 0.0]** |
+
+The read-time filter matches the write-time gate on **contradiction
+surfacing** — B3 vs `Brtcf` on contradiction rate is **not significant**
+(paired t-test, Holm-corrected p = 0.178, d = −0.73) — **but constraint
+violations stay at the ungoverned-baseline level (50.7)** because the durable
+store is never repaired. Only write-time governance (B3) drives durable
+violations to zero, and that advantage is decisive (B3 vs B0, Holm-corrected
+p < 0.0001, d = −22.6). The task-success cost of B3 (60.0 vs `Brtcf` 72.3) is
+the *mechanism's* signature: B3 quarantines conflicting writes at ingest (1,198
+vs 556 quarantined), so they are not retrievable, whereas `Brtcf` keeps the
+full store and filters only the answer. The design choice is therefore explicit
+— durable integrity (and protection of any consumer that does not re-run the
+read-time filter) in exchange for conservative, conflict-aware answering. Any
+downstream consumer that does not re-run the same read-time filter sees the
+corrupted state; this is the core argument for gating at write time.
 
 
 

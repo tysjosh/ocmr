@@ -94,11 +94,19 @@ class Settings(BaseModel):
     # --- Write-time governance ablation switches (paper §IV-D) -------------
     # Enabled by default (full OCMR). Disabling one realizes a write-time
     # ablation: ``enable_schema_validation`` gates W5 typed-schema checks;
-    # ``enable_contradiction_gate`` gates W7/C7 so contradictions are no longer
-    # blocked/quarantined at write time. Retrieval-time ablations (provenance,
-    # hybrid routing) are expressed via the baseline StrategyToggles.
+    # ``enable_constraint_validation`` gates W6 graph/domain/temporal/evidence
+    # checks; ``enable_contradiction_gate`` gates W7/C7 so contradictions are no
+    # longer blocked/quarantined at write time. Retrieval-time ablations
+    # (provenance, hybrid routing) are expressed via the baseline StrategyToggles.
     enable_schema_validation: bool = True
+    enable_constraint_validation: bool = True
     enable_contradiction_gate: bool = True
+    # Reviewer ablation: latest-value supersession for Slot -[HAS_VALUE]->
+    # SlotValue only, without the broader ontology-governance stack. When set,
+    # any active HAS_VALUE assertion for the same Slot is superseded by the new
+    # assertion; other relations are accepted under whatever W5/W6 switches are
+    # active. Off by default; enabled only by the opt-in Bsup baseline.
+    supersession_only_has_value: bool = False
     # When True, a single-valued conflict from an ``update``-intent write
     # (an *authoritative* state change, e.g. a trusted dialogue-state slot
     # update) supersedes the incumbent **unconditionally** — no confidence

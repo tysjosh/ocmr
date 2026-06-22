@@ -269,9 +269,11 @@ Baselines are the same memory strategy with different governance toggles
 | **B2** | Graph + semantic, no governance |
 | **B3** | Full governance (contradiction + quarantine + provenance) |
 | **B4** | B3 + the `Answer_Policy` |
+| **Bsup** | Opt-in latest-value supersession only for `Slot -[HAS_VALUE]-> SlotValue` |
 
 `B0–B3` run by default; `B4` layers the answer policy on `B3` for the
-answer-quality comparison.
+answer-quality comparison. Extended baselines such as `Bsup` are selected
+explicitly with `--baselines`.
 
 ## Testing
 

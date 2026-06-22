@@ -20,6 +20,9 @@ B4   ✓            ✓         ✓           ✓                 ✓           
   (Req 22.3).
 * **B3** — full hybrid + contradiction + quarantine + provenance (Req 22.4).
 * **B4** — B3 + the P1–P5 Answer_Policy (Req 22.5).
+* **Bsup** — latest-value supersession for ``Slot -[HAS_VALUE]-> SlotValue``
+  only; no broader schema/constraint/quarantine/provenance governance. This is
+  an opt-in reviewer ablation, not part of the canonical B-suite.
 
 The :data:`BASELINE_TOGGLES` map records each preset; :data:`BASELINE_REGISTRY`
 maps a baseline name to a ``factory(container) -> MemoryStrategy``. Use
@@ -119,6 +122,18 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
         use_answer_policy=False,
         use_read_time_filter=True,
     ),
+    # Bsup — latest-value supersession only for Slot HAS_VALUE. Hybrid retrieval
+    # is kept so it compares directly against B2/B3 on LongMemEval, but write
+    # governance is intentionally reduced to the narrow same-slot overwrite rule.
+    "Bsup": StrategyToggles(
+        use_ontology=True,
+        use_graph=True,
+        use_vectors=True,
+        use_contradiction=False,
+        use_quarantine=False,
+        use_provenance=False,
+        use_answer_policy=False,
+    ),
 }
 
 #: Human-readable description per baseline (used in metrics/reporting).
@@ -130,6 +145,7 @@ BASELINE_DESCRIPTIONS: Dict[str, str] = {
     "B4": "B3 + Answer_Policy (Req 22.5)",
     "Brag": "RAG-only: vectors-only retrieval, answer from text, no governance",
     "Brtcf": "Retrieval-time contradiction filter: no write gate, filter at read",
+    "Bsup": "Latest-value supersession only for Slot HAS_VALUE",
 }
 
 #: Per-baseline **write-time** governance settings overrides (paper §IV-A).
@@ -156,6 +172,14 @@ BASELINE_SETTINGS: Dict[str, Dict[str, bool]] = {
     # Retrieval-time filter: typed schema on, but write-time contradiction gate
     # OFF so conflicts accumulate durably and are caught only at read time.
     "Brtcf": {"enable_schema_validation": True, "enable_contradiction_gate": False},
+    # Supersession-only reviewer ablation: no typed schema, no W6/C7 governance,
+    # only the narrow Slot HAS_VALUE latest-value overwrite rule.
+    "Bsup": {
+        "enable_schema_validation": False,
+        "enable_constraint_validation": False,
+        "enable_contradiction_gate": False,
+        "supersession_only_has_value": True,
+    },
 }
 
 
@@ -188,7 +212,7 @@ BASELINE_REGISTRY: Dict[str, BaselineFactory] = {
 DEFAULT_RUN_BASELINES: tuple[str, ...] = ("B0", "B1", "B2", "B3")
 
 #: The canonical B-suite (the design's toggle matrix). Extended comparison
-#: baselines (e.g. ``Brag``, ``Brtcf``) live in the registry but are opt-in via
+#: baselines (e.g. ``Brag``, ``Brtcf``, ``Bsup``) live in the registry but are opt-in via
 #: an explicit ``baselines=`` list, so they never alter the canonical suite.
 CANONICAL_BASELINES: tuple[str, ...] = ("B0", "B1", "B2", "B3", "B4")
 

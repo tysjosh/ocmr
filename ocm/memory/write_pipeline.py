@@ -606,10 +606,21 @@ class WritePipeline:
                 outcome = self.commit_manager.commit(candidate, vr, created_at=now)
                 return outcome, 1, 0
 
+        # Reviewer ablation: latest-value supersession for Slot HAS_VALUE only.
+        # This bypasses the broader W6/W7 governance stack and asks whether the
+        # observed gains are explained by a plain "keep the newest slot value"
+        # policy.
+        if getattr(self.settings, "supersession_only_has_value", False):
+            vr = self._supersession_only_verdict(candidate)
+            outcome = self.commit_manager.commit(candidate, vr, created_at=now)
+            return outcome, 0 if vr.valid else 1, 0
+
         # W6 (+W7) — graph-level constraints incl. the contradiction gate. The
         # contradiction-gate ablation disables C7 by passing no checker, so
         # contradictions are no longer blocked/quarantined at write time.
-        if getattr(self.settings, "enable_contradiction_gate", True):
+        if not getattr(self.settings, "enable_constraint_validation", True):
+            vr = ValidationResult(valid=True, recommended_action="accept")
+        elif getattr(self.settings, "enable_contradiction_gate", True):
             vr = self.constraint_validator.validate(
                 candidate, self.graph, settings=self.settings
             )
@@ -622,6 +633,50 @@ class WritePipeline:
         vfail = 0 if vr.valid else 1
         cfail = 1 if (not vr.valid and vr.failed_check == "C7") else 0
         return outcome, vfail, cfail
+
+    def _supersession_only_verdict(
+        self, candidate: CandidateAssertion
+    ) -> ValidationResult:
+        """Latest-value routing for the Bsup ablation.
+
+        Only ``Slot -[HAS_VALUE]-> SlotValue`` participates. If the slot already
+        has one or more active ``HAS_VALUE`` assertions, they are superseded and
+        the candidate becomes current. No schema, temporal, provenance, evidence,
+        or contradiction quarantine checks are consulted here; the baseline is
+        intentionally just a same-slot overwrite policy.
+        """
+        if candidate.predicate != "HAS_VALUE":
+            return ValidationResult(valid=True, recommended_action="accept")
+
+        if self.graph.get_entity_type(candidate.subject_id) != "Slot":
+            return ValidationResult(valid=True, recommended_action="accept")
+
+        current_ids: list[str] = []
+        new_id = self.ids.assertion_id(
+            candidate.subject_id,
+            candidate.predicate,
+            candidate.object_id,
+            candidate.source_ref,
+        )
+        for _s, _o, _k, data in self.graph.out_edges(
+            candidate.subject_id, candidate.predicate
+        ):
+            old_id = data.get("assertion_id")
+            if old_id and old_id != new_id:
+                current_ids.append(str(old_id))
+
+        if not current_ids:
+            return ValidationResult(valid=True, recommended_action="accept")
+
+        return ValidationResult(
+            valid=True,
+            reason=(
+                "Bsup latest-value supersession for Slot HAS_VALUE "
+                f"replaces {current_ids}"
+            ),
+            conflicting_ids=current_ids,
+            recommended_action="supersede",
+        )
 
     # ====================================================================
     # Entity status reconciliation (HAS_STATUS assertions)
@@ -659,6 +714,25 @@ class WritePipeline:
         current, current_aid = self._current_status(entity_id)
         if desired == current:
             return None  # idempotent no-op
+
+        if getattr(self.settings, "supersession_only_has_value", False):
+            # Bsup has no status/evidence/temporal governance. It accepts status
+            # assertions as ordinary memory and intentionally does not supersede
+            # them; only Slot HAS_VALUE gets latest-value supersession.
+            status_value_id = self._ensure_status_value(desired, now)
+            candidate = CandidateAssertion(
+                subject_id=entity_id,
+                predicate=HAS_STATUS,
+                object_id=status_value_id,
+                confidence=STATUS_CONFIDENCE,
+                source_ref=source_ref,
+                write_intent=run_intent,
+                extractor_version=None,
+            )
+            vr = ValidationResult(valid=True, recommended_action="accept")
+            outcome = self.commit_manager.commit(candidate, vr, created_at=now)
+            self._sync_entity_status(entity_id, desired)
+            return outcome
 
         action, reason = self._classify_status_change(
             etype, entity_id, current, current_aid, desired, run_intent

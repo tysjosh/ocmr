@@ -30,6 +30,12 @@ def test_baseline_write_time_settings_gradient():
         "enable_schema_validation": True,
         "enable_contradiction_gate": True,
     }
+    assert baseline_settings_overrides("Bsup") == {
+        "enable_schema_validation": False,
+        "enable_constraint_validation": False,
+        "enable_contradiction_gate": False,
+        "supersession_only_has_value": True,
+    }
 
 
 def _ingest_contradiction(method: str):
