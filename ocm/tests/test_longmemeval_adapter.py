@@ -13,6 +13,7 @@ Exercises the shared foundation both evaluation arms build on:
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
@@ -413,7 +414,18 @@ def test_evaluate_abstention_e2e_abstains_when_extraction_empty():
     assert report["counts"]["B3"]["non_abstained"] == 0
 
 
-def test_evaluate_abstention_e2e_counts_false_support_from_noisy_extraction():
+def test_package_abstention_depends_on_final_answer_not_support():
+    from ocm.evaluation.datasets.longmemeval_adapter import _package_is_abstention
+
+    assert _package_is_abstention(
+        SimpleNamespace(answer=None, supporting_assertions=[object()])
+    )
+    assert not _package_is_abstention(
+        SimpleNamespace(answer="Fluffy", supporting_assertions=[])
+    )
+
+
+def test_evaluate_abstention_e2e_counts_noisy_support_as_diagnostic():
     from ocm.evaluation.datasets.longmemeval_adapter import (
         build_fact_extract_fn,
         evaluate_abstention_e2e,
@@ -430,7 +442,12 @@ def test_evaluate_abstention_e2e_counts_false_support_from_noisy_extraction():
         _abs_instance(), fx, baselines=("B0",), seeds=(1337,)
     )
     metric = report["abstention_metrics"]["B0"]["abstention_accuracy"]
-    assert metric["mean"] == 0.0
-    assert report["counts"]["B0"]["non_abstained"] == 1
+    false_answer = report["abstention_metrics"]["B0"]["false_answer_rate"]
+    support = report["abstention_metrics"]["B0"]["supporting_response_rate"]
+    assert metric["mean"] == 100.0
+    assert false_answer["mean"] == 0.0
+    assert support["mean"] == 100.0
+    assert report["counts"]["B0"]["abstained"] == 1
+    assert report["counts"]["B0"]["non_abstained"] == 0
     assert report["counts"]["B0"]["supporting_responses"] == 1
     assert report["write_outcomes"]["B0"]["accepted"] >= 1

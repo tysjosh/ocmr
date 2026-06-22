@@ -672,9 +672,10 @@ def build_abstention_e2e_from_extraction(
     over every full-haystack session, writes whatever noisy durable facts the
     model finds, and asks the natural ``_abs`` question. Because no gold answer
     exists for these instances, correctness is scored by
-    :func:`evaluate_abstention_e2e`: the system must produce no answer and no
-    accepted supporting assertion for the absent fact. Conflicts-only or
-    missing-evidence packages count as abstention.
+    :func:`evaluate_abstention_e2e`: the system must produce no final answer for
+    the absent fact. Retrieved/supporting assertions are reported as diagnostics
+    because full-haystack extraction can surface unrelated accepted memories even
+    when the package correctly refuses to answer.
     """
     return _build_e2e_examples_from_extraction(
         instances,
@@ -751,13 +752,11 @@ def _package_is_abstention(package: Any) -> bool:
     In the end-to-end setting there is no deterministic slot marker and no
     generator to produce an explicit "I don't know" sentence for B0--B3. We
     therefore score the retrieval package itself: a correct abstention has no
-    non-empty answer and no accepted supporting assertion. Missing-information
-    notes or conflicts can still be present; those are governed refusal signals,
-    not fabricated support.
+    non-empty answer. Missing-information notes, retrieved items, accepted
+    support, or conflicts can still be present; those are diagnostics about the
+    noisy full haystack rather than fabricated final answers.
     """
-    if not _answer_is_abstention(getattr(package, "answer", None)):
-        return False
-    return not bool(getattr(package, "supporting_assertions", []) or [])
+    return _answer_is_abstention(getattr(package, "answer", None))
 
 
 def evaluate_abstention_e2e(
@@ -783,13 +782,15 @@ def evaluate_abstention_e2e(
     The returned report mirrors the other LongMemEval runners but uses
     abstention-specific metrics:
 
-    * ``abstention_accuracy`` — percent of ``_abs`` questions with no answer and
-      no accepted support.
-    * ``false_support_or_answer_rate`` — percent that surfaced either an answer
-      or accepted support despite the absent gold fact.
+    * ``abstention_accuracy`` — percent of ``_abs`` questions with no final
+      answer.
+    * ``false_answer_rate`` — percent that surfaced a final answer despite the
+      absent gold fact.
+    * ``supporting_response_rate`` — diagnostic percent with accepted support
+      retrieved from noisy full-haystack extraction.
 
-    Checkpoint suffix ``__lme_abs_e2e`` keeps these runs separate from the
-    knowledge-update Arm-B checkpoints.
+    Checkpoint suffix ``__lme_abs_e2e_v2`` keeps these runs separate from the
+    knowledge-update Arm-B checkpoints and from the earlier no-support scorer.
     """
     from ocm.core.config import Settings
     from ocm.core.container import CoreContainer
@@ -813,7 +814,8 @@ def evaluate_abstention_e2e(
     ckpt = _Checkpoint(checkpoint_dir)
 
     per_seed_accuracy: dict[str, list[float]] = {m: [] for m in methods}
-    per_seed_false: dict[str, list[float]] = {m: [] for m in methods}
+    per_seed_false_answer: dict[str, list[float]] = {m: [] for m in methods}
+    per_seed_supporting: dict[str, list[float]] = {m: [] for m in methods}
     counts: dict[str, dict[str, int]] = {
         m: {
             "abstained": 0,
@@ -844,7 +846,7 @@ def evaluate_abstention_e2e(
         for method in methods:
             key = (
                 f"abs_e2e__{method}__seed{seed}__n{n_examples}"
-                f"__intent_{intent_mode}__lme_abs_e2e"
+                f"__intent_{intent_mode}__lme_abs_e2e_v2"
             )
             cached = ckpt.load(key)
             if cached is None:
@@ -885,17 +887,35 @@ def evaluate_abstention_e2e(
 
                 denom = n_examples or 1
                 acc = 100.0 * method_counts["abstained"] / denom
-                false_rate = 100.0 * method_counts["non_abstained"] / denom
+                false_answer_rate = 100.0 * method_counts["answered"] / denom
+                supporting_rate = (
+                    100.0 * method_counts["supporting_responses"] / denom
+                )
                 cached = {
                     "abstention_accuracy": acc,
-                    "false_support_or_answer_rate": false_rate,
+                    "false_answer_rate": false_answer_rate,
+                    # Backward-compatible alias for older readers. The metric
+                    # now means false final answer; accepted support is tracked
+                    # separately as a diagnostic.
+                    "false_support_or_answer_rate": false_answer_rate,
+                    "supporting_response_rate": supporting_rate,
                     "counts": method_counts,
                     "write_outcomes": wo,
                 }
                 ckpt.save(key, cached)
 
             per_seed_accuracy[method].append(float(cached["abstention_accuracy"]))
-            per_seed_false[method].append(float(cached["false_support_or_answer_rate"]))
+            per_seed_false_answer[method].append(
+                float(
+                    cached.get(
+                        "false_answer_rate",
+                        cached.get("false_support_or_answer_rate", 0.0),
+                    )
+                )
+            )
+            per_seed_supporting[method].append(
+                float(cached.get("supporting_response_rate", 0.0))
+            )
             for count_key, value in (cached.get("counts") or {}).items():
                 if count_key in counts[method]:
                     counts[method][count_key] += int(value)
@@ -914,7 +934,15 @@ def evaluate_abstention_e2e(
         "abstention_metrics": {
             m: {
                 "abstention_accuracy": stats.mean_ci(per_seed_accuracy[m]).__dict__,
-                "false_support_or_answer_rate": stats.mean_ci(per_seed_false[m]).__dict__,
+                "false_answer_rate": stats.mean_ci(
+                    per_seed_false_answer[m]
+                ).__dict__,
+                "supporting_response_rate": stats.mean_ci(
+                    per_seed_supporting[m]
+                ).__dict__,
+                "false_support_or_answer_rate": stats.mean_ci(
+                    per_seed_false_answer[m]
+                ).__dict__,
             }
             for m in methods
         },

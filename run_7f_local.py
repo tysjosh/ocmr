@@ -240,13 +240,24 @@ def _print_abstention_table(report: dict[str, Any], intent_mode: str) -> None:
         f"\n=== LongMemEval abstention END-TO-END "
         f"(intent_mode={intent_mode}; mean [95% CI]) ==="
     )
-    print(f"{'Method':<8}{'Abstention up':<22}{'False support/answer dn':<28}")
+    print(f"{'Method':<8}{'Abstention up':<22}{'False answer dn':<22}{'Support diag':<22}")
     for method in report["methods"]:
         row = report["abstention_metrics"][method]
+        false_key = (
+            "false_answer_rate"
+            if "false_answer_rate" in row
+            else "false_support_or_answer_rate"
+        )
+        support = (
+            _ci(row, "supporting_response_rate")
+            if "supporting_response_rate" in row
+            else "n/a"
+        )
         print(
             f"{method:<8}"
             f"{_ci(row, 'abstention_accuracy'):<22}"
-            f"{_ci(row, 'false_support_or_answer_rate'):<28}"
+            f"{_ci(row, false_key):<22}"
+            f"{support:<22}"
         )
     print(
         "\nabstention counts:",
