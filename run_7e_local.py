@@ -11,7 +11,8 @@ Expected annotation cache:
 Example:
     python run_7e_local.py
     python run_7e_local.py --embeddings deterministic --limit 5
-    python run_7e_local.py --annotate --llm-base-url http://localhost:8000/v1 --llm-model Qwen/Qwen2.5-7B-Instruct --limit 5
+    python run_7e_local.py --annotate --limit 5
+    python run_7e_local.py --annotate --annotate-backend openai --llm-base-url http://localhost:8000/v1 --limit 5
 """
 
 from __future__ import annotations
@@ -96,6 +97,61 @@ def _build_chat_fn(
     return _chat
 
 
+def _build_transformers_chat_fn(
+    *,
+    model_id: str,
+    max_new_tokens: int,
+    allow_offload: bool,
+):
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "Transformers annotation backend needs a CUDA GPU. Use cached "
+            "annotations or --annotate-backend openai with a remote endpoint."
+        )
+
+    print(f"loading {model_id} with transformers bf16/device_map=auto")
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        torch_dtype=torch.bfloat16,
+        device_map="auto",
+    )
+    model.eval()
+    print(f"Loaded {model_id} (bf16)")
+
+    device_map = getattr(model, "hf_device_map", {}) or {}
+    offloaded = [name for name, device in device_map.items() if device in ("cpu", "disk")]
+    print("offloaded modules:", offloaded or "none (all on GPU)")
+    if offloaded and not allow_offload:
+        raise RuntimeError(
+            "Model offloaded to CPU/disk, which will make annotation very slow. "
+            "Use a smaller model, reduce memory pressure, or pass --allow-offload."
+        )
+
+    def _chat(prompt: str) -> str:
+        messages = [
+            {"role": "system", "content": "You label data and output only a JSON object."},
+            {"role": "user", "content": prompt},
+        ]
+        text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        inputs = tokenizer(text, return_tensors="pt").to(model.device)
+        with torch.no_grad():
+            out = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
+        generated = out[0][inputs["input_ids"].shape[1]:]
+        return tokenizer.decode(generated, skip_special_tokens=True)
+
+    return _chat
+
+
 def main() -> int:
     repo_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(
@@ -113,9 +169,15 @@ def main() -> int:
         "--annotate",
         action="store_true",
         help=(
-            "Create the missing annotation cache via an OpenAI-compatible "
-            "chat-completions endpoint."
+            "Create the missing annotation cache. Defaults to the same local "
+            "Transformers bf16 Qwen load used in Colab."
         ),
+    )
+    parser.add_argument(
+        "--annotate-backend",
+        choices=("transformers", "openai"),
+        default="transformers",
+        help="Annotation backend: local Transformers model or OpenAI-compatible endpoint.",
     )
     parser.add_argument(
         "--llm-base-url",
@@ -129,11 +191,16 @@ def main() -> int:
     )
     parser.add_argument(
         "--llm-model",
-        default=os.environ.get("LME_ANNOTATE_MODEL", "Qwen/Qwen2.5-7B-Instruct"),
-        help="Model name passed to the chat-completions endpoint.",
+        default=os.environ.get("LME_ANNOTATE_MODEL", "Qwen/Qwen2.5-14B-Instruct"),
+        help="Model id/name used by the annotation backend.",
     )
     parser.add_argument("--llm-timeout-s", type=float, default=120.0)
-    parser.add_argument("--llm-max-tokens", type=int, default=512)
+    parser.add_argument("--llm-max-tokens", type=int, default=256)
+    parser.add_argument(
+        "--allow-offload",
+        action="store_true",
+        help="Allow Transformers device_map=auto to offload modules to CPU/disk.",
+    )
     parser.add_argument(
         "--embeddings",
         choices=("local", "deterministic"),
@@ -187,28 +254,35 @@ def main() -> int:
                 "Missing annotation cache:\n"
                 f"  {ann_path}\n\n"
                 "Generate Cell 7e annotations once on GPU/Colab, copy the file "
-                "here, or rerun with --annotate and an OpenAI-compatible "
-                "chat-completions endpoint. This local runner intentionally "
-                "does not start a slow CPU-local Qwen annotation pass."
-            )
-        if not args.llm_base_url:
-            raise SystemExit(
-                "--annotate requires --llm-base-url, for example "
-                "http://localhost:8000/v1"
+                "here, or rerun with --annotate on a CUDA GPU. This local "
+                "runner refuses CPU/disk offload unless --allow-offload is set."
             )
         from ocm.evaluation.datasets.longmemeval_annotate import annotate_file
 
-        chat_fn = _build_chat_fn(
-            base_url=args.llm_base_url,
-            model=args.llm_model,
-            api_key=args.llm_api_key,
-            timeout_s=args.llm_timeout_s,
-            max_tokens=args.llm_max_tokens,
-        )
-        print(
-            "annotating knowledge-update questions via "
-            f"{_chat_completions_url(args.llm_base_url)} model={args.llm_model}"
-        )
+        if args.annotate_backend == "openai":
+            if not args.llm_base_url:
+                raise SystemExit(
+                    "--annotate-backend openai requires --llm-base-url, for example "
+                    "http://localhost:8000/v1"
+                )
+            chat_fn = _build_chat_fn(
+                base_url=args.llm_base_url,
+                model=args.llm_model,
+                api_key=args.llm_api_key,
+                timeout_s=args.llm_timeout_s,
+                max_tokens=args.llm_max_tokens,
+            )
+            print(
+                "annotating knowledge-update questions via "
+                f"{_chat_completions_url(args.llm_base_url)} model={args.llm_model}"
+            )
+        else:
+            chat_fn = _build_transformers_chat_fn(
+                model_id=args.llm_model,
+                max_new_tokens=args.llm_max_tokens,
+                allow_offload=args.allow_offload,
+            )
+
         annotations = annotate_file(
             str(lme_path), str(ann_path), chat_fn, limit=args.limit
         )
