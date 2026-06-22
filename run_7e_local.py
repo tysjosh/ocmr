@@ -52,6 +52,11 @@ def _download_if_missing(path: Path, url: str) -> None:
     urllib.request.urlretrieve(url, path)
 
 
+def _safe_segment(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in value)
+    return cleaned.strip("_") or "run"
+
+
 def _chat_completions_url(base_url: str) -> str:
     base = base_url.rstrip("/")
     if base.endswith("/chat/completions"):
@@ -231,19 +236,28 @@ def main() -> int:
 
     data_dir = (args.data_dir or repo_dir / "data").resolve()
     output_dir = (args.output_dir or repo_dir / "local_results").resolve()
-    checkpoint_dir = (
-        args.checkpoint_dir or output_dir / "checkpoints" / "qwen"
-    ).resolve()
     ann_path = (
         args.annotations
         or output_dir / "longmemeval_kupdate_annotations.json"
     ).resolve()
+    if args.checkpoint_dir is not None:
+        checkpoint_dir = args.checkpoint_dir.resolve()
+    else:
+        limit_segment = f"limit_{args.limit}" if args.limit is not None else "full"
+        checkpoint_dir = (
+            output_dir
+            / "checkpoints"
+            / "qwen"
+            / _safe_segment(ann_path.stem)
+            / limit_segment
+        ).resolve()
     lme_path = data_dir / "longmemeval_oracle.json"
 
     output_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     _download_if_missing(lme_path, LME_ORACLE_URL)
     print(f"LongMemEval data: {lme_path}")
+    print(f"checkpoint dir: {checkpoint_dir}")
 
     if ann_path.exists():
         annotations = load_annotations(str(ann_path))
