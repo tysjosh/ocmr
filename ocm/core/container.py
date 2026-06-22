@@ -50,6 +50,8 @@ Requirements: 11.8, 19.1, 27.2, 27.3.
 
 from __future__ import annotations
 
+import uuid
+
 from ocm.core.config import Settings
 from ocm.core.ids import IdGenerator
 from ocm.core.logging import ResearchLogger
@@ -132,6 +134,7 @@ class CoreContainer:
             self.embeddings,
             chroma_mode=settings.chroma_mode,
             chroma_path=settings.chroma_path,
+            collection_name=self._vector_collection_name(settings),
             graph=self.graph,
         )
 
@@ -231,6 +234,15 @@ class CoreContainer:
         if settings.deterministic_test_mode:
             return DeterministicEmbeddingProvider()
         return LocalEmbeddingProvider(settings.embedding_model)
+
+    @staticmethod
+    def _vector_collection_name(settings: Settings) -> str:
+        """Choose a Chroma collection name, isolating memory-mode containers."""
+        if settings.chroma_collection:
+            return settings.chroma_collection
+        if settings.chroma_mode == "memory":
+            return f"ocm_memory_{uuid.uuid4().hex}"
+        return "ocm_memory"
 
     @staticmethod
     def _build_extractor(settings: Settings):

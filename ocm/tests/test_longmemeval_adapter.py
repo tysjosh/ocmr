@@ -360,3 +360,77 @@ def test_run_longmemeval_e2e_governed_beats_ungoverned_on_violations():
     assert v("B3") == 0.0
     assert v("B0") > 0.0 and v("B2") > 0.0
     assert report["write_outcomes"]["B3"]["superseded"] >= 1
+
+
+def _abs_instance() -> list[dict]:
+    return [{
+        "question_id": "ku_0002_abs",
+        "question_type": "knowledge-update",
+        "question": "What is the user's frequent-flyer number?",
+        "haystack_session_ids": ["s0"],
+        "haystack_sessions": [[
+            {"role": "user", "content": "I adopted a cat named Fluffy."},
+            {"role": "assistant", "content": "That's sweet."},
+        ]],
+        "answer_session_ids": [],
+    }]
+
+
+def test_build_abstention_e2e_extracts_full_haystack_facts():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_abstention_e2e_from_extraction,
+        build_fact_extract_fn,
+    )
+
+    def pet_fact_chat(prompt: str) -> str:
+        return '[{"attribute": "pet_name", "value": "Fluffy"}]'
+
+    fx = build_fact_extract_fn(pet_fact_chat)
+    examples, oracle = build_abstention_e2e_from_extraction(_abs_instance(), fx)
+    assert examples[0].category == "abstention_e2e"
+    assert examples[0].questions[0].query == "What is the user's frequent-flyer number?"
+    assert examples[0].questions[0].expected_answer_contains == []
+    rel = oracle.extract("", "ku_0002_abs:s0").relations[0]
+    assert rel["predicate"] == "HAS_VALUE"
+    assert rel["write_intent"] == "new_fact"
+
+
+def test_evaluate_abstention_e2e_abstains_when_extraction_empty():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_fact_extract_fn,
+        evaluate_abstention_e2e,
+    )
+
+    fx = build_fact_extract_fn(lambda _prompt: "[]")
+    report = evaluate_abstention_e2e(
+        _abs_instance(), fx, baselines=("B3",), seeds=(1337,)
+    )
+    assert report["subset"] == "abstention"
+    assert report["arm"] == "end_to_end"
+    metric = report["abstention_metrics"]["B3"]["abstention_accuracy"]
+    assert metric["mean"] == 100.0
+    assert report["counts"]["B3"]["abstained"] == 1
+    assert report["counts"]["B3"]["non_abstained"] == 0
+
+
+def test_evaluate_abstention_e2e_counts_false_support_from_noisy_extraction():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_fact_extract_fn,
+        evaluate_abstention_e2e,
+    )
+
+    def pet_fact_chat(prompt: str) -> str:
+        text = prompt.lower()
+        if "fluffy" in text:
+            return '[{"attribute": "pet_name", "value": "Fluffy"}]'
+        return "[]"
+
+    fx = build_fact_extract_fn(pet_fact_chat)
+    report = evaluate_abstention_e2e(
+        _abs_instance(), fx, baselines=("B0",), seeds=(1337,)
+    )
+    metric = report["abstention_metrics"]["B0"]["abstention_accuracy"]
+    assert metric["mean"] == 0.0
+    assert report["counts"]["B0"]["non_abstained"] == 1
+    assert report["counts"]["B0"]["supporting_responses"] == 1
+    assert report["write_outcomes"]["B0"]["accepted"] >= 1

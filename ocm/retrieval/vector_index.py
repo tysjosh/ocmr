@@ -45,6 +45,7 @@ Requirements: 13.4, 13.5, 13.6, 16.6.
 from __future__ import annotations
 
 import math
+import uuid
 from typing import Any, Optional
 
 from pydantic import BaseModel
@@ -172,6 +173,8 @@ class VectorIndex:
         self.provider = provider
         self.chroma_mode = chroma_mode
         self.chroma_path = chroma_path
+        if chroma_mode == "memory" and collection_name == DEFAULT_COLLECTION:
+            collection_name = f"{DEFAULT_COLLECTION}_{uuid.uuid4().hex}"
         self.collection_name = collection_name
         self.graph = graph
         self._using_fallback = False

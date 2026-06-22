@@ -13,8 +13,9 @@ Scope (deliberately narrow, mirroring the MultiWOZ scoping):
   governed arm **supersedes** the prior value (current value retrievable, zero
   durable violations); an ungoverned arm keeps both (stale-surfacing + a
   single-valued violation). Same claim as MultiWOZ, new domain + benchmark.
-* **`abstention` questions** (``question_id`` ends in ``_abs``) — handled by a
-  later increment; governed quarantine / insufficient evidence → *abstain*.
+* **`abstention` questions** (``question_id`` ends in ``_abs``) — no grounded
+  answer exists in the haystack; governed quarantine / insufficient evidence →
+  *abstain* rather than fabricate a memory.
 
 Two evaluation arms share this module:
 
@@ -25,7 +26,9 @@ Two evaluation arms share this module:
   and cached/committed; this module consumes it deterministically. Built here.
 * **Arm B (end-to-end).** The real LLM extractor runs over the full haystack and
   governance acts on noisy candidates; entity resolution becomes load-bearing.
-  Wired in a later increment (reuses the same examples + scoring).
+  Knowledge-update uses the standard task-success metric over retrieved
+  evidence, while abstention uses a dedicated refusal metric: no answer and no
+  accepted support for the absent fact.
 
 Dataset format (``longmemeval_{oracle,s,m}.json``; HF ``xiaowu0162/longmemeval-cleaned``):
 each of 500 instances has ``question_id``, ``question_type``, ``question``,
@@ -558,27 +561,15 @@ def build_fact_extract_fn(chat_fn) -> Any:
     return _extract
 
 
-def build_e2e_from_extraction(
+def _build_e2e_examples_from_extraction(
     instances: Iterable[dict[str, Any]],
     fact_extract_fn: Any,
     *,
     intent_mode: str = "auto",
+    category: str,
+    expected_answer_fn: Any,
 ) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
-    """Build end-to-end examples by extracting facts from the haystack with an LLM.
-
-    ``fact_extract_fn`` maps one session's text → ``[{attribute, value}, ...]``
-    (see :func:`build_fact_extract_fn`). Per question we walk the sessions in
-    order, normalize each attribute to a stable slot key, and track a belief so a
-    changed value is emitted as an ``update`` (``intent_mode="auto"``) — or always
-    as ``new_fact`` (``intent_mode="new_fact"``, the conservative case where the
-    gate quarantines conflicts). Writes are cached per ``source_ref`` and replayed
-    via the stateless oracle, so the LLM runs once regardless of arms/seeds.
-
-    The recall question is the **natural** LongMemEval question (no slot marker);
-    the answer is scored against the gold ``answer`` via the harness's
-    token-containment metric over retrieved evidence. Returns
-    ``(examples, oracle_extractor)``.
-    """
+    """Shared Arm-B builder: extract haystack facts and replay cached writes."""
     if intent_mode not in ("auto", "new_fact"):
         raise ValueError("intent_mode must be 'auto' or 'new_fact'")
 
@@ -625,17 +616,73 @@ def build_e2e_from_extraction(
 
         question = Question(
             query=str(inst.get("question", "")),
-            expected_answer_contains=[str(inst.get("answer", ""))],
+            expected_answer_contains=list(expected_answer_fn(inst)),
             expected_conflict=False,
         )
         examples.append(
             BenchmarkExample(
-                id=qid, category="knowledge_update_e2e",
+                id=qid, category=category,
                 sessions=sessions, questions=[question],
             )
         )
 
     return examples, LongMemEvalOracleExtractor(writes_by_ref)
+
+
+def build_e2e_from_extraction(
+    instances: Iterable[dict[str, Any]],
+    fact_extract_fn: Any,
+    *,
+    intent_mode: str = "auto",
+) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
+    """Build end-to-end examples by extracting facts from the haystack with an LLM.
+
+    ``fact_extract_fn`` maps one session's text → ``[{attribute, value}, ...]``
+    (see :func:`build_fact_extract_fn`). Per question we walk the sessions in
+    order, normalize each attribute to a stable slot key, and track a belief so a
+    changed value is emitted as an ``update`` (``intent_mode="auto"``) — or always
+    as ``new_fact`` (``intent_mode="new_fact"``, the conservative case where the
+    gate quarantines conflicts). Writes are cached per ``source_ref`` and replayed
+    via the stateless oracle, so the LLM runs once regardless of arms/seeds.
+
+    The recall question is the **natural** LongMemEval question (no slot marker);
+    the answer is scored against the gold ``answer`` via the harness's
+    token-containment metric over retrieved evidence. Returns
+    ``(examples, oracle_extractor)``.
+    """
+    return _build_e2e_examples_from_extraction(
+        instances,
+        fact_extract_fn,
+        intent_mode=intent_mode,
+        category="knowledge_update_e2e",
+        expected_answer_fn=lambda inst: [str(inst.get("answer", ""))],
+    )
+
+
+def build_abstention_e2e_from_extraction(
+    instances: Iterable[dict[str, Any]],
+    fact_extract_fn: Any,
+    *,
+    intent_mode: str = "auto",
+) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
+    """Build end-to-end abstention probes from raw LongMemEval haystacks.
+
+    This is the Arm-B counterpart to :func:`build_abstention_examples`: instead
+    of emitting an empty oracle sentinel slot, it runs the real fact extractor
+    over every full-haystack session, writes whatever noisy durable facts the
+    model finds, and asks the natural ``_abs`` question. Because no gold answer
+    exists for these instances, correctness is scored by
+    :func:`evaluate_abstention_e2e`: the system must produce no answer and no
+    accepted supporting assertion for the absent fact. Conflicts-only or
+    missing-evidence packages count as abstention.
+    """
+    return _build_e2e_examples_from_extraction(
+        instances,
+        fact_extract_fn,
+        intent_mode=intent_mode,
+        category="abstention_e2e",
+        expected_answer_fn=lambda _inst: [],
+    )
 
 
 def run_longmemeval_e2e(
@@ -695,4 +742,182 @@ def run_longmemeval_e2e(
             m: {metric: agg[m][metric].__dict__ for metric in agg[m]} for m in agg
         },
         "write_outcomes": ms.write_outcomes,
+    }
+
+
+def _package_is_abstention(package: Any) -> bool:
+    """True when a package represents a faithful abstention on an ``_abs`` query.
+
+    In the end-to-end setting there is no deterministic slot marker and no
+    generator to produce an explicit "I don't know" sentence for B0--B3. We
+    therefore score the retrieval package itself: a correct abstention has no
+    non-empty answer and no accepted supporting assertion. Missing-information
+    notes or conflicts can still be present; those are governed refusal signals,
+    not fabricated support.
+    """
+    if not _answer_is_abstention(getattr(package, "answer", None)):
+        return False
+    return not bool(getattr(package, "supporting_assertions", []) or [])
+
+
+def evaluate_abstention_e2e(
+    instances: Iterable[dict[str, Any]],
+    fact_extract_fn: Any,
+    *,
+    intent_mode: str = "auto",
+    baselines: Iterable[str] = ("B0", "B2", "B3"),
+    seeds: Iterable[int] = (1337,),
+    settings_factory: Any = None,
+    embeddings: object | None = None,
+    checkpoint_dir: Optional[str] = None,
+    top_k: int = 10,
+) -> dict[str, Any]:
+    """Score Arm-B LongMemEval abstention over raw full-haystack extraction.
+
+    The ``_abs`` split asks questions whose answer is absent from the haystack.
+    This runner builds end-to-end examples with
+    :func:`build_abstention_e2e_from_extraction`, ingests the extracted facts
+    through each baseline, and counts a response as correct only when the
+    evidence package abstains (:func:`_package_is_abstention`).
+
+    The returned report mirrors the other LongMemEval runners but uses
+    abstention-specific metrics:
+
+    * ``abstention_accuracy`` — percent of ``_abs`` questions with no answer and
+      no accepted support.
+    * ``false_support_or_answer_rate`` — percent that surfaced either an answer
+      or accepted support despite the absent gold fact.
+
+    Checkpoint suffix ``__lme_abs_e2e`` keeps these runs separate from the
+    knowledge-update Arm-B checkpoints.
+    """
+    from ocm.core.config import Settings
+    from ocm.core.container import CoreContainer
+    from ocm.evaluation import stats
+    from ocm.evaluation.baselines import baseline_settings_overrides, build_baseline
+    from ocm.evaluation.experiment import _Checkpoint, _seed_everything
+    from ocm.evaluation.runner import BaselineRunner
+
+    if settings_factory is None:
+        def settings_factory() -> Settings:  # type: ignore[misc]
+            return Settings(
+                deterministic_test_mode=True, chroma_mode="memory", extractor="mock",
+                authoritative_update_supersede=True,
+            )
+
+    examples, oracle = build_abstention_e2e_from_extraction(
+        instances, fact_extract_fn, intent_mode=intent_mode
+    )
+    methods = list(baselines)
+    seed_list = list(seeds)
+    ckpt = _Checkpoint(checkpoint_dir)
+
+    per_seed_accuracy: dict[str, list[float]] = {m: [] for m in methods}
+    per_seed_false: dict[str, list[float]] = {m: [] for m in methods}
+    counts: dict[str, dict[str, int]] = {
+        m: {
+            "abstained": 0,
+            "non_abstained": 0,
+            "answered": 0,
+            "supporting_responses": 0,
+            "retrieved_responses": 0,
+            "conflict_responses": 0,
+            "missing_information_responses": 0,
+        }
+        for m in methods
+    }
+    write_outcomes: dict[str, dict[str, int]] = {
+        m: {
+            "candidates": 0,
+            "accepted": 0,
+            "superseded": 0,
+            "quarantined": 0,
+            "rejected": 0,
+        }
+        for m in methods
+    }
+
+    runner = BaselineRunner(settings_factory=settings_factory, top_k=top_k)
+    n_examples = len(examples)
+    for seed in seed_list:
+        _seed_everything(seed)
+        for method in methods:
+            key = (
+                f"abs_e2e__{method}__seed{seed}__n{n_examples}"
+                f"__intent_{intent_mode}__lme_abs_e2e"
+            )
+            cached = ckpt.load(key)
+            if cached is None:
+                settings = settings_factory().model_copy(
+                    update=baseline_settings_overrides(method)
+                )
+                container = CoreContainer(
+                    settings, extractor=oracle, embeddings=embeddings
+                )
+                strategy = build_baseline(method, container)
+                method_counts = {k: 0 for k in counts[method]}
+                wo = {k: 0 for k in write_outcomes[method]}
+
+                for ex in examples:
+                    wc = runner._ingest_sessions(strategy, ex)
+                    for outcome_key in wo:
+                        wo[outcome_key] += int(wc.get(outcome_key, 0))
+
+                    package = strategy.query(ex.questions[0].query, top_k=top_k)
+                    answer = getattr(package, "answer", None)
+                    has_answer = not _answer_is_abstention(answer)
+                    has_support = bool(
+                        getattr(package, "supporting_assertions", []) or []
+                    )
+                    has_retrieved = bool(getattr(package, "retrieved_items", []) or [])
+                    has_conflict = bool(getattr(package, "conflicts", []) or [])
+                    has_missing = bool(
+                        getattr(package, "missing_information", []) or []
+                    )
+                    abstained = _package_is_abstention(package)
+
+                    method_counts["abstained" if abstained else "non_abstained"] += 1
+                    method_counts["answered"] += int(has_answer)
+                    method_counts["supporting_responses"] += int(has_support)
+                    method_counts["retrieved_responses"] += int(has_retrieved)
+                    method_counts["conflict_responses"] += int(has_conflict)
+                    method_counts["missing_information_responses"] += int(has_missing)
+
+                denom = n_examples or 1
+                acc = 100.0 * method_counts["abstained"] / denom
+                false_rate = 100.0 * method_counts["non_abstained"] / denom
+                cached = {
+                    "abstention_accuracy": acc,
+                    "false_support_or_answer_rate": false_rate,
+                    "counts": method_counts,
+                    "write_outcomes": wo,
+                }
+                ckpt.save(key, cached)
+
+            per_seed_accuracy[method].append(float(cached["abstention_accuracy"]))
+            per_seed_false[method].append(float(cached["false_support_or_answer_rate"]))
+            for count_key, value in (cached.get("counts") or {}).items():
+                if count_key in counts[method]:
+                    counts[method][count_key] += int(value)
+            for outcome_key, value in (cached.get("write_outcomes") or {}).items():
+                if outcome_key in write_outcomes[method]:
+                    write_outcomes[method][outcome_key] += int(value)
+
+    return {
+        "dataset": "longmemeval",
+        "subset": "abstention",
+        "arm": "end_to_end",
+        "intent_mode": intent_mode,
+        "methods": methods,
+        "seeds": seed_list,
+        "n_examples": n_examples,
+        "abstention_metrics": {
+            m: {
+                "abstention_accuracy": stats.mean_ci(per_seed_accuracy[m]).__dict__,
+                "false_support_or_answer_rate": stats.mean_ci(per_seed_false[m]).__dict__,
+            }
+            for m in methods
+        },
+        "counts": counts,
+        "write_outcomes": write_outcomes,
     }

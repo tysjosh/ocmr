@@ -288,7 +288,7 @@ def test_service_start_smoke():
     )
     app = create_app(CoreContainer(settings))
 
-    paths = {getattr(route, "path", None) for route in app.routes}
+    paths = set(app.openapi()["paths"])
     for expected in (
         "/memory/write",
         "/memory/query",

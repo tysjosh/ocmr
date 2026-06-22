@@ -62,6 +62,17 @@ def test_invalid_chroma_mode_rejected() -> None:
         VectorIndex(provider=DeterministicEmbeddingProvider(), chroma_mode="bogus")
 
 
+def test_memory_mode_default_collections_are_isolated() -> None:
+    """Separate memory-mode indexes must not see each other's vectors."""
+    first = VectorIndex(provider=DeterministicEmbeddingProvider(), chroma_mode="memory")
+    second = VectorIndex(provider=DeterministicEmbeddingProvider(), chroma_mode="memory")
+
+    first.add("claim:only-first", "Alice owns Project Orion", MEMORY_TYPE_CLAIM)
+
+    assert _ids(first.query("Alice owns Project Orion", top_k=10)) == ["claim:only-first"]
+    assert second.query("Alice owns Project Orion", top_k=10) == []
+
+
 # ---------------------------------------------------------------------------
 # 1. add/query round-trip
 # ---------------------------------------------------------------------------

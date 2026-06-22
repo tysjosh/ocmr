@@ -65,6 +65,10 @@ class Settings(BaseModel):
     sqlite_path: str = "ocm.db"
     chroma_mode: Literal["persistent", "memory"] = "persistent"
     chroma_path: str = ".chroma"
+    # Optional Chroma collection override. When omitted, memory-mode containers
+    # get a fresh per-container collection so hermetic tests/evaluations cannot
+    # see vectors from earlier containers in the same process.
+    chroma_collection: Optional[str] = None
 
     # --- Determinism (Req 27.5) --------------------------------------------
     deterministic_test_mode: bool = False
