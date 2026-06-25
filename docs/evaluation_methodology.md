@@ -349,10 +349,11 @@ record; the decisive metrics (`experiment.decisive_metrics`) are computed per
   responses. The primary measure is taken from the arm's *durable store*
   (`experiment.durable_constraint_violations`): a single-valued relation (1:1 or
   m:1, e.g. `HAS_STATUS`, `ASSIGNED_TO`) left with ≥ 2 distinct accepted objects
-  for one subject. Because every arm shares the governed write path, the durable
-  store is identical across arms; the governance difference is whether an arm
-  *surfaces* constraint-violating state unflagged at answer time
-  (`runner`'s `surfaced_violation`).
+  for one subject. Every arm uses the same write-pipeline implementation, but
+  baseline-specific settings decide whether schema checks, contradiction gating,
+  and supersession run; the durable store is therefore measured per arm. The
+  runner also records whether constraint-violating state was surfaced unflagged
+  at answer time (`runner`'s `surfaced_violation`).
 
 **Calibration** (`stats.expected_calibration_error`, `stats.brier_score`) uses
 the package confidence vs whether the answer was fully correct (all expected
@@ -372,12 +373,52 @@ where a "merge" means two mentions resolved to the same node; `false_merges`
 counts distinct-entity pairs (different gold groups, same example) wrongly
 merged.
 
+### Baseline definitions
+
+The labels in the main tables are implementation-level ablations, not different
+model prompts. Each arm uses the same extraction, normalization, entity
+resolution, commit, vector-index, reranking, and packaging components; only the
+write-time governance switches and retrieval composition differ.
+
+- **B0 / text-only.** Accepted memory is serialized into compact text and indexed
+  semantically: accepted assertions are embedded as
+  `subject_name PREDICATE object_name`, and accepted claims, documents, and
+  events use their natural text renderings. B0 retrieves only from this vector
+  index; it does not use symbolic graph traversal and it does not run
+  contradiction/quarantine/provenance governance. It is not raw-turn transcript
+  RAG and it does not append dialogue summaries.
+- **B1 / ontology-only.** Uses the symbolic graph retriever only, with vectors
+  disabled. It isolates graph/symbolic retrieval and schema-enabled,
+  contradiction-gate-off write behavior from semantic retrieval. B1 is part of
+  the canonical B0-B4 suite, but it is a retrieval-composition ablation, so
+  compressed headline and real-data tables focus on the stronger B0/B2/B3
+  governance comparison.
+- **B2 / hybrid without governance.** Combines symbolic graph retrieval with
+  semantic vector retrieval and uses the same reranker as B3, but leaves
+  contradiction/quarantine/provenance governance off at write and read time. This
+  is the closest apples-to-apples ungoverned comparator for B3.
+- **B3 / OCMR.** Uses hybrid retrieval plus write-time contradiction gating,
+  quarantine, supersession, and provenance-aware packaging. This is the primary
+  governed system.
+- **`Brag` / RAG-only.** Uses the same vector index as B0, but packages evidence
+  without the graph-assisted structural-answer path; answers are read only from
+  retrieved text. It is vector retrieval over serialized memory items, not a
+  separate chunk index over raw interaction history or gold evidence spans.
+- **`Brtcf` / read-time contradiction filter.** Uses hybrid retrieval with the
+  write-time contradiction gate off, then scans accepted memory at query time for
+  single-valued conflicts and filters/surfaces them during reranking/packaging.
+  It tests read-time filtering against OCMR's write-time repair.
+- **`Bsup` / supersession-only.** Uses hybrid retrieval with the broad
+  governance stack disabled, plus one narrow rule:
+  `Slot -[HAS_VALUE]-> SlotValue` keeps only the latest active value for a slot.
+  It tests whether slot-update gains are merely latest-value overwrite behavior.
+
 ### Comparison baselines (extended)
 
 Beyond the canonical B0–B4 toggle matrix, extended baselines isolate
 alternative designs (opt-in via `baselines=(..., "Brag", "Brtcf", "Bsup")`;
-`ocm/evaluation/baselines.py`). All baselines share the governed write pipeline;
-these differ in retrieval composition and write-time gating.
+`ocm/evaluation/baselines.py`). All baselines share the same pipeline
+implementation; these differ in retrieval composition and write-time gating.
 
 - **`Brag` — RAG-only.** Vectors-only similarity retrieval with the answer read
   **only from retrieved text** (the evidence package is built without the
@@ -440,6 +481,16 @@ onto governed memory. Each dialogue-state slot (e.g. `hotel-area`) becomes a
 gold per-turn belief state so governance is evaluated *given correct slots*
 (isolating it from dialogue-state-tracking error). The full pipeline, baselines,
 and metrics run unchanged via the harness's `provided_examples` hook.
+
+The real-data validation tables use the focused B0/B2/B3 panel (with `Bsup`
+reported when isolating latest-value overwrite) rather than repeating every
+synthetic comparison baseline. The reason is scope: MultiWOZ and LongMemEval are
+slot/fact-update governance probes, so B2 is the strongest ungoverned hybrid
+match for B3, and B0 anchors the vector/text-only condition. B1 and `Brag`
+primarily test retrieval composition, already covered in the synthetic suite;
+`Brtcf` tests read-time conflict filtering and cannot repair the durable store,
+which is the real-data claim being checked here. The scripts still accept all
+arms via `--baselines` for appendix or reviewer-requested runs.
 
 Three modeling decisions make this faithful — each fixes a distinct, real
 behaviour observed on the data:
