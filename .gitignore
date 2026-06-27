@@ -19,6 +19,8 @@ ocm.db
 *.sqlite
 *.sqlite3
 .chroma/
+data/
+local_results/
 benchmark.jsonl
 results.json
 vllm.log

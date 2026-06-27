@@ -489,7 +489,7 @@ def run_longmemeval_suite(
 # must map a fact's mentions across sessions to ONE stable slot key, or the
 # update is never detected as a single-valued conflict.
 
-#: Prompt a model to extract durable user facts from one message/session.
+#: Prompt a model to extract durable user profile facts from one message/session.
 FACT_EXTRACTION_PROMPT = """\
 Extract durable USER facts (stable attributes the user states about themselves,
 e.g. where they live, their job, preferences) from the message below.
@@ -502,6 +502,56 @@ Respond with ONLY a JSON array, no prose. Each item:
 Use the SAME attribute name whenever the user refers to the same fact. If the
 message states no durable user fact, respond with [].
 """
+
+#: Broader prompt for LongMemEval Arm B. LongMemEval questions often ask for
+#: counts, progress values, schedules, episodic updates, third-party facts tied
+#: to the user, and yes/no state changes. The durable-profile prompt above was
+#: too narrow for that benchmark; keep it for ablations, but use this for the
+#: raw end-to-end condition.
+LONGMEMEVAL_MEMORY_EXTRACTION_PROMPT = """\
+Extract explicit memory facts from the conversation session below.
+
+Goal: preserve facts that could answer future long-term-memory questions about
+the user, the user's life, or named people/places/items/events connected to the
+user. Include more than stable profile facts.
+
+Extract facts such as:
+- preferences, identity, residence, job, school, family, friends, pets
+- current/latest values, corrections, decisions, plans, status changes
+- counts, totals, progress, durations, amounts of money, measurements
+- dates, days of week, times, schedules, frequencies, locations
+- purchases, trips, classes, hobbies, health routines, projects, goals
+- yes/no facts or comparisons when explicitly stated
+- facts about user-relevant third parties, e.g. "Rachel works at TechCorp"
+
+Do NOT extract generic advice, code, public reference facts, or assistant-only
+speculation unless the conversation explicitly ties them to the user or a named
+entity in the user's memory.
+
+When a later turn corrects or updates an earlier fact in this same session, emit
+the latest value using the same attribute name. Preserve exact numbers, units,
+money strings, dates, weekdays, names, and short answer phrases.
+
+Message:
+{text}
+
+Respond with ONLY a JSON array, no prose. Each item must include:
+{{"attribute": "<short stable snake_case subject_property>", "value": "<concise exact value>"}}
+
+Guidance:
+- Attribute names should include enough subject context to be stable, e.g.
+  "charity_5k_personal_best_time", "korean_restaurants_tried_count",
+  "rachel_current_employer", "cocktail_class_day", "mom_uses_same_grocery_method".
+- Use the SAME attribute name whenever this session refers to the same fact.
+- Use values directly answerable by a future question, e.g. "25 minutes and 50 seconds",
+  "four", "$400,000", "Friday", "Yes", "less water (5 ounces) per tablespoon".
+- If no user-memory fact is stated, respond with [].
+"""
+
+FACT_EXTRACTION_PROMPTS: dict[str, str] = {
+    "durable": FACT_EXTRACTION_PROMPT,
+    "longmemeval": LONGMEMEVAL_MEMORY_EXTRACTION_PROMPT,
+}
 
 
 def normalize_attribute(attribute: str) -> str:
@@ -634,11 +684,15 @@ def parse_facts_json(text: str) -> list[dict[str, Any]]:
 
 
 #: A fact extractor maps one session's text → a list of ``{attribute, value}``.
-def build_fact_extract_fn(chat_fn) -> Any:
+def build_fact_extract_fn(
+    chat_fn,
+    *,
+    prompt_template: str = FACT_EXTRACTION_PROMPT,
+) -> Any:
     """Build a per-session fact extractor from a chat callable (``prompt -> text``)."""
 
     def _extract(text: str) -> list[dict[str, Any]]:
-        return parse_facts_json(chat_fn(FACT_EXTRACTION_PROMPT.format(text=text)))
+        return parse_facts_json(chat_fn(prompt_template.format(text=text)))
 
     return _extract
 
@@ -910,6 +964,7 @@ def run_longmemeval_e2e(
     fact_extract_fn: Any,
     *,
     intent_mode: str = "auto",
+    extract_prompt_name: str = "durable",
     slot_link_fn: Any | None = None,
     slot_linker_name: str = "none",
     baselines: Iterable[str] = ("B0", "B2", "B3"),
@@ -961,6 +1016,7 @@ def run_longmemeval_e2e(
         "subset": "knowledge-update",
         "arm": "end_to_end",
         "intent_mode": intent_mode,
+        "extract_prompt": extract_prompt_name,
         "slot_linker": slot_linker_name,
         "methods": methods,
         "seeds": list(seeds),
@@ -990,6 +1046,7 @@ def evaluate_abstention_e2e(
     fact_extract_fn: Any,
     *,
     intent_mode: str = "auto",
+    extract_prompt_name: str = "durable",
     slot_link_fn: Any | None = None,
     slot_linker_name: str = "none",
     baselines: Iterable[str] = ("B0", "B2", "B3"),
@@ -1159,6 +1216,7 @@ def evaluate_abstention_e2e(
         "subset": "abstention",
         "arm": "end_to_end",
         "intent_mode": intent_mode,
+        "extract_prompt": extract_prompt_name,
         "slot_linker": slot_linker_name,
         "methods": methods,
         "seeds": seed_list,

@@ -491,9 +491,13 @@ primarily test retrieval composition, already covered in the synthetic suite;
 `Brtcf` tests read-time conflict filtering and cannot repair the durable store,
 which is the real-data claim being checked here. The scripts still accept all
 arms via `--baselines` for appendix or reviewer-requested runs. For LongMemEval
-Arm B, the optional `--slot-linker qwen` condition adds a Qwen JSON linking pass
-after fact extraction and before `Slot` creation; this tests how much of the
-Arm-A to Arm-B gap is extraction/linking quality rather than the governance rule.
+Arm B, `--extract-prompt longmemeval` uses the benchmark-specific memory
+extractor that captures counts, schedules, episodic updates, third-party facts,
+amounts, durations, and yes/no state changes, rather than the narrower durable
+profile-fact extractor used for the original ablation. The optional
+`--slot-linker qwen` condition then adds a Qwen JSON linking pass after fact
+extraction and before `Slot` creation; together these conditions separate
+extraction coverage, entity/slot linking, and the governance rule.
 
 Three modeling decisions make this faithful — each fixes a distinct, real
 behaviour observed on the data:

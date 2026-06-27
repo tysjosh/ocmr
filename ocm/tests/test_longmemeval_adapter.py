@@ -307,6 +307,28 @@ def test_parse_facts_json_array_and_facts_object():
     assert parse_facts_json("nothing") == []
 
 
+def test_build_fact_extract_fn_accepts_longmemeval_prompt_template():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        FACT_EXTRACTION_PROMPTS,
+        build_fact_extract_fn,
+    )
+
+    prompts: list[str] = []
+
+    def chat(prompt: str) -> str:
+        prompts.append(prompt)
+        return '[{"attribute":"charity_5k_personal_best_time","value":"25:50"}]'
+
+    fx = build_fact_extract_fn(
+        chat,
+        prompt_template=FACT_EXTRACTION_PROMPTS["longmemeval"],
+    )
+    assert fx("I ran the charity 5K in 25:50.") == [
+        {"attribute": "charity_5k_personal_best_time", "value": "25:50"}
+    ]
+    assert "counts, totals, progress" in prompts[0]
+
+
 def test_normalize_attribute():
     from ocm.evaluation.datasets.longmemeval_adapter import normalize_attribute
 
@@ -456,9 +478,14 @@ def test_run_longmemeval_e2e_governed_beats_ungoverned_on_violations():
 
     fx = build_fact_extract_fn(_fake_fact_chat)
     report = run_longmemeval_e2e(
-        sample_instances(), fx, baselines=("B0", "B2", "B3"), seeds=(1337,)
+        sample_instances(),
+        fx,
+        extract_prompt_name="longmemeval",
+        baselines=("B0", "B2", "B3"),
+        seeds=(1337,),
     )
     assert report["arm"] == "end_to_end"
+    assert report["extract_prompt"] == "longmemeval"
     dm = report["decisive_metrics"]
     v = lambda m: dm[m]["constraint_violations"]["mean"]
     # Governed supersede → 0 durable violations; ungoverned keep both values.

@@ -3,13 +3,14 @@
 
 This mirrors OCM_Colab.ipynb Cell 7f, but uses local filesystem defaults and
 persistent caches. The real Qwen fact extractor reads the full LongMemEval
-haystack file and emits noisy durable facts; an optional Qwen slot-linking pass
+haystack file and emits noisy memory facts; an optional Qwen slot-linking pass
 can canonicalize paraphrased attributes before governance is evaluated.
 
 Examples:
     python run_7f_local.py --e2e-limit 5 --abst-limit 5 --embeddings deterministic
     python run_7f_local.py
     python run_7f_local.py --full
+    python run_7f_local.py --full --baselines B0,B2,Bsup,B3 --slot-linker qwen
 """
 
 from __future__ import annotations
@@ -287,6 +288,16 @@ def main() -> int:
     parser.add_argument("--baselines", default="B0,B2,B3")
     parser.add_argument("--intent-mode", choices=("auto", "new_fact"), default="auto")
     parser.add_argument(
+        "--extract-prompt",
+        choices=("durable", "longmemeval"),
+        default="longmemeval",
+        help=(
+            "Fact extraction prompt. 'durable' is the original user-profile "
+            "extractor; 'longmemeval' also extracts counts, schedules, events, "
+            "third-party facts, and yes/no memory facts."
+        ),
+    )
+    parser.add_argument(
         "--slot-linker",
         choices=("none", "deterministic", "qwen"),
         default="none",
@@ -320,7 +331,15 @@ def main() -> int:
         help="Model id/name used by the extraction backend.",
     )
     parser.add_argument("--llm-timeout-s", type=float, default=120.0)
-    parser.add_argument("--llm-max-tokens", type=int, default=256)
+    parser.add_argument(
+        "--llm-max-tokens",
+        type=int,
+        default=None,
+        help=(
+            "Generation budget for cache misses. Defaults to 256 for the old "
+            "durable prompt and 768 for the LongMemEval memory prompt."
+        ),
+    )
     parser.add_argument("--allow-offload", action="store_true")
     parser.add_argument("--flush-every", type=int, default=50)
     parser.add_argument(
@@ -338,6 +357,7 @@ def main() -> int:
         sys.path.insert(0, str(repo_dir))
 
     from ocm.evaluation.datasets.longmemeval_adapter import (
+        FACT_EXTRACTION_PROMPTS,
         build_fact_extract_fn,
         build_slot_link_fn,
         evaluate_abstention_e2e,
@@ -358,11 +378,26 @@ def main() -> int:
 
     data_dir = (args.data_dir or repo_dir / "data").resolve()
     output_dir = (args.output_dir or repo_dir / "local_results").resolve()
+    llm_max_tokens = (
+        args.llm_max_tokens
+        if args.llm_max_tokens is not None
+        else (768 if args.extract_prompt == "longmemeval" else 256)
+    )
+    extract_cache_name = (
+        "lme_e2e_extract_cache.json"
+        if args.extract_prompt == "durable"
+        else f"lme_e2e_extract_cache_{_safe_segment(args.extract_prompt)}.json"
+    )
+    link_cache_name = (
+        "lme_e2e_link_cache.json"
+        if args.extract_prompt == "durable"
+        else f"lme_e2e_link_cache_{_safe_segment(args.extract_prompt)}.json"
+    )
     extract_cache = (
-        args.extract_cache or output_dir / "lme_e2e_extract_cache.json"
+        args.extract_cache or output_dir / extract_cache_name
     ).resolve()
     link_cache = (
-        args.link_cache or output_dir / "lme_e2e_link_cache.json"
+        args.link_cache or output_dir / link_cache_name
     ).resolve()
     if args.checkpoint_dir is not None:
         checkpoint_root = args.checkpoint_dir.resolve()
@@ -374,7 +409,8 @@ def main() -> int:
                 f"_t{int(round(args.link_threshold * 100))}"
             )
         run_segment = (
-            f"intent_{args.intent_mode}__ku_{_limit_segment(e2e_limit)}"
+            f"extract_{args.extract_prompt}__intent_{args.intent_mode}"
+            f"__ku_{_limit_segment(e2e_limit)}"
             f"__abs_{_limit_segment(abst_limit)}{link_segment}"
         )
         checkpoint_root = (
@@ -386,6 +422,7 @@ def main() -> int:
     checkpoint_root.mkdir(parents=True, exist_ok=True)
     _download_if_missing(lme_s_path, LME_S_URL)
     print(f"LongMemEval (full haystack): {lme_s_path}")
+    print(f"extract prompt: {args.extract_prompt}; max tokens: {llm_max_tokens}")
     print(f"checkpoint root: {checkpoint_root}")
     print(f"extraction cache: {extract_cache}")
     if args.slot_linker == "qwen":
@@ -409,11 +446,11 @@ def main() -> int:
                 model=args.llm_model,
                 api_key=args.llm_api_key,
                 timeout_s=args.llm_timeout_s,
-                max_tokens=args.llm_max_tokens,
+                max_tokens=llm_max_tokens,
             )
         return _build_transformers_chat_fn(
             model_id=args.llm_model,
-            max_new_tokens=args.llm_max_tokens,
+            max_new_tokens=llm_max_tokens,
             allow_offload=args.allow_offload,
         )
 
@@ -429,7 +466,10 @@ def main() -> int:
         shared_chat_factory,
         flush_every=args.flush_every,
     )
-    fact_extract_fn = build_fact_extract_fn(cached_chat)
+    fact_extract_fn = build_fact_extract_fn(
+        cached_chat,
+        prompt_template=FACT_EXTRACTION_PROMPTS[args.extract_prompt],
+    )
     link_cached_chat = None
     slot_link_fn = None
     if args.slot_linker == "deterministic":
@@ -469,6 +509,7 @@ def main() -> int:
                 instances,
                 fact_extract_fn,
                 intent_mode=args.intent_mode,
+                extract_prompt_name=args.extract_prompt,
                 slot_link_fn=slot_link_fn,
                 slot_linker_name=args.slot_linker,
                 baselines=baselines,
@@ -494,6 +535,7 @@ def main() -> int:
                 abst_instances,
                 fact_extract_fn,
                 intent_mode=args.intent_mode,
+                extract_prompt_name=args.extract_prompt,
                 slot_link_fn=slot_link_fn,
                 slot_linker_name=args.slot_linker,
                 baselines=baselines,
