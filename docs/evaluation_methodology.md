@@ -490,7 +490,10 @@ match for B3, and B0 anchors the vector/text-only condition. B1 and `Brag`
 primarily test retrieval composition, already covered in the synthetic suite;
 `Brtcf` tests read-time conflict filtering and cannot repair the durable store,
 which is the real-data claim being checked here. The scripts still accept all
-arms via `--baselines` for appendix or reviewer-requested runs.
+arms via `--baselines` for appendix or reviewer-requested runs. For LongMemEval
+Arm B, the optional `--slot-linker qwen` condition adds a Qwen JSON linking pass
+after fact extraction and before `Slot` creation; this tests how much of the
+Arm-A to Arm-B gap is extraction/linking quality rather than the governance rule.
 
 Three modeling decisions make this faithful — each fixes a distinct, real
 behaviour observed on the data:

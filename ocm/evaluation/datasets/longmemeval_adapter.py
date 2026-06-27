@@ -513,6 +513,88 @@ def normalize_attribute(attribute: str) -> str:
     return s
 
 
+_PREFERRED_CANONICAL_SLOTS: tuple[str, ...] = (
+    "current_employer",
+    "current_job",
+    "home_city",
+    "hometown",
+    "current_residence",
+    "advisor",
+    "school",
+    "degree_program",
+    "dietary_restriction",
+    "favorite_food",
+    "favorite_color",
+    "pet_name",
+    "partner_name",
+    "phone_number",
+    "email_address",
+    "frequent_flyer_number",
+)
+
+_SLOT_ALIAS_TO_CANONICAL: dict[str, str] = {
+    "company": "current_employer",
+    "current_company": "current_employer",
+    "current_employer": "current_employer",
+    "employer": "current_employer",
+    "organization": "current_employer",
+    "workplace": "current_employer",
+    "job": "current_job",
+    "occupation": "current_job",
+    "profession": "current_job",
+    "role": "current_job",
+    "title": "current_job",
+    "city": "current_residence",
+    "current_city": "current_residence",
+    "home": "current_residence",
+    "home_city": "current_residence",
+    "where_i_live": "current_residence",
+    "where_the_user_lives": "current_residence",
+    "residence": "current_residence",
+    "current_residence": "current_residence",
+    "address": "current_residence",
+    "hometown": "hometown",
+    "advisor": "advisor",
+    "academic_advisor": "advisor",
+    "phd_advisor": "advisor",
+    "supervisor": "advisor",
+    "school": "school",
+    "university": "school",
+    "college": "school",
+    "degree": "degree_program",
+    "degree_program": "degree_program",
+    "program": "degree_program",
+    "diet": "dietary_restriction",
+    "dietary_restriction": "dietary_restriction",
+    "food_restriction": "dietary_restriction",
+    "allergy": "dietary_restriction",
+    "favorite_food": "favorite_food",
+    "favourite_food": "favorite_food",
+    "favorite_meal": "favorite_food",
+    "favorite_color": "favorite_color",
+    "favourite_color": "favorite_color",
+    "cat_name": "pet_name",
+    "dog_name": "pet_name",
+    "pet": "pet_name",
+    "pet_name": "pet_name",
+    "partner": "partner_name",
+    "partner_name": "partner_name",
+    "spouse": "partner_name",
+    "email": "email_address",
+    "email_address": "email_address",
+    "phone": "phone_number",
+    "phone_number": "phone_number",
+    "frequent_flyer": "frequent_flyer_number",
+    "frequent_flyer_number": "frequent_flyer_number",
+}
+
+
+def canonicalize_slot_attribute(attribute: str) -> str:
+    """Apply deterministic common user-memory slot aliases after normalization."""
+    attr = normalize_attribute(attribute)
+    return _SLOT_ALIAS_TO_CANONICAL.get(attr, attr)
+
+
 def parse_facts_json(text: str) -> list[dict[str, Any]]:
     """Extract the first JSON array of objects from a model response (tolerant).
 
@@ -561,6 +643,127 @@ def build_fact_extract_fn(chat_fn) -> Any:
     return _extract
 
 
+def parse_slot_link_json(text: str) -> dict[str, Any]:
+    """Parse the first JSON object emitted by a slot-linking model."""
+    import json as _json
+
+    if not text:
+        return {}
+    start = text.find("{")
+    while start != -1:
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = _json.loads(text[start : i + 1])
+                        return obj if isinstance(obj, dict) else {}
+                    except _json.JSONDecodeError:
+                        break
+        start = text.find("{", start + 1)
+    return {}
+
+
+def _format_slot_link_prompt(
+    *,
+    question: str,
+    raw_attribute: str,
+    value: str,
+    existing_slots: dict[str, str],
+    session_text: str,
+) -> str:
+    import json as _json
+
+    existing = [
+        {"slot_id": slot_id, "latest_value": latest_value}
+        for slot_id, latest_value in sorted(existing_slots.items())
+    ]
+    context = str(session_text or "")
+    if len(context) > 4000:
+        context = context[:4000] + "\n...[truncated]"
+    return (
+        "You are an entity and slot linker for a long-term memory system.\n\n"
+        "Given a new extracted user-memory assertion, decide whether its slot "
+        "matches an existing canonical slot or should create a new canonical slot.\n\n"
+        "Rules:\n"
+        "- Return only one JSON object, no prose.\n"
+        "- Link if confidence >= 0.75.\n"
+        "- Use ambiguous if multiple existing slots are plausible.\n"
+        "- Never create a new slot if a paraphrase match is likely.\n"
+        "- Prefer canonical user-fact slots when appropriate.\n"
+        "- Slot ids must be short snake_case strings.\n\n"
+        f"Preferred canonical slots: {_json.dumps(list(_PREFERRED_CANONICAL_SLOTS))}\n"
+        f"Question: {question}\n"
+        f"Existing slots: {_json.dumps(existing, ensure_ascii=False)}\n"
+        f"New assertion: {_json.dumps({'attribute': raw_attribute, 'value': value}, ensure_ascii=False)}\n"
+        f"Relevant conversation context:\n{context}\n\n"
+        "Return JSON exactly like:\n"
+        "{"
+        "\"entity_action\":\"link_existing|create_new|ambiguous\","
+        "\"entity_id\":null,"
+        "\"slot_action\":\"link_existing|create_new|ambiguous\","
+        "\"slot_id\":\"... or null\","
+        "\"confidence\":0.0,"
+        "\"evidence\":\"short reason\""
+        "}"
+    )
+
+
+def build_slot_link_fn(
+    chat_fn: Any | None = None,
+    *,
+    confidence_threshold: float = 0.75,
+) -> Any:
+    """Build a deterministic-plus-optional-LLM slot linker for Arm B facts."""
+
+    def _link(
+        *,
+        raw_attribute: str,
+        value: str,
+        existing_slots: dict[str, str],
+        session_text: str,
+        question: str = "",
+        question_id: str = "",
+    ) -> str:
+        del question_id  # kept for caller symmetry and future diagnostics.
+        raw = normalize_attribute(raw_attribute)
+        deterministic = canonicalize_slot_attribute(raw)
+        if not raw:
+            return raw
+
+        # The deterministic alias map is intentionally authoritative for common
+        # user facts; it is cheaper and more stable than another model call.
+        if deterministic in existing_slots or deterministic != raw or chat_fn is None:
+            return deterministic
+
+        prompt = _format_slot_link_prompt(
+            question=question,
+            raw_attribute=raw,
+            value=value,
+            existing_slots=existing_slots,
+            session_text=session_text,
+        )
+        decision = parse_slot_link_json(chat_fn(prompt))
+        confidence = float(decision.get("confidence") or 0.0)
+        slot_action = str(decision.get("slot_action") or "").strip().lower()
+        slot_id = normalize_attribute(decision.get("slot_id") or "")
+
+        if confidence < float(confidence_threshold):
+            return deterministic
+        if slot_action == "ambiguous":
+            return deterministic
+        if slot_action == "link_existing" and slot_id in existing_slots:
+            return slot_id
+        if slot_action == "create_new" and slot_id:
+            return canonicalize_slot_attribute(slot_id)
+        return deterministic
+
+    return _link
+
+
 def _build_e2e_examples_from_extraction(
     instances: Iterable[dict[str, Any]],
     fact_extract_fn: Any,
@@ -568,6 +771,7 @@ def _build_e2e_examples_from_extraction(
     intent_mode: str = "auto",
     category: str,
     expected_answer_fn: Any,
+    slot_link_fn: Any | None = None,
 ) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
     """Shared Arm-B builder: extract haystack facts and replay cached writes."""
     if intent_mode not in ("auto", "new_fact"):
@@ -578,6 +782,7 @@ def _build_e2e_examples_from_extraction(
 
     for inst in instances:
         qid = str(inst["question_id"])
+        question_text = str(inst.get("question", ""))
         belief: dict[str, str] = {}
         sessions: list[Session] = []
         for idx, session in enumerate(inst.get("haystack_sessions", []) or []):
@@ -588,6 +793,16 @@ def _build_e2e_examples_from_extraction(
                 value = str(fact.get("value", "")).strip()
                 if not attr or not value:
                     continue
+                if slot_link_fn is not None:
+                    linked_attr = slot_link_fn(
+                        raw_attribute=attr,
+                        value=value,
+                        existing_slots=dict(belief),
+                        session_text=text,
+                        question=question_text,
+                        question_id=qid,
+                    )
+                    attr = normalize_attribute(linked_attr) or attr
                 prev = belief.get(attr)
                 if prev == value:
                     continue  # re-asserted same value — no write
@@ -615,7 +830,7 @@ def _build_e2e_examples_from_extraction(
             sessions.append(Session(session_id=f"s{idx}", input=text))
 
         question = Question(
-            query=str(inst.get("question", "")),
+            query=question_text,
             expected_answer_contains=list(expected_answer_fn(inst)),
             expected_conflict=False,
         )
@@ -634,6 +849,7 @@ def build_e2e_from_extraction(
     fact_extract_fn: Any,
     *,
     intent_mode: str = "auto",
+    slot_link_fn: Any | None = None,
 ) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
     """Build end-to-end examples by extracting facts from the haystack with an LLM.
 
@@ -654,6 +870,7 @@ def build_e2e_from_extraction(
         instances,
         fact_extract_fn,
         intent_mode=intent_mode,
+        slot_link_fn=slot_link_fn,
         category="knowledge_update_e2e",
         expected_answer_fn=lambda inst: [str(inst.get("answer", ""))],
     )
@@ -664,6 +881,7 @@ def build_abstention_e2e_from_extraction(
     fact_extract_fn: Any,
     *,
     intent_mode: str = "auto",
+    slot_link_fn: Any | None = None,
 ) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
     """Build end-to-end abstention probes from raw LongMemEval haystacks.
 
@@ -681,6 +899,7 @@ def build_abstention_e2e_from_extraction(
         instances,
         fact_extract_fn,
         intent_mode=intent_mode,
+        slot_link_fn=slot_link_fn,
         category="abstention_e2e",
         expected_answer_fn=lambda _inst: [],
     )
@@ -691,6 +910,8 @@ def run_longmemeval_e2e(
     fact_extract_fn: Any,
     *,
     intent_mode: str = "auto",
+    slot_link_fn: Any | None = None,
+    slot_linker_name: str = "none",
     baselines: Iterable[str] = ("B0", "B2", "B3"),
     seeds: Iterable[int] = (1337,),
     settings_factory: Any = None,
@@ -700,7 +921,8 @@ def run_longmemeval_e2e(
     """End-to-end LongMemEval knowledge-update run (Arm B): real extraction.
 
     Extracts facts from the haystack with ``fact_extract_fn`` (belief-tracked,
-    cached per session), then runs the governed vs ungoverned comparison via the
+    cached per session), optionally canonicalizes extracted attributes with
+    ``slot_link_fn``, then runs the governed vs ungoverned comparison via the
     multi-seed harness, replaying the cached writes through the stateless oracle.
     Checkpoint suffix ``__lme_e2e`` keeps these separate from the Arm-A oracle
     run. Unlike Arm A, recall is scored on the **natural** question via retrieval,
@@ -717,7 +939,10 @@ def run_longmemeval_e2e(
             )
 
     examples, oracle = build_e2e_from_extraction(
-        instances, fact_extract_fn, intent_mode=intent_mode
+        instances,
+        fact_extract_fn,
+        intent_mode=intent_mode,
+        slot_link_fn=slot_link_fn,
     )
     methods = list(baselines)
     ms = run_multiseed(
@@ -736,6 +961,7 @@ def run_longmemeval_e2e(
         "subset": "knowledge-update",
         "arm": "end_to_end",
         "intent_mode": intent_mode,
+        "slot_linker": slot_linker_name,
         "methods": methods,
         "seeds": list(seeds),
         "n_examples": len(examples),
@@ -764,6 +990,8 @@ def evaluate_abstention_e2e(
     fact_extract_fn: Any,
     *,
     intent_mode: str = "auto",
+    slot_link_fn: Any | None = None,
+    slot_linker_name: str = "none",
     baselines: Iterable[str] = ("B0", "B2", "B3"),
     seeds: Iterable[int] = (1337,),
     settings_factory: Any = None,
@@ -807,7 +1035,10 @@ def evaluate_abstention_e2e(
             )
 
     examples, oracle = build_abstention_e2e_from_extraction(
-        instances, fact_extract_fn, intent_mode=intent_mode
+        instances,
+        fact_extract_fn,
+        intent_mode=intent_mode,
+        slot_link_fn=slot_link_fn,
     )
     methods = list(baselines)
     seed_list = list(seeds)
@@ -928,6 +1159,7 @@ def evaluate_abstention_e2e(
         "subset": "abstention",
         "arm": "end_to_end",
         "intent_mode": intent_mode,
+        "slot_linker": slot_linker_name,
         "methods": methods,
         "seeds": seed_list,
         "n_examples": n_examples,

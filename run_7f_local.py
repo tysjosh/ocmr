@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Run notebook Cell 7f locally: LongMemEval Arm B / end-to-end.
 
-This mirrors OCM_Colab.ipynb Cell 7f, but uses local filesystem defaults and a
-persistent extraction cache. The real Qwen fact extractor reads the full
-LongMemEval haystack file and emits noisy durable facts; governance is then
-evaluated over B0/B2/B3 for knowledge-update and _abs abstention.
+This mirrors OCM_Colab.ipynb Cell 7f, but uses local filesystem defaults and
+persistent caches. The real Qwen fact extractor reads the full LongMemEval
+haystack file and emits noisy durable facts; an optional Qwen slot-linking pass
+can canonicalize paraphrased attributes before governance is evaluated.
 
 Examples:
     python run_7f_local.py --e2e-limit 5 --abst-limit 5 --embeddings deterministic
@@ -279,12 +279,25 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--checkpoint-dir", type=Path, default=None)
     parser.add_argument("--extract-cache", type=Path, default=None)
+    parser.add_argument("--link-cache", type=Path, default=None)
     parser.add_argument("--e2e-limit", default="30", help="Knowledge-update cap; use full/none/all for full split.")
     parser.add_argument("--abst-limit", default="30", help="Abstention cap; use full/none/all for full split.")
     parser.add_argument("--full", action="store_true", help="Set both limits to full.")
     parser.add_argument("--seeds", default="1337,7,42,99,2024")
     parser.add_argument("--baselines", default="B0,B2,B3")
     parser.add_argument("--intent-mode", choices=("auto", "new_fact"), default="auto")
+    parser.add_argument(
+        "--slot-linker",
+        choices=("none", "deterministic", "qwen"),
+        default="none",
+        help="Canonicalize extracted attributes before Slot creation.",
+    )
+    parser.add_argument(
+        "--link-threshold",
+        type=float,
+        default=0.75,
+        help="Minimum model confidence for Qwen slot-link decisions.",
+    )
     parser.add_argument(
         "--extract-backend",
         choices=("transformers", "openai"),
@@ -326,6 +339,7 @@ def main() -> int:
 
     from ocm.evaluation.datasets.longmemeval_adapter import (
         build_fact_extract_fn,
+        build_slot_link_fn,
         evaluate_abstention_e2e,
         load_longmemeval,
         run_longmemeval_e2e,
@@ -347,12 +361,21 @@ def main() -> int:
     extract_cache = (
         args.extract_cache or output_dir / "lme_e2e_extract_cache.json"
     ).resolve()
+    link_cache = (
+        args.link_cache or output_dir / "lme_e2e_link_cache.json"
+    ).resolve()
     if args.checkpoint_dir is not None:
         checkpoint_root = args.checkpoint_dir.resolve()
     else:
+        link_segment = ""
+        if args.slot_linker != "none":
+            link_segment = (
+                f"__link_{_safe_segment(args.slot_linker)}"
+                f"_t{int(round(args.link_threshold * 100))}"
+            )
         run_segment = (
             f"intent_{args.intent_mode}__ku_{_limit_segment(e2e_limit)}"
-            f"__abs_{_limit_segment(abst_limit)}"
+            f"__abs_{_limit_segment(abst_limit)}{link_segment}"
         )
         checkpoint_root = (
             output_dir / "checkpoints" / "qwen_e2e" / _safe_segment(run_segment)
@@ -365,6 +388,10 @@ def main() -> int:
     print(f"LongMemEval (full haystack): {lme_s_path}")
     print(f"checkpoint root: {checkpoint_root}")
     print(f"extraction cache: {extract_cache}")
+    if args.slot_linker == "qwen":
+        print(f"slot-link cache: {link_cache}")
+    elif args.slot_linker == "deterministic":
+        print("slot linker: deterministic aliases")
 
     def chat_factory():
         if args.extract_backend == "openai":
@@ -390,12 +417,33 @@ def main() -> int:
             allow_offload=args.allow_offload,
         )
 
+    shared_chat: dict[str, Any] = {"fn": None}
+
+    def shared_chat_factory():
+        if shared_chat["fn"] is None:
+            shared_chat["fn"] = chat_factory()
+        return shared_chat["fn"]
+
     cached_chat = CachedChat(
         extract_cache,
-        chat_factory,
+        shared_chat_factory,
         flush_every=args.flush_every,
     )
     fact_extract_fn = build_fact_extract_fn(cached_chat)
+    link_cached_chat = None
+    slot_link_fn = None
+    if args.slot_linker == "deterministic":
+        slot_link_fn = build_slot_link_fn()
+    elif args.slot_linker == "qwen":
+        link_cached_chat = CachedChat(
+            link_cache,
+            shared_chat_factory,
+            flush_every=args.flush_every,
+        )
+        slot_link_fn = build_slot_link_fn(
+            link_cached_chat,
+            confidence_threshold=args.link_threshold,
+        )
 
     if args.embeddings == "deterministic":
         embeddings = DeterministicEmbeddingProvider()
@@ -421,6 +469,8 @@ def main() -> int:
                 instances,
                 fact_extract_fn,
                 intent_mode=args.intent_mode,
+                slot_link_fn=slot_link_fn,
+                slot_linker_name=args.slot_linker,
                 baselines=baselines,
                 seeds=seeds,
                 embeddings=embeddings,
@@ -444,6 +494,8 @@ def main() -> int:
                 abst_instances,
                 fact_extract_fn,
                 intent_mode=args.intent_mode,
+                slot_link_fn=slot_link_fn,
+                slot_linker_name=args.slot_linker,
                 baselines=baselines,
                 seeds=seeds,
                 embeddings=embeddings,
@@ -453,7 +505,11 @@ def main() -> int:
             _print_abstention_table(abst_report, args.intent_mode)
     finally:
         cached_chat.flush()
+        if link_cached_chat is not None:
+            link_cached_chat.flush()
         print(f"extraction cache entries: {len(cached_chat.cache)} -> {extract_cache}")
+        if link_cached_chat is not None:
+            print(f"slot-link cache entries: {len(link_cached_chat.cache)} -> {link_cache}")
 
     out_path = output_dir / "results_longmemeval_e2e.json"
     with out_path.open("w", encoding="utf-8") as fh:

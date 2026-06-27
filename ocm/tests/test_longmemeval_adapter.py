@@ -314,6 +314,83 @@ def test_normalize_attribute():
     assert normalize_attribute("residence") == "residence"
 
 
+def test_slot_link_json_and_deterministic_aliases():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_slot_link_fn,
+        canonicalize_slot_attribute,
+        parse_slot_link_json,
+    )
+
+    assert parse_slot_link_json(
+        'Here: {"slot_action":"link_existing","slot_id":"employer","confidence":0.9}'
+    )["slot_id"] == "employer"
+    assert parse_slot_link_json("not json") == {}
+    assert canonicalize_slot_attribute("Workplace") == "current_employer"
+
+    linker = build_slot_link_fn()
+    assert linker(
+        raw_attribute="where_i_live",
+        value="Boston",
+        existing_slots={},
+        session_text="I live in Boston.",
+    ) == "current_residence"
+
+
+def test_qwen_slot_linker_links_existing_slot_when_confident():
+    from ocm.evaluation.datasets.longmemeval_adapter import build_slot_link_fn
+
+    prompts: list[str] = []
+
+    def chat(prompt: str) -> str:
+        prompts.append(prompt)
+        return (
+            '{"entity_action":"link_existing","entity_id":null,'
+            '"slot_action":"link_existing","slot_id":"current_employer",'
+            '"confidence":0.92,"evidence":"workplace paraphrases employer"}'
+        )
+
+    linker = build_slot_link_fn(chat)
+    linked = linker(
+        raw_attribute="work_affiliation",
+        value="DeepMind",
+        existing_slots={"current_employer": "Google"},
+        session_text="I switched workplaces to DeepMind.",
+        question="Where does the user work?",
+    )
+    assert linked == "current_employer"
+    assert prompts and "Existing slots" in prompts[0]
+
+
+def test_qwen_slot_linker_falls_back_on_ambiguous_or_low_confidence():
+    from ocm.evaluation.datasets.longmemeval_adapter import build_slot_link_fn
+
+    linker = build_slot_link_fn(
+        lambda _prompt: (
+            '{"slot_action":"ambiguous","slot_id":"current_employer",'
+            '"confidence":0.95}'
+        )
+    )
+    assert linker(
+        raw_attribute="work_affiliation",
+        value="DeepMind",
+        existing_slots={"current_employer": "Google"},
+        session_text="I switched workplaces to DeepMind.",
+    ) == "work_affiliation"
+
+    low = build_slot_link_fn(
+        lambda _prompt: (
+            '{"slot_action":"link_existing","slot_id":"current_employer",'
+            '"confidence":0.4}'
+        )
+    )
+    assert low(
+        raw_attribute="work_affiliation",
+        value="DeepMind",
+        existing_slots={"current_employer": "Google"},
+        session_text="I switched workplaces to DeepMind.",
+    ) == "work_affiliation"
+
+
 def test_build_e2e_belief_tracks_intent_and_caches_writes():
     from ocm.evaluation.datasets.longmemeval_adapter import (
         build_e2e_from_extraction,
@@ -330,6 +407,33 @@ def test_build_e2e_belief_tracks_intent_and_caches_writes():
     # The recall question is the natural question (no slot marker) + gold answer.
     assert examples[0].questions[0].query == "Where does the user currently live?"
     assert examples[0].questions[0].expected_answer_contains == ["San Francisco"]
+
+
+def test_build_e2e_slot_linker_collapses_paraphrased_attributes():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        build_e2e_from_extraction,
+        build_slot_link_fn,
+    )
+
+    responses = iter([
+        [{"attribute": "residence", "value": "New York"}],
+        [],
+        [{"attribute": "where_i_live", "value": "San Francisco"}],
+    ])
+
+    def fx(_text: str):
+        return next(responses)
+
+    _, oracle = build_e2e_from_extraction(
+        sample_instances(),
+        fx,
+        slot_link_fn=build_slot_link_fn(),
+    )
+    first = oracle.extract("", "ku_0001:s0").relations[0]
+    updated = oracle.extract("", "ku_0001:s2").relations[0]
+    assert first["subject"] == "ku_0001:current_residence"
+    assert updated["subject"] == "ku_0001:current_residence"
+    assert updated["write_intent"] == "update"
 
 
 def test_build_e2e_new_fact_mode_does_not_emit_update():
