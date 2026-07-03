@@ -582,3 +582,31 @@ def test_evaluate_abstention_e2e_counts_noisy_support_as_diagnostic():
     assert report["counts"]["B0"]["non_abstained"] == 0
     assert report["counts"]["B0"]["supporting_responses"] == 1
     assert report["write_outcomes"]["B0"]["accepted"] >= 1
+
+
+# -- extraction-prompt registry / non-primed generic ablation --------------- #
+def test_generic_prompt_is_registered_and_not_benchmark_primed():
+    from ocm.evaluation.datasets.longmemeval_adapter import (
+        FACT_EXTRACTION_PROMPTS,
+        build_fact_extract_fn,
+    )
+
+    assert set(FACT_EXTRACTION_PROMPTS) >= {"durable", "longmemeval", "generic"}
+    generic = FACT_EXTRACTION_PROMPTS["generic"]
+    # The generic prompt must not contain LongMemEval-specific example names or
+    # values (those would prime the extractor on the benchmark's questions).
+    primed_tokens = [
+        "charity_5k_personal_best_time",
+        "korean_restaurants_tried_count",
+        "rachel_current_employer",
+        "cocktail_class_day",
+        "mom_uses_same_grocery_method",
+        "25 minutes and 50 seconds",
+        "$400,000",
+    ]
+    for tok in primed_tokens:
+        assert tok not in generic, f"generic prompt leaks benchmark-specific token: {tok}"
+    # It still takes {text} and drives the extractor.
+    fx = build_fact_extract_fn(lambda p: '[{"attribute": "residence", "value": "NY"}]',
+                               prompt_template=generic)
+    assert fx("I live in NY") == [{"attribute": "residence", "value": "NY"}]

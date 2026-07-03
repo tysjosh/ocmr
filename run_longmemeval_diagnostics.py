@@ -438,12 +438,13 @@ def main() -> int:
     parser.add_argument("--intent-mode", choices=("auto", "new_fact"), default="auto")
     parser.add_argument(
         "--extract-prompt",
-        choices=("durable", "longmemeval"),
+        choices=("durable", "longmemeval", "generic"),
         default="longmemeval",
         help=(
             "Fact-extraction prompt whose cache to read. MUST match the prompt "
             "used by the 7f run that populated the cache (run_7f_local.py "
-            "defaults to 'longmemeval')."
+            "defaults to 'longmemeval'; 'generic' is the non-benchmark-primed "
+            "ablation)."
         ),
     )
     parser.add_argument("--e2e-limit", type=int, default=None)

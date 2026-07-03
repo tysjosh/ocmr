@@ -289,7 +289,7 @@ def main() -> int:
     parser.add_argument("--intent-mode", choices=("auto", "new_fact"), default="auto")
     parser.add_argument(
         "--extract-prompt",
-        choices=("durable", "longmemeval"),
+        choices=("durable", "longmemeval", "generic"),
         default="longmemeval",
         help=(
             "Fact extraction prompt. 'durable' is the original user-profile "
@@ -381,7 +381,7 @@ def main() -> int:
     llm_max_tokens = (
         args.llm_max_tokens
         if args.llm_max_tokens is not None
-        else (768 if args.extract_prompt == "longmemeval" else 256)
+        else (768 if args.extract_prompt in ("longmemeval", "generic") else 256)
     )
     extract_cache_name = (
         "lme_e2e_extract_cache.json"

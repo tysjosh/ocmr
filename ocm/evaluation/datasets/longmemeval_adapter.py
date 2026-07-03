@@ -548,9 +548,55 @@ Guidance:
 - If no user-memory fact is stated, respond with [].
 """
 
+#: Generic broadened prompt — the SAME broadened fact *categories* as the
+#: ``longmemeval`` prompt, but with the benchmark-specific example attribute
+#: names/values removed. This is the *non-primed* variant: it is not shown any of
+#: LongMemEval's question shapes, so a result under this prompt supports the
+#: "generalizes to real dialogue" claim without the "extractor was fitted to the
+#: benchmark" objection. Compare against ``longmemeval`` as a fitted-vs-generic
+#: ablation: if recall holds here, the result is not benchmark-primed.
+GENERIC_MEMORY_EXTRACTION_PROMPT = """\
+Extract explicit memory facts from the conversation session below.
+
+Goal: preserve facts that could answer future long-term-memory questions about
+the user, the user's life, or named people/places/items/events connected to the
+user. Include more than stable profile facts.
+
+Extract facts such as:
+- preferences, identity, residence, job, school, family, friends, pets
+- current/latest values, corrections, decisions, plans, status changes
+- counts, totals, progress, durations, amounts of money, measurements
+- dates, days of week, times, schedules, frequencies, locations
+- purchases, trips, classes, hobbies, health routines, projects, goals
+- yes/no facts or comparisons when explicitly stated
+- facts about user-relevant third parties (a named person's job, location, etc.)
+
+Do NOT extract generic advice, code, public reference facts, or assistant-only
+speculation unless the conversation explicitly ties them to the user or a named
+entity in the user's memory.
+
+When a later turn corrects or updates an earlier fact in this same session, emit
+the latest value using the same attribute name. Preserve exact numbers, units,
+money strings, dates, weekdays, names, and short answer phrases.
+
+Message:
+{text}
+
+Respond with ONLY a JSON array, no prose. Each item must include:
+{{"attribute": "<short stable snake_case subject_property>", "value": "<concise exact value>"}}
+
+Guidance:
+- Give each attribute enough subject context to stay stable across the session
+  (identify whose fact it is and which property), and reuse the SAME attribute
+  name whenever this session refers to the same fact.
+- Values should be the concise, exact phrase a future question would expect.
+- If no user-memory fact is stated, respond with [].
+"""
+
 FACT_EXTRACTION_PROMPTS: dict[str, str] = {
     "durable": FACT_EXTRACTION_PROMPT,
     "longmemeval": LONGMEMEVAL_MEMORY_EXTRACTION_PROMPT,
+    "generic": GENERIC_MEMORY_EXTRACTION_PROMPT,
 }
 
 
