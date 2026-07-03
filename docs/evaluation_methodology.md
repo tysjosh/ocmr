@@ -574,6 +574,51 @@ semantics for trusted single-valued state but is a modelling choice (see below).
 >   (supersede) or stale (quarantine). It improves *recall*, never the safety
 >   claim.
 
+### Real-data validation #2 (LongMemEval) — oracle and end-to-end
+
+A second real-data validation on **LongMemEval** (Wu et al., ICLR 2025), a
+recognized long-term-memory benchmark, generalizes the single-valued governance
+result from task-oriented slots (MultiWOZ) to **open-domain** chat. Scope is the
+`knowledge-update` ability (a user fact stated then changed; the answer is the
+latest value) mapped to the same `Slot -[HAS_VALUE]-> SlotValue` (`m:1`)
+governance. Two arms (`ocm/evaluation/datasets/longmemeval_adapter.py`):
+
+- **Arm A (oracle).** A gold value trajectory per question, LLM-annotated
+  **then validated against the benchmark answer** and cached
+  (`longmemeval_annotate.py`), replayed deterministically. Isolates governance
+  from extraction, exactly like the MultiWOZ oracle.
+- **Arm B (end-to-end).** The real LLM extracts facts from the full haystack
+  (`longmemeval_s.json`); governance acts on noisy candidates. Extraction is run
+  once and cached; a per-question belief assigns `update` vs `new_fact`.
+
+**Honest framing of the Arm-B result (this is the intended claim — do not
+overstate it).** End-to-end, write-time governance holds **constraint violations
+at 0** while the ungoverned arm accumulates many (e.g. B0/B2 ≈ 644 vs B3 = 0 on
+the 72-question knowledge-update subset). Governance suppresses **nothing
+correct**: B3 shows 0 rejected and 0 quarantined, so it is not the bottleneck.
+Raw task success is **extraction-bound, not governance-bound** — a diagnostic
+(`run_longmemeval_diagnostics.py`) shows the gold answer was *ever extracted*
+into any candidate for only ≈ 20% of questions, and B3 task success (≈ 18%) sits
+right at that extraction ceiling. The Arm-A → Arm-B gap therefore measures the
+**extraction/entity-resolution cost, not a governance cost**.
+
+Consequently:
+
+- **Do not claim Arm B out-recalls the ungoverned baseline.** The ungoverned arm
+  "wins" raw recall only by retaining hundreds of contradictory facts — the very
+  failure the paper argues against. The governed value is *durable consistency at
+  no correctness cost from the gate*, with recall limited upstream by extraction.
+- **Extractor-prompt honesty (fitted vs generic).** The broadened Arm-B
+  extraction prompt (`longmemeval`) lists fact *categories* (counts, dates,
+  schedules, third-party facts). A `generic` prompt variant with the same
+  categories but **no benchmark-specific example names/values** is provided as an
+  ablation. Report the `generic` result for the generalization claim; if recall
+  only holds under the benchmark-primed `longmemeval` prompt, disclose that as
+  benchmark fitting rather than claiming generalization.
+- **Abstention** (`_abs` questions) is scored end-to-end; in oracle mode it is a
+  plumbing check only (no fabricated value exists to surface), so cross-baseline
+  divergence is meaningful only in Arm B.
+
 ### Statistics
 
 Multi-seed (default 5 seeds: `1337, 7, 42, 99, 2024`). Per-metric aggregates use a
