@@ -770,10 +770,26 @@ class WritePipeline:
         if desired == current:
             return None  # idempotent no-op
 
-        if getattr(self.settings, "supersession_only_has_value", False):
+        # --- Option B guard (additive): reconcile-path C4/C8/C10 enforcement is
+        # gated by the existing ``enable_constraint_validation`` toggle, mirroring
+        # how ``_process_relation`` gates the W6 constraint validator. When
+        # constraint validation is off, accept the status assertion as ordinary
+        # memory (no C4/C8/C10 via ``_classify_status_change``), leaving C4/C8/C10
+        # poison as an accepted Invalid_Active_State. This reuses the existing
+        # ``supersession_only_has_value`` toggle-off accept path below.
+        # Behavior-preserving when ``enable_constraint_validation`` is true (the
+        # default): the branch is NOT taken and the unchanged pre-Option-B
+        # ``_classify_status_change`` path runs.
+        bypass_constraints = getattr(
+            self.settings, "supersession_only_has_value", False
+        ) or not getattr(self.settings, "enable_constraint_validation", True)
+
+        if bypass_constraints:
             # Bsup has no status/evidence/temporal governance. It accepts status
             # assertions as ordinary memory and intentionally does not supersede
-            # them; only Slot HAS_VALUE gets latest-value supersession.
+            # them; only Slot HAS_VALUE gets latest-value supersession. The
+            # Option B guard reuses the same accept path when constraint
+            # validation is disabled.
             status_value_id = self._ensure_status_value(desired, now)
             candidate = CandidateAssertion(
                 subject_id=entity_id,
