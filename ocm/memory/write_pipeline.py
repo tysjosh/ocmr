@@ -615,6 +615,17 @@ class WritePipeline:
             outcome = self.commit_manager.commit(candidate, vr, created_at=now)
             return outcome, 0 if vr.valid else 1, 0
 
+        # Reviewer baseline: MemGPT-style LLM-managed memory. The (LLM-decided)
+        # write intent alone governs the store op — no schema/contradiction/
+        # quarantine governance. Unlike Bsup (always overwrite), this supersedes
+        # only when the model chose to *update*; an *insert* decision on a slot
+        # that already has a value leaves both active (a violation), which is the
+        # MemGPT failure mode OCMR's gate prevents.
+        if getattr(self.settings, "memgpt_intent_supersede", False):
+            vr = self._memgpt_intent_verdict(candidate)
+            outcome = self.commit_manager.commit(candidate, vr, created_at=now)
+            return outcome, 0 if vr.valid else 1, 0
+
         # W6 (+W7) — graph-level constraints incl. the contradiction gate. The
         # contradiction-gate ablation disables C7 by passing no checker, so
         # contradictions are no longer blocked/quarantined at write time.
@@ -674,6 +685,50 @@ class WritePipeline:
                 "Bsup latest-value supersession for Slot HAS_VALUE "
                 f"replaces {current_ids}"
             ),
+            conflicting_ids=current_ids,
+            recommended_action="supersede",
+        )
+
+    def _memgpt_intent_verdict(
+        self, candidate: CandidateAssertion
+    ) -> ValidationResult:
+        """Intent-conditional routing for the MemGPT-style baseline.
+
+        Only ``Slot -[HAS_VALUE]-> SlotValue`` participates. The (LLM-decided)
+        ``write_intent`` on the candidate is the sole gate: an ``update`` intent
+        supersedes any active HAS_VALUE assertion(s) for the same Slot (the model
+        chose to overwrite); any other intent is accepted as an additional value
+        (the model chose to insert). No schema/contradiction/quarantine checks
+        run. Consequently an ``insert`` decision on a slot that already holds a
+        value leaves both active — the single-valued violation OCMR's gate would
+        have prevented.
+        """
+        if candidate.predicate != "HAS_VALUE":
+            return ValidationResult(valid=True, recommended_action="accept")
+        if self.graph.get_entity_type(candidate.subject_id) != "Slot":
+            return ValidationResult(valid=True, recommended_action="accept")
+        if candidate.write_intent != WriteIntent.update:
+            # insert / new_fact: add without superseding (may leave a conflict).
+            return ValidationResult(valid=True, recommended_action="accept")
+
+        new_id = self.ids.assertion_id(
+            candidate.subject_id,
+            candidate.predicate,
+            candidate.object_id,
+            candidate.source_ref,
+        )
+        current_ids: list[str] = []
+        for _s, _o, _k, data in self.graph.out_edges(
+            candidate.subject_id, candidate.predicate
+        ):
+            old_id = data.get("assertion_id")
+            if old_id and old_id != new_id:
+                current_ids.append(str(old_id))
+        if not current_ids:
+            return ValidationResult(valid=True, recommended_action="accept")
+        return ValidationResult(
+            valid=True,
+            reason=f"MemGPT-style overwrite (LLM update) replaces {current_ids}",
             conflicting_ids=current_ids,
             recommended_action="supersede",
         )

@@ -11,6 +11,7 @@ Examples:
     python run_7f_local.py
     python run_7f_local.py --full
     python run_7f_local.py --full --baselines B0,B2,Bsup,B3 --slot-linker qwen
+    python run_7f_local.py --full --manager memgpt   # MemGPT-style Bmemgpt row
 """
 
 from __future__ import annotations
@@ -286,6 +287,19 @@ def main() -> int:
     parser.add_argument("--full", action="store_true", help="Set both limits to full.")
     parser.add_argument("--seeds", default="1337,7,42,99,2024")
     parser.add_argument("--baselines", default="B0,B2,B3")
+    parser.add_argument(
+        "--manager",
+        choices=("governed", "memgpt"),
+        default="governed",
+        help=(
+            "Write manager. 'governed' runs the OCMR baselines given by "
+            "--baselines. 'memgpt' runs the MemGPT-style LLM-managed baseline "
+            "(Bmemgpt): the same extraction/retrieval, but each per-fact memory "
+            "edit is an LLM insert/update/skip decision with no OCMR governance, "
+            "so a wrong 'insert' on a changed fact leaves a durable violation. "
+            "Knowledge-update only; abstention is skipped."
+        ),
+    )
     parser.add_argument("--intent-mode", choices=("auto", "new_fact"), default="auto")
     parser.add_argument(
         "--extract-prompt",
@@ -359,10 +373,12 @@ def main() -> int:
     from ocm.evaluation.datasets.longmemeval_adapter import (
         FACT_EXTRACTION_PROMPTS,
         build_fact_extract_fn,
+        build_memgpt_decide_fn,
         build_slot_link_fn,
         evaluate_abstention_e2e,
         load_longmemeval,
         run_longmemeval_e2e,
+        run_longmemeval_memgpt,
     )
     from ocm.retrieval.embeddings import (
         DeterministicEmbeddingProvider,
@@ -408,10 +424,11 @@ def main() -> int:
                 f"__link_{_safe_segment(args.slot_linker)}"
                 f"_t{int(round(args.link_threshold * 100))}"
             )
+        manager_segment = "" if args.manager == "governed" else "__mgr_memgpt"
         run_segment = (
             f"extract_{args.extract_prompt}__intent_{args.intent_mode}"
             f"__ku_{_limit_segment(e2e_limit)}"
-            f"__abs_{_limit_segment(abst_limit)}{link_segment}"
+            f"__abs_{_limit_segment(abst_limit)}{link_segment}{manager_segment}"
         )
         checkpoint_root = (
             output_dir / "checkpoints" / "qwen_e2e" / _safe_segment(run_segment)
@@ -485,6 +502,29 @@ def main() -> int:
             confidence_threshold=args.link_threshold,
         )
 
+    # MemGPT-style per-fact memory decisions (insert/update/skip). Uses the
+    # same shared Qwen backend but a distinct disk cache so decisions are reused
+    # across seeds and never collide with the extraction/link caches.
+    decide_cached_chat = None
+    memgpt_decide_fn = None
+    if args.manager == "memgpt":
+        decide_cache = (
+            output_dir / f"lme_e2e_memgpt_decide_cache_{_safe_segment(args.extract_prompt)}.json"
+        ).resolve()
+        decide_cached_chat = CachedChat(
+            decide_cache,
+            shared_chat_factory,
+            flush_every=args.flush_every,
+        )
+        memgpt_decide_fn = build_memgpt_decide_fn(decide_cached_chat)
+        print(f"manager: MemGPT-style (Bmemgpt); decision cache: {decide_cache}")
+        if not args.skip_abstention:
+            print(
+                "note: --manager memgpt is a write-policy baseline for updates; "
+                "skipping abstention (governed B0/B2/B3 already cover it)."
+            )
+            args.skip_abstention = True
+
     if args.embeddings == "deterministic":
         embeddings = DeterministicEmbeddingProvider()
     else:
@@ -505,18 +545,31 @@ def main() -> int:
                 f"{len(instances)} knowledge-update questions "
                 "(end-to-end extraction over full haystack)"
             )
-            e2e_report = run_longmemeval_e2e(
-                instances,
-                fact_extract_fn,
-                intent_mode=args.intent_mode,
-                extract_prompt_name=args.extract_prompt,
-                slot_link_fn=slot_link_fn,
-                slot_linker_name=args.slot_linker,
-                baselines=baselines,
-                seeds=seeds,
-                embeddings=embeddings,
-                checkpoint_dir=str(checkpoint_root / "knowledge_update"),
-            )
+            if args.manager == "memgpt":
+                e2e_report = run_longmemeval_memgpt(
+                    instances,
+                    fact_extract_fn,
+                    memgpt_decide_fn,
+                    extract_prompt_name=args.extract_prompt,
+                    slot_link_fn=slot_link_fn,
+                    slot_linker_name=args.slot_linker,
+                    seeds=seeds,
+                    embeddings=embeddings,
+                    checkpoint_dir=str(checkpoint_root / "knowledge_update"),
+                )
+            else:
+                e2e_report = run_longmemeval_e2e(
+                    instances,
+                    fact_extract_fn,
+                    intent_mode=args.intent_mode,
+                    extract_prompt_name=args.extract_prompt,
+                    slot_link_fn=slot_link_fn,
+                    slot_linker_name=args.slot_linker,
+                    baselines=baselines,
+                    seeds=seeds,
+                    embeddings=embeddings,
+                    checkpoint_dir=str(checkpoint_root / "knowledge_update"),
+                )
             result["knowledge_update"] = e2e_report
             _print_knowledge_table(e2e_report, args.intent_mode)
 
@@ -549,9 +602,16 @@ def main() -> int:
         cached_chat.flush()
         if link_cached_chat is not None:
             link_cached_chat.flush()
+        if decide_cached_chat is not None:
+            decide_cached_chat.flush()
         print(f"extraction cache entries: {len(cached_chat.cache)} -> {extract_cache}")
         if link_cached_chat is not None:
             print(f"slot-link cache entries: {len(link_cached_chat.cache)} -> {link_cache}")
+        if decide_cached_chat is not None:
+            print(
+                f"memgpt decision cache entries: {len(decide_cached_chat.cache)} "
+                f"-> {decide_cached_chat.path}"
+            )
 
     out_path = output_dir / "results_longmemeval_e2e.json"
     with out_path.open("w", encoding="utf-8") as fh:

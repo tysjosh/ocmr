@@ -134,6 +134,20 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
         use_provenance=False,
         use_answer_policy=False,
     ),
+    # Bmemgpt — MemGPT-style LLM-managed memory. Same hybrid retrieval as B2/B3,
+    # but durable writes are edited solely by the LLM's per-write insert/update
+    # decision (carried as write_intent); no schema/contradiction/quarantine/
+    # provenance governance. Opt-in reviewer baseline for the "LLM-managed vs
+    # constraint-governed" comparison; not part of the canonical B-suite.
+    "Bmemgpt": StrategyToggles(
+        use_ontology=True,
+        use_graph=True,
+        use_vectors=True,
+        use_contradiction=False,
+        use_quarantine=False,
+        use_provenance=False,
+        use_answer_policy=False,
+    ),
 }
 
 #: Human-readable description per baseline (used in metrics/reporting).
@@ -146,6 +160,7 @@ BASELINE_DESCRIPTIONS: Dict[str, str] = {
     "Brag": "RAG-only: vectors-only retrieval, answer from text, no governance",
     "Brtcf": "Retrieval-time contradiction filter: no write gate, filter at read",
     "Bsup": "Latest-value supersession only for Slot HAS_VALUE",
+    "Bmemgpt": "MemGPT-style LLM-managed memory (LLM decides insert/update; no governance)",
 }
 
 #: Per-baseline **write-time** governance settings overrides (paper §IV-A).
@@ -179,6 +194,13 @@ BASELINE_SETTINGS: Dict[str, Dict[str, bool]] = {
         "enable_constraint_validation": False,
         "enable_contradiction_gate": False,
         "supersession_only_has_value": True,
+    },
+    # MemGPT-style: LLM-decided intent is the only gate; no OCMR governance.
+    "Bmemgpt": {
+        "enable_schema_validation": False,
+        "enable_constraint_validation": False,
+        "enable_contradiction_gate": False,
+        "memgpt_intent_supersede": True,
     },
 }
 

@@ -115,3 +115,14 @@ class Settings(BaseModel):
     # must dominate an untrusted incumbent by a margin). Off by default so the
     # conservative contradiction-oriented behavior is unchanged (paper §IV-D).
     authoritative_update_supersede: bool = False
+    # Reviewer baseline: MemGPT-style LLM-managed memory. When set, the durable
+    # store is edited purely by the (LLM-decided) write intent carried on each
+    # candidate: an ``update`` intent supersedes the incumbent HAS_VALUE for the
+    # same Slot (the model chose to overwrite), while any other intent is
+    # accepted as an additional value (the model chose to insert). No schema,
+    # contradiction, quarantine, or provenance governance runs. This models
+    # MemGPT's self-editing memory (the LLM decides insert vs. overwrite) and,
+    # unlike OCMR's gate, does NOT guarantee single-valued consistency: an
+    # incorrect ``insert`` decision leaves two active values (a violation).
+    # Off by default; enabled only by the opt-in Bmemgpt baseline.
+    memgpt_intent_supersede: bool = False

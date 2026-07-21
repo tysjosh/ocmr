@@ -600,6 +600,89 @@ FACT_EXTRACTION_PROMPTS: dict[str, str] = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# MemGPT-style memory manager (LLM decides insert / update / skip per write)
+# --------------------------------------------------------------------------- #
+#: Prompt for the MemGPT-style baseline's self-editing memory decision. Given
+#: the fact the model currently holds for an attribute (if any) and a new
+#: observation, the model chooses to INSERT (a new fact), UPDATE (overwrite the
+#: prior value because the fact changed), or SKIP (duplicate/irrelevant). This
+#: is the LLM-managed-memory analogue of OCMR's governed write decision, but
+#: with no ontology/cardinality guarantee.
+MEMGPT_MEMORY_DECISION_PROMPT = """\
+You manage an agent's long-term memory. For one attribute you currently store a
+value; a new observation has arrived. Decide how to edit memory.
+
+Attribute: {attribute}
+Currently stored value: {current_value}
+New observation: {new_value}
+
+Choose ONE action:
+- "insert": there is no meaningful stored value yet, so store this as new.
+- "update": the stored fact has CHANGED; overwrite it with the new value.
+- "skip": the new observation is a duplicate or does not update the fact.
+
+Respond with ONLY a JSON object: {{"action": "insert|update|skip"}}.
+"""
+
+
+def parse_memgpt_action(text: str) -> str:
+    """Parse a MemGPT decision response into ``insert``/``update``/``skip``.
+
+    Defaults to ``insert`` when the response is unparseable (the conservative,
+    non-superseding choice, so parsing failures cannot silently erase memory).
+    """
+    obj = _parse_first_json_object(text)
+    action = str((obj or {}).get("action", "")).strip().lower()
+    return action if action in ("insert", "update", "skip") else "insert"
+
+
+def _parse_first_json_object(text: str) -> Optional[dict[str, Any]]:
+    """Extract the first balanced JSON object from a model response, or None."""
+    import json as _json
+
+    if not text:
+        return None
+    start = text.find("{")
+    while start != -1:
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = _json.loads(text[start : i + 1])
+                        if isinstance(obj, dict):
+                            return obj
+                    except _json.JSONDecodeError:
+                        break
+        start = text.find("{", start + 1)
+    return None
+
+
+def build_memgpt_decide_fn(chat_fn) -> Any:
+    """Build a MemGPT-style memory-decision function from a chat callable.
+
+    Returns ``decide(attribute, new_value, current_value) -> action`` suitable
+    for :func:`build_e2e_from_extraction` with ``intent_mode="memgpt"``. A fact
+    with no prior value short-circuits to ``insert`` (no LLM call needed); an
+    unchanged value is handled upstream. Only genuine potential overwrites hit
+    the model.
+    """
+
+    def _decide(*, attribute: str, new_value: str, current_value: Optional[str]) -> str:
+        if not current_value:
+            return "insert"
+        prompt = MEMGPT_MEMORY_DECISION_PROMPT.format(
+            attribute=attribute, current_value=current_value, new_value=new_value
+        )
+        return parse_memgpt_action(chat_fn(prompt))
+
+    return _decide
+
+
 def normalize_attribute(attribute: str) -> str:
     """Normalize a free-text attribute to a stable snake_case slot key fragment."""
     import re
@@ -872,10 +955,19 @@ def _build_e2e_examples_from_extraction(
     category: str,
     expected_answer_fn: Any,
     slot_link_fn: Any | None = None,
+    decide_fn: Any | None = None,
 ) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
-    """Shared Arm-B builder: extract haystack facts and replay cached writes."""
-    if intent_mode not in ("auto", "new_fact"):
-        raise ValueError("intent_mode must be 'auto' or 'new_fact'")
+    """Shared Arm-B builder: extract haystack facts and replay cached writes.
+
+    ``decide_fn`` (MemGPT-style baseline) overrides the deterministic
+    insert/update rule: given ``(attribute, new_value, current_value)`` it
+    returns ``"insert"``/``"update"``/``"skip"`` and the emitted ``write_intent``
+    follows that choice. When ``None``, the deterministic belief rule is used.
+    """
+    if intent_mode not in ("auto", "new_fact", "memgpt"):
+        raise ValueError("intent_mode must be 'auto', 'new_fact', or 'memgpt'")
+    if intent_mode == "memgpt" and decide_fn is None:
+        raise ValueError("intent_mode='memgpt' requires a decide_fn")
 
     examples: list[BenchmarkExample] = []
     writes_by_ref: dict[str, _SessionWrites] = {}
@@ -906,7 +998,19 @@ def _build_e2e_examples_from_extraction(
                 prev = belief.get(attr)
                 if prev == value:
                     continue  # re-asserted same value — no write
-                if prev is None:
+                if intent_mode == "memgpt":
+                    # MemGPT-style: the LLM decides insert / update / skip. A
+                    # wrong "insert" on a changed fact leaves both values active
+                    # (a violation) — the failure mode OCMR's gate prevents.
+                    action = str(decide_fn(attribute=attr, new_value=value,
+                                           current_value=prev)).strip().lower()
+                    if action == "skip":
+                        continue
+                    if action == "update":
+                        intent, conf = "update", UPDATE_CONFIDENCE
+                    else:  # "insert" (or any non-update decision)
+                        intent, conf = "new_fact", NEW_FACT_CONFIDENCE
+                elif prev is None:
                     intent, conf = "new_fact", NEW_FACT_CONFIDENCE
                 else:
                     intent = "update" if intent_mode == "auto" else "new_fact"
@@ -950,6 +1054,7 @@ def build_e2e_from_extraction(
     *,
     intent_mode: str = "auto",
     slot_link_fn: Any | None = None,
+    decide_fn: Any | None = None,
 ) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
     """Build end-to-end examples by extracting facts from the haystack with an LLM.
 
@@ -971,6 +1076,7 @@ def build_e2e_from_extraction(
         fact_extract_fn,
         intent_mode=intent_mode,
         slot_link_fn=slot_link_fn,
+        decide_fn=decide_fn,
         category="knowledge_update_e2e",
         expected_answer_fn=lambda inst: [str(inst.get("answer", ""))],
     )
@@ -1065,6 +1171,73 @@ def run_longmemeval_e2e(
         "extract_prompt": extract_prompt_name,
         "slot_linker": slot_linker_name,
         "methods": methods,
+        "seeds": list(seeds),
+        "n_examples": len(examples),
+        "decisive_metrics": {
+            m: {metric: agg[m][metric].__dict__ for metric in agg[m]} for m in agg
+        },
+        "write_outcomes": ms.write_outcomes,
+    }
+
+
+def run_longmemeval_memgpt(
+    instances: Iterable[dict[str, Any]],
+    fact_extract_fn: Any,
+    memgpt_decide_fn: Any,
+    *,
+    extract_prompt_name: str = "generic",
+    slot_link_fn: Any | None = None,
+    slot_linker_name: str = "none",
+    seeds: Iterable[int] = (1337,),
+    embeddings: object | None = None,
+    checkpoint_dir: Optional[str] = None,
+) -> dict[str, Any]:
+    """MemGPT-style end-to-end LongMemEval run (Bmemgpt baseline).
+
+    Identical extraction/retrieval to :func:`run_longmemeval_e2e`, but per-fact
+    memory edits are decided by ``memgpt_decide_fn`` (LLM insert/update/skip) and
+    committed with no OCMR governance (``memgpt_intent_supersede``). Unlike the
+    governed arm, an incorrect ``insert`` on a changed fact leaves both values
+    active, so this arm can exhibit durable violations. Runs only the ``Bmemgpt``
+    baseline; place its row beside the governed B0/B2/B3 results.
+    """
+    from ocm.core.config import Settings
+    from ocm.evaluation.baselines import baseline_settings_overrides
+    from ocm.evaluation.experiment import aggregate_methods, run_multiseed
+
+    overrides = baseline_settings_overrides("Bmemgpt")
+
+    def settings_factory() -> Settings:  # type: ignore[misc]
+        return Settings(
+            deterministic_test_mode=True, chroma_mode="memory", extractor="mock",
+            **overrides,
+        )
+
+    examples, oracle = build_e2e_from_extraction(
+        instances,
+        fact_extract_fn,
+        intent_mode="memgpt",
+        slot_link_fn=slot_link_fn,
+        decide_fn=memgpt_decide_fn,
+    )
+    ms = run_multiseed(
+        ["Bmemgpt"],
+        seeds=seeds,
+        settings_factory=settings_factory,
+        extractor=oracle,
+        embeddings=embeddings,
+        checkpoint_dir=checkpoint_dir,
+        key_suffix="__lme_memgpt",
+        provided_examples=examples,
+    )
+    agg = aggregate_methods(ms)
+    return {
+        "dataset": "longmemeval",
+        "subset": "knowledge-update",
+        "arm": "end_to_end_memgpt",
+        "extract_prompt": extract_prompt_name,
+        "slot_linker": slot_linker_name,
+        "methods": ["Bmemgpt"],
         "seeds": list(seeds),
         "n_examples": len(examples),
         "decisive_metrics": {
