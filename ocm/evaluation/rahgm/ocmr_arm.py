@@ -499,6 +499,7 @@ def collect_benchmark_cases(
     *,
     extractor: Any = None,
     embeddings: Any = None,
+    settings_factory: Any = None,
 ) -> list["BenchmarkCase"]:
     """Collect routing cases from OCMR's benchmark, labelled review-worthy or not.
 
@@ -515,7 +516,7 @@ def collect_benchmark_cases(
     from ocm.governance.conditions import AutonomousOcmrRouter
     from ocm.governance.policy import RoutingCase, compute_guards
 
-    settings = _default_settings().model_copy(
+    settings = (settings_factory or _default_settings)().model_copy(
         update=baseline_settings_overrides("B3")
     )
     container_kwargs: dict[str, Any] = {}
@@ -567,6 +568,7 @@ def fit_policy_on_benchmark(
     iterations: int = 3000,
     extractor: Any = None,
     embeddings: Any = None,
+    settings_factory: Any = None,
 ) -> dict[str, Any]:
     """Fit the escalation policy on a held-out split of OCMR's benchmark.
 
@@ -597,7 +599,9 @@ def fit_policy_on_benchmark(
 
     from ocm.governance.policy import TrainingSample
 
-    dev_cases = collect_benchmark_cases(dev, extractor=extractor, embeddings=embeddings)
+    dev_cases = collect_benchmark_cases(
+        dev, extractor=extractor, embeddings=embeddings, settings_factory=settings_factory
+    )
     n_quarantined = sum(1 for c in dev_cases if c.quarantined)
     n_false = sum(1 for c in dev_cases if c.false_quarantine)
 
@@ -650,6 +654,7 @@ def separability_report(
     *,
     extractor: Any = None,
     embeddings: Any = None,
+    settings_factory: Any = None,
 ) -> dict[str, Any]:
     """Can the constraint-failure features tell a false quarantine from a genuine one?
 
@@ -660,7 +665,9 @@ def separability_report(
     discriminating signal.
     """
     policy = EscalationPolicy(params)
-    cases = collect_benchmark_cases(examples, extractor=extractor, embeddings=embeddings)
+    cases = collect_benchmark_cases(
+        examples, extractor=extractor, embeddings=embeddings, settings_factory=settings_factory
+    )
     quarantined = [c for c in cases if c.quarantined]
     escalated = [
         c
@@ -718,6 +725,7 @@ def run_ocmr_escalation_arm(
     examples: list[BenchmarkExample] | None = None,
     extractor: Any = None,
     embeddings: Any = None,
+    settings_factory: Any = None,
 ) -> dict[str, Any]:
     """Run OCMR's benchmark with and without risk-adaptive escalation.
 
@@ -748,7 +756,7 @@ def run_ocmr_escalation_arm(
             policy=policy,
             reviewer=reviewer_fn,
             escalate_all_quarantines=(arm == "B3Q"),
-            settings_factory=_default_settings,
+            settings_factory=settings_factory or _default_settings,
             extractor=extractor,
             embeddings=embeddings,
         )
