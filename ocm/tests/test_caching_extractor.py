@@ -32,7 +32,13 @@ def test_repeated_inputs_hit_cache_and_skip_base():
     r3 = ext.extract("Bob owns Atlas.", "ex2:s1")    # new -> miss
 
     assert base.calls == 2  # only the two distinct inputs hit the base model
-    assert ext.stats == {"hits": 1, "misses": 2, "size": 2}
+    assert ext.stats == {
+        "hits": 1,
+        "misses": 2,
+        "size": 2,
+        "failure_hits": 0,
+        "distinct_failures": 0,
+    }
     # Cached result equals the first (deterministic), and is a distinct object.
     assert r1.entities == r2.entities
     assert r1 is not r2

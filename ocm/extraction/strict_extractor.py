@@ -137,12 +137,24 @@ class StrictExtractor:
         self.calls = 0
         self.model_failures = 0
         self.environment_failures = 0
+        #: Distinct inputs seen and distinct inputs that failed. A failing input
+        #: is re-extracted by every arm unless the cache memoizes failures, so
+        #: ``model_failures / calls`` counts retries and overstates how much of
+        #: the corpus is actually unparseable. These sets give the honest ratio.
+        self._seen: set[str] = set()
+        self._failed: set[str] = set()
         #: First few model-fault messages, for the end-of-run report.
         self.model_failure_examples: list[str] = []
+
+    @staticmethod
+    def _key(text: str, source_ref: str) -> str:
+        return f"{source_ref}\x00{text}"
 
     def extract(self, text: str, source_ref: str) -> ExtractionResult:
         """Extract, routing failures by cause."""
         self.calls += 1
+        key = self._key(text, source_ref)
+        self._seen.add(key)
         try:
             return self._base.extract(text, source_ref)
         except ExtractionError as exc:
@@ -155,18 +167,26 @@ class StrictExtractor:
                     ) from exc
             else:
                 self.model_failures += 1
-                if len(self.model_failure_examples) < 5:
-                    self.model_failure_examples.append(f"{source_ref}: {exc}")
+                if key not in self._failed:
+                    self._failed.add(key)
+                    if len(self.model_failure_examples) < 5:
+                        self.model_failure_examples.append(f"{source_ref}: {exc}")
             raise
 
     @property
     def stats(self) -> dict[str, Any]:
-        """Call and failure counters for the end-of-run report."""
-        rate = self.model_failures / self.calls if self.calls else 0.0
+        """Call and failure counters for the end-of-run report.
+
+        ``unparseable_input_rate`` is the figure to quote: it is over *distinct*
+        inputs, so it is not inflated by per-arm retries of the same failure.
+        """
+        n_inputs = len(self._seen)
         return {
             "calls": self.calls,
+            "distinct_inputs": n_inputs,
+            "distinct_unparseable_inputs": len(self._failed),
+            "unparseable_input_rate": (len(self._failed) / n_inputs) if n_inputs else 0.0,
             "model_failures": self.model_failures,
-            "model_failure_rate": rate,
             "environment_failures": self.environment_failures,
             "model_failure_examples": list(self.model_failure_examples),
         }

@@ -28,13 +28,21 @@ import json
 import os
 from typing import Any, Optional
 
+from ocm.extraction.base import ExtractionError
 from ocm.memory.contracts import ExtractionResult
 
 
 class CachingExtractor:
     """Deterministic memoization layer over a base W1 extractor."""
 
-    def __init__(self, base: Any, cache_path: Optional[str] = None, autosave_every: int = 50) -> None:
+    def __init__(
+        self,
+        base: Any,
+        cache_path: Optional[str] = None,
+        autosave_every: int = 50,
+        *,
+        cache_failures: bool = False,
+    ) -> None:
         """Wrap ``base``.
 
         Args:
@@ -45,14 +53,27 @@ class CachingExtractor:
                 process restarts. When ``None`` the cache is in-memory only.
             autosave_every: Persist to ``cache_path`` after this many new misses
                 (ignored when ``cache_path`` is ``None``); bounds disk I/O.
+            cache_failures: Memoize :class:`ExtractionError` outcomes as well as
+                successful ones, **in memory only**. Without this, a failing
+                input is re-extracted by every arm, because the raise happens
+                before the store. That costs one generation per arm, and it also
+                leaves cross-arm consistency resting on the assumption that
+                greedy decoding is bit-identical on repeat calls. Memoizing the
+                failure makes every arm in one process observe exactly the same
+                extraction outcome by construction. Failures are deliberately
+                never written to ``cache_path``, so a transient fault cannot
+                poison a cache that outlives the process.
         """
         self._base = base
         self.version = getattr(base, "version", "caching-extractor")
         self._cache: dict[str, ExtractionResult] = {}
+        self._failures: dict[str, str] = {}
+        self._cache_failures = bool(cache_failures)
         self._cache_path = cache_path
         self._autosave_every = max(1, int(autosave_every))
         self.hits = 0
         self.misses = 0
+        self.failure_hits = 0
         self._unsaved = 0
         if cache_path:
             self._load()
@@ -81,8 +102,18 @@ class CachingExtractor:
         if cached is not None:
             self.hits += 1
             return cached.model_copy(deep=True)
+        if self._cache_failures and key in self._failures:
+            self.failure_hits += 1
+            raise ExtractionError(self._failures[key])
         self.misses += 1
-        result = self._base.extract(text, source_ref)
+        try:
+            result = self._base.extract(text, source_ref)
+        except ExtractionError as exc:
+            # Record the verdict so sibling arms see the identical outcome without
+            # paying for another generation. Never persisted to disk.
+            if self._cache_failures:
+                self._failures[key] = str(exc)
+            raise
         self._cache[key] = result
         self._unsaved += 1
         if self._cache_path and self._unsaved >= self._autosave_every:
@@ -92,7 +123,13 @@ class CachingExtractor:
     @property
     def stats(self) -> dict[str, int]:
         """Cache hit/miss/size counters (useful to print after a run)."""
-        return {"hits": self.hits, "misses": self.misses, "size": len(self._cache)}
+        return {
+            "hits": self.hits,
+            "misses": self.misses,
+            "size": len(self._cache),
+            "failure_hits": self.failure_hits,
+            "distinct_failures": len(self._failures),
+        }
 
     # -- persistence -------------------------------------------------------
     def save(self) -> None:

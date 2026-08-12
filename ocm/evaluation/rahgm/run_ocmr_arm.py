@@ -49,6 +49,7 @@ import time
 from typing import Any, Sequence
 
 from ocm.evaluation.benchmark import BenchmarkGenerator
+from ocm.evaluation.experiment import make_settings_factory
 from ocm.evaluation.rahgm.ocmr_arm import (
     ARMS,
     REVIEWERS,
@@ -62,6 +63,19 @@ DEFAULT_SEEDS: tuple[int, ...] = (1337, 7, 42, 99, 2024)
 
 #: Reviewers to run by default: the deployable policy, the ceiling, and both controls.
 DEFAULT_REVIEWERS: tuple[str, ...] = ("identity", "oracle", "release_all", "uphold_all")
+
+#: OCMR's published Table III values, for the reproduction gate. Until the B0 and
+#: B3 rows land near these, no B3R row can join that table: a mismatch means this
+#: run's configuration differs from the published one, so the arms would not be
+#: comparable to the rest of the paper.
+PUBLISHED_TABLE_III: dict[str, dict[str, float]] = {
+    "B0": {"task": 77.20, "contrad": 14.49, "viol": 50.72},
+    "B3": {"task": 60.00, "contrad": 1.26, "viol": 0.00},
+}
+
+#: Tolerance for the gate, in metric points. Task success is the loose one because
+#: the arms are scored on a held-out 60% split rather than the full benchmark.
+GATE_TOLERANCE: dict[str, float] = {"task": 6.0, "contrad": 4.0, "viol": 15.0}
 
 #: Scope note embedded in every artifact.
 SCOPE_NOTE = (
@@ -124,7 +138,10 @@ def _build_extractor(
         base, tolerate_environment_errors=tolerate_extraction_errors
     )
     # Greedy decoding makes memoization exact, so the cache only changes timing.
-    return CachingExtractor(strict, cache_path=cache_path)
+    # cache_failures keeps every arm on the identical extraction outcome for an
+    # unparseable input, instead of re-generating it once per arm and relying on
+    # repeat greedy decoding being bit-identical.
+    return CachingExtractor(strict, cache_path=cache_path, cache_failures=True)
 
 
 #: Probe inputs for the preflight check. Taken verbatim from the benchmark's own
@@ -203,6 +220,72 @@ def _preflight(extractor: Any) -> None:
     )
 
 
+def _build_embeddings(kind: str, model_name: str) -> Any:
+    """Load the embedding provider once and share it across every container.
+
+    The published run uses real ``all-MiniLM-L6-v2`` vectors. Retrieval quality
+    drives task success, which is answer-token recall over a haystack of retrieved
+    text, so substituting the offline hashing provider suppresses task success
+    while leaving the write-time metrics (contradiction rate, durable violations)
+    largely intact. That asymmetry is a configuration artifact, not a finding.
+    """
+    if kind == "deterministic":
+        return None  # container builds DeterministicEmbeddingProvider
+    from ocm.retrieval.embeddings import LocalEmbeddingProvider
+
+    print(f"[embeddings] loading {model_name} ...", flush=True)
+    return LocalEmbeddingProvider(model_name=model_name)
+
+
+def _gate_report(aggregate: dict[str, dict[str, list[float]]]) -> dict[str, Any]:
+    """Compare the reproduced B0/B3 rows against OCMR's published Table III.
+
+    Returns a verdict per arm and metric. A failure means this run is not
+    configured like the published one, so nothing in the table should be quoted
+    alongside the rest of the paper until the discrepancy is explained.
+    """
+    checks: list[dict[str, Any]] = []
+    for arm, expected in PUBLISHED_TABLE_III.items():
+        values = aggregate.get(arm)
+        if not values:
+            continue
+        for metric, want in expected.items():
+            got = _mean(values[metric])
+            delta = got - want
+            checks.append(
+                {
+                    "arm": arm,
+                    "metric": metric,
+                    "published": want,
+                    "observed": round(got, 2),
+                    "delta": round(delta, 2),
+                    "tolerance": GATE_TOLERANCE[metric],
+                    "pass": abs(delta) <= GATE_TOLERANCE[metric],
+                }
+            )
+    return {"passed": all(c["pass"] for c in checks) if checks else False, "checks": checks}
+
+
+def _render_gate(gate: dict[str, Any]) -> str:
+    """Render the reproduction gate as a short table."""
+    lines = [
+        "reproduction gate vs OCMR Table III "
+        "(a FAIL means this run's configuration differs from the published one):",
+        f"  {'arm':4s} {'metric':8s} {'published':>10s} {'observed':>9s} {'delta':>8s}  verdict",
+    ]
+    for check in gate["checks"]:
+        verdict = "pass" if check["pass"] else "FAIL"
+        lines.append(
+            f"  {check['arm']:4s} {check['metric']:8s} {check['published']:10.2f} "
+            f"{check['observed']:9.2f} {check['delta']:+8.2f}  {verdict}"
+        )
+    lines.append(
+        "  => GATE PASSED" if gate["passed"] else
+        "  => GATE FAILED: do not put a B3R row in Table III from this run."
+    )
+    return "\n".join(lines)
+
+
 def _strict_stats(extractor: Any) -> dict[str, Any] | None:
     """Pull the :class:`StrictExtractor` counters out from under the cache."""
     node = extractor
@@ -260,6 +343,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="Qwen/Qwen2.5-14B-Instruct",
         help="HF model id for --extractor qwen",
     )
+    parser.add_argument(
+        "--embeddings",
+        choices=("deterministic", "local", "auto"),
+        default="auto",
+        help=(
+            "'local' uses real all-MiniLM-L6-v2, matching the published run; "
+            "'deterministic' uses offline hashed vectors, which suppresses task "
+            "success because retrieval drives it. 'auto' picks local for "
+            "--extractor qwen and deterministic for mock."
+        ),
+    )
+    parser.add_argument(
+        "--embedding-model",
+        default="sentence-transformers/all-MiniLM-L6-v2",
+        help="embedding model for --embeddings local",
+    )
     parser.add_argument("--per-category", type=int, default=25)
     parser.add_argument(
         "--seeds",
@@ -315,6 +414,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         cache_path = os.path.join(args.out, "extraction_cache.json")
         print(f"[cache] defaulting to {cache_path}", flush=True)
 
+    embedding_kind = args.embeddings
+    if embedding_kind == "auto":
+        embedding_kind = "local" if args.extractor == "qwen" else "deterministic"
+
     extractor = _build_extractor(
         args.extractor,
         model_id=args.model,
@@ -323,6 +426,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         tolerate_extraction_errors=args.tolerate_extraction_errors,
     )
     _preflight(extractor)
+
+    embeddings = _build_embeddings(embedding_kind, args.embedding_model)
+    # Match the published configuration exactly: real embeddings imply
+    # deterministic_test_mode=False, which is the stochasticity the multi-seed CIs
+    # are meant to capture. Storage stays hermetic either way.
+    settings_factory = make_settings_factory(
+        # An injected extractor instance takes precedence over this setting, so it
+        # stays "mock" and the Qwen extractor is passed in directly instead.
+        extractor="mock",
+        embeddings=embedding_kind,
+        embedding_model=args.embedding_model,
+    )
 
     if args.probe_only:
         print("\n[probe-only] full extraction JSON per probe:", flush=True)
@@ -369,13 +484,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(f"[seed {seed}] fitting policy on the development split ...", flush=True)
         fitted = fit_policy_on_benchmark(
-            examples, extractor=extractor, embeddings=None
+            examples,
+            extractor=extractor,
+            embeddings=embeddings,
+            settings_factory=settings_factory,
         )
         separability.append(
             {
                 "seed": seed,
                 **separability_report(
-                    fitted["test_examples"], fitted["params"], extractor=extractor
+                    fitted["test_examples"],
+                    fitted["params"],
+                    extractor=extractor,
+                    embeddings=embeddings,
+                    settings_factory=settings_factory,
                 ),
             }
         )
@@ -390,6 +512,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 reviewer=reviewer,
                 params=fitted["params"],
                 extractor=extractor,
+                embeddings=embeddings,
+                settings_factory=settings_factory,
             )
             seed_entry["reviewers"][reviewer] = report
             for arm_name, arm in report["arms"].items():
@@ -409,6 +533,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     elapsed = time.perf_counter() - started
     table = _render(aggregate)
     print("\n" + table, flush=True)
+    gate = _gate_report(aggregate)
+    print("\n" + _render_gate(gate), flush=True)
     print(
         "\nseparability of false vs genuine quarantines "
         "(lift over base rate ~0 means the constraint pattern carries no signal):",
@@ -426,14 +552,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     extraction_stats = _strict_stats(extractor)
     if extraction_stats:
         print(
-            f"\nextraction: {extraction_stats['calls']} call(s), "
-            f"{extraction_stats['model_failures']} unparseable "
-            f"({extraction_stats['model_failure_rate']:.1%})",
+            f"\nextraction: {extraction_stats['distinct_inputs']} distinct input(s), "
+            f"{extraction_stats['distinct_unparseable_inputs']} unparseable "
+            f"({extraction_stats['unparseable_input_rate']:.1%}); "
+            f"{extraction_stats['calls']} generation call(s)",
             flush=True,
         )
         for example in extraction_stats["model_failure_examples"]:
             print(f"  e.g. {example}", flush=True)
-        if extraction_stats["model_failure_rate"] > 0.05:
+        if extraction_stats["unparseable_input_rate"] > 0.05:
             print(
                 "  WARNING: over 5% of extractions were unparseable, so memory is "
                 "under-populated relative to OCMR's published run. Check the "
@@ -453,7 +580,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             "reviewers": reviewers,
             "arms": arms,
             "cache_path": cache_path,
+            "embeddings": embedding_kind,
+            "embedding_model": (
+                args.embedding_model if embedding_kind == "local" else None
+            ),
         },
+        "reproduction_gate": gate,
         "aggregate": {
             name: {
                 "task_success_mean": _mean(v["task"]),
@@ -481,7 +613,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         with open(json_path, "w", encoding="utf-8") as handle:
             json.dump(report, handle, indent=2, default=str)
         with open(text_path, "w", encoding="utf-8") as handle:
-            handle.write(SCOPE_NOTE + "\n\n" + table + "\n")
+            handle.write(
+                SCOPE_NOTE + "\n\n" + table + "\n\n" + _render_gate(gate) + "\n"
+            )
         print(f"Wrote {json_path}\nWrote {text_path}", flush=True)
     return 0
 
