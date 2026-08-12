@@ -48,6 +48,21 @@ from ocm.extraction.llm_extractor import SYSTEM_PROMPT
 from ocm.memory.contracts import ExtractionResult
 
 
+def _window(text: str, pos: int, radius: int = 40) -> str:
+    """Return the characters around ``pos``, for diagnosing a parse failure.
+
+    A :class:`json.JSONDecodeError` reports where parsing stopped but not what
+    was there, and the raw generation is otherwise dropped on the floor. Quoting
+    a short window makes the actual defect (a trailing comma, an unquoted key,
+    single quotes) visible in the log without dumping the whole output.
+    """
+    lo = max(0, pos - radius)
+    hi = min(len(text), pos + radius)
+    prefix = "..." if lo > 0 else ""
+    suffix = "..." if hi < len(text) else ""
+    return f"{prefix}{text[lo:hi]}{suffix}"
+
+
 def _loads_lenient(content: str) -> dict:
     """Parse the first balanced JSON object out of a model generation.
 
@@ -67,10 +82,18 @@ def _loads_lenient(content: str) -> dict:
     end = text.rfind("}")
     if start == -1 or end == -1 or end < start:
         raise ExtractionError("transformers extractor output contained no JSON object")
+    candidate = text[start : end + 1]
     try:
-        data = json.loads(text[start : end + 1])
+        data = json.loads(candidate)
     except json.JSONDecodeError as exc:
-        raise ExtractionError(f"transformers extractor produced invalid JSON: {exc}") from exc
+        # Include a window around the offending offset. Without it the raw
+        # generation is discarded and the failure cannot be diagnosed after the
+        # fact: the message alone says a key was expected but not what was
+        # actually emitted there.
+        raise ExtractionError(
+            f"transformers extractor produced invalid JSON: {exc} "
+            f"| near: {_window(candidate, exc.pos)!r}"
+        ) from exc
     if not isinstance(data, dict):
         raise ExtractionError("transformers extractor JSON was not an object")
     return data
