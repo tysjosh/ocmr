@@ -132,3 +132,64 @@ def test_successful_extraction_passes_through() -> None:
         "environment_failures": 0,
         "model_failure_examples": [],
     }
+
+
+# --------------------------------------------------------------------------- #
+# Preflight: the second silent-degradation mode
+# --------------------------------------------------------------------------- #
+class _Empty:
+    """Parses cleanly but extracts nothing. Raises no error anywhere."""
+
+    version = "empty-v1"
+
+    def extract(self, text: str, source_ref: str) -> ExtractionResult:
+        return ExtractionResult(extractor_version="empty-v1")
+
+
+class _Relational:
+    """Emits one relation per call, like a working extractor."""
+
+    version = "rel-v1"
+
+    def extract(self, text: str, source_ref: str) -> ExtractionResult:
+        return ExtractionResult(
+            entities=[{"name": "Alice", "type": "Person"}],
+            relations=[
+                {
+                    "subject": "Alice",
+                    "predicate": "OWNS",
+                    "object": "Orion",
+                    "confidence": 0.9,
+                }
+            ],
+            extractor_version="rel-v1",
+        )
+
+
+def test_preflight_rejects_an_extractor_that_yields_no_relations() -> None:
+    """A valid-but-empty extractor must not be allowed to start a sweep."""
+    from ocm.evaluation.rahgm.run_ocmr_arm import _preflight
+
+    with pytest.raises(SystemExit) as excinfo:
+        _preflight(_Empty())
+    assert "no relations" in str(excinfo.value)
+
+
+def test_preflight_accepts_a_working_extractor() -> None:
+    from ocm.evaluation.rahgm.run_ocmr_arm import _preflight
+
+    _preflight(_Relational())  # must not raise
+
+
+def test_preflight_is_a_no_op_for_the_offline_mock() -> None:
+    from ocm.evaluation.rahgm.run_ocmr_arm import _preflight
+
+    _preflight(None)
+
+
+def test_preflight_aborts_on_an_environment_fault() -> None:
+    from ocm.evaluation.rahgm.run_ocmr_arm import _preflight
+
+    with pytest.raises(SystemExit) as excinfo:
+        _preflight(StrictExtractor(_Boom(REAL_TRITON_MESSAGE)))
+    assert "Python.h" in str(excinfo.value)
