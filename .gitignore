@@ -29,6 +29,12 @@ vllm.log
 .DS_Store
 .ipynb_checkpoints/
 
-# Research paper (kept locally, not committed)
+# Research papers (kept locally, not committed)
 Ontology_Constrained_Memory_for_Agent_Reasoning.pdf
 Ontology_Constrained_Memory_for_Agent_Reasoning.txt
+Risk_Adaptive_Human_Governed_Memory_for_Trustworthy_Analytic_Agents.pdf
+
+# Full-text extractions of the papers above (same content, different format)
+docs/_paper_extracted.txt
+docs/_paper1_extracted.txt
+docs/_paper2_extracted.txt
