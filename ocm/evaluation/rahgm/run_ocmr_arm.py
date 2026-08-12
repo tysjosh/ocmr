@@ -79,7 +79,12 @@ SCOPE_NOTE = (
 
 
 def _build_extractor(
-    kind: str, *, model_id: str, cache_path: str | None, max_new_tokens: int
+    kind: str,
+    *,
+    model_id: str,
+    cache_path: str | None,
+    max_new_tokens: int,
+    tolerate_extraction_errors: bool = False,
 ) -> Any:
     """Build the W1 extractor, importing torch/transformers only when needed."""
     if kind == "mock":
@@ -100,6 +105,7 @@ def _build_extractor(
         ) from exc
 
     from ocm.extraction.caching_extractor import CachingExtractor
+    from ocm.extraction.strict_extractor import StrictExtractor
     from ocm.extraction.transformers_extractor import TransformersExtractor
 
     print(f"[extractor] loading {model_id} ...", flush=True)
@@ -110,8 +116,68 @@ def _build_extractor(
     base = TransformersExtractor(
         model=model, tokenizer=tokenizer, max_new_tokens=max_new_tokens
     )
+    # StrictExtractor sits *inside* the cache so failures are never memoized. It
+    # aborts on environment faults (broken Triton/CUDA, OOM) because the write
+    # pipeline would otherwise swallow them and every arm would silently run on
+    # an empty memory store, producing a plausible but meaningless table.
+    strict = StrictExtractor(
+        base, tolerate_environment_errors=tolerate_extraction_errors
+    )
     # Greedy decoding makes memoization exact, so the cache only changes timing.
-    return CachingExtractor(base, cache_path=cache_path)
+    return CachingExtractor(strict, cache_path=cache_path)
+
+
+#: Probe sentence for the preflight check. Deliberately in the same shape as the
+#: benchmark's own session text so a successful extraction is meaningful.
+_PROBE_TEXT = "Alice owns Project Orion."
+_PROBE_REF = "preflight:probe"
+
+
+def _preflight(extractor: Any) -> None:
+    """Verify the extractor actually generates before committing hours of GPU time.
+
+    A broken CUDA/Triton toolchain makes every ``generate`` call raise, and the
+    write pipeline is designed to absorb extraction failures as recorded
+    validation failures. That combination silently produces a full results table
+    over an empty memory store, so the environment must be proven up front.
+
+    Raises:
+        SystemExit: If the probe extraction fails, carrying the remediation text.
+    """
+    if extractor is None:
+        return  # offline mock: nothing to prove
+    from ocm.extraction.strict_extractor import ExtractionEnvironmentError
+
+    print("[preflight] probing the extractor with one short input ...", flush=True)
+    try:
+        result = extractor.extract(_PROBE_TEXT, _PROBE_REF)
+    except ExtractionEnvironmentError as exc:
+        raise SystemExit(f"\n[preflight FAILED]\n{exc}") from exc
+    except Exception as exc:  # noqa: BLE001 - surface anything as a hard stop
+        raise SystemExit(
+            f"\n[preflight FAILED] the extractor raised {exc!r}.\n"
+            "Aborting: a run started in this state would record every write as a "
+            "failed extraction and report a table computed over empty memory."
+        ) from exc
+
+    n = len(getattr(result, "assertions", []) or [])
+    print(
+        f"[preflight] ok - probe produced {n} assertion(s), "
+        f"extractor_version={getattr(result, 'extractor_version', '?')}",
+        flush=True,
+    )
+
+
+def _strict_stats(extractor: Any) -> dict[str, Any] | None:
+    """Pull the :class:`StrictExtractor` counters out from under the cache."""
+    node = extractor
+    for _ in range(4):  # walk a short wrapper chain
+        if node is None:
+            return None
+        if type(node).__name__ == "StrictExtractor":
+            return node.stats
+        node = getattr(node, "_base", None)
+    return None
 
 
 def _mean(values: Sequence[float]) -> float:
@@ -181,6 +247,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--max-new-tokens", type=int, default=1024)
     parser.add_argument("--out", default="local_results/ocmr_arm")
     parser.add_argument("--no-write", action="store_true")
+    parser.add_argument(
+        "--tolerate-extraction-errors",
+        action="store_true",
+        help=(
+            "do not abort when extraction fails for environmental reasons. "
+            "Unsafe: the write pipeline records a failed extraction and carries "
+            "on, so a broken GPU environment yields a full table computed over "
+            "an empty memory store. For debugging only."
+        ),
+    )
     args = parser.parse_args(argv)
 
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
@@ -200,7 +276,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         model_id=args.model,
         cache_path=cache_path,
         max_new_tokens=args.max_new_tokens,
+        tolerate_extraction_errors=args.tolerate_extraction_errors,
     )
+    _preflight(extractor)
 
     print(SCOPE_NOTE, flush=True)
     print(
@@ -286,6 +364,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"lift={entry['lift_over_base_rate']:+.3f}",
             flush=True,
         )
+    extraction_stats = _strict_stats(extractor)
+    if extraction_stats:
+        print(
+            f"\nextraction: {extraction_stats['calls']} call(s), "
+            f"{extraction_stats['model_failures']} unparseable "
+            f"({extraction_stats['model_failure_rate']:.1%})",
+            flush=True,
+        )
+        for example in extraction_stats["model_failure_examples"]:
+            print(f"  e.g. {example}", flush=True)
+        if extraction_stats["model_failure_rate"] > 0.05:
+            print(
+                "  WARNING: over 5% of extractions were unparseable, so memory is "
+                "under-populated relative to OCMR's published run. Check the "
+                "reproduction gate (B0 ~ 77.20, B3 ~ 60.00) before using these "
+                "numbers.",
+                flush=True,
+            )
     print(f"\n[done] {elapsed:.1f}s", flush=True)
 
     report = {
@@ -314,6 +410,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             for name, v in aggregate.items()
         },
         "separability": separability,
+        "extraction": extraction_stats,
         "per_seed": per_seed,
         "elapsed_seconds": round(elapsed, 2),
     }
