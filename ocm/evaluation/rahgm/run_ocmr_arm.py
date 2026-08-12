@@ -127,43 +127,78 @@ def _build_extractor(
     return CachingExtractor(strict, cache_path=cache_path)
 
 
-#: Probe sentence for the preflight check. Deliberately in the same shape as the
-#: benchmark's own session text so a successful extraction is meaningful.
-_PROBE_TEXT = "Alice owns Project Orion."
-_PROBE_REF = "preflight:probe"
+#: Probe inputs for the preflight check. Taken verbatim from the benchmark's own
+#: anchor sessions, so an extractor that handles these is handling the real task.
+#: Each must yield at least one relation, otherwise memory stays empty and every
+#: arm's numbers become meaningless.
+_PROBES: tuple[tuple[str, str], ...] = (
+    ("Alice owns Project Orion.", "preflight:owns"),
+    ("Bob is assigned to Task T1 and Bob completed Task T1.", "preflight:assigned"),
+)
+
+#: The six item lists on :class:`~ocm.memory.contracts.ExtractionResult`.
+_ITEM_FIELDS = ("entities", "events", "claims", "documents", "decisions", "relations")
+
+
+def _item_counts(result: Any) -> dict[str, int]:
+    """Per-field item counts for an :class:`ExtractionResult`."""
+    return {f: len(getattr(result, f, []) or []) for f in _ITEM_FIELDS}
 
 
 def _preflight(extractor: Any) -> None:
-    """Verify the extractor actually generates before committing hours of GPU time.
+    """Prove the extractor works before committing hours of GPU time.
 
-    A broken CUDA/Triton toolchain makes every ``generate`` call raise, and the
-    write pipeline is designed to absorb extraction failures as recorded
-    validation failures. That combination silently produces a full results table
-    over an empty memory store, so the environment must be proven up front.
+    Guards two distinct silent-degradation modes, both of which end in a full,
+    plausible-looking arm table computed over an empty memory store:
+
+    1. Every ``generate`` call raises (broken Triton/CUDA, OOM). The write
+       pipeline absorbs each one as a recorded validation failure (Req 3.3).
+    2. Every call returns schema-valid but *empty* JSON. Nothing raises at all,
+       so no warning is logged anywhere.
+
+    The second is the more dangerous of the two because it is completely silent,
+    so the check asserts on extracted content rather than on mere success.
 
     Raises:
-        SystemExit: If the probe extraction fails, carrying the remediation text.
+        SystemExit: If any probe fails or yields no relations.
     """
     if extractor is None:
         return  # offline mock: nothing to prove
     from ocm.extraction.strict_extractor import ExtractionEnvironmentError
 
-    print("[preflight] probing the extractor with one short input ...", flush=True)
-    try:
-        result = extractor.extract(_PROBE_TEXT, _PROBE_REF)
-    except ExtractionEnvironmentError as exc:
-        raise SystemExit(f"\n[preflight FAILED]\n{exc}") from exc
-    except Exception as exc:  # noqa: BLE001 - surface anything as a hard stop
-        raise SystemExit(
-            f"\n[preflight FAILED] the extractor raised {exc!r}.\n"
-            "Aborting: a run started in this state would record every write as a "
-            "failed extraction and report a table computed over empty memory."
-        ) from exc
+    print(f"[preflight] probing the extractor with {len(_PROBES)} inputs ...", flush=True)
+    totals: dict[str, int] = {f: 0 for f in _ITEM_FIELDS}
+    for text, ref in _PROBES:
+        try:
+            result = extractor.extract(text, ref)
+        except ExtractionEnvironmentError as exc:
+            raise SystemExit(f"\n[preflight FAILED]\n{exc}") from exc
+        except Exception as exc:  # noqa: BLE001 - surface anything as a hard stop
+            raise SystemExit(
+                f"\n[preflight FAILED] the extractor raised {exc!r} on {text!r}.\n"
+                "Aborting: a run started in this state would record every write as "
+                "a failed extraction and report a table computed over empty memory."
+            ) from exc
+        counts = _item_counts(result)
+        for field, n in counts.items():
+            totals[field] += n
+        summary = " ".join(f"{f}={counts[f]}" for f in _ITEM_FIELDS if counts[f])
+        print(f"[preflight]   {ref}: {summary or 'NOTHING EXTRACTED'}", flush=True)
 
-    n = len(getattr(result, "assertions", []) or [])
+    if totals["relations"] == 0:
+        raise SystemExit(
+            "\n[preflight FAILED] the extractor parsed cleanly but produced no "
+            f"relations across {len(_PROBES)} probe inputs (totals: {totals}).\n"
+            "Aborting: relations are what become candidate assertions, so memory "
+            "would stay empty and every arm would score on an empty store. "
+            "Nothing raises in this state, which is why it is checked here.\n"
+            "Likely causes: a model too small or too heavily quantized to follow "
+            "the JSON extraction schema, or a chat template mismatch. Inspect one "
+            "raw generation before continuing."
+        )
     print(
-        f"[preflight] ok - probe produced {n} assertion(s), "
-        f"extractor_version={getattr(result, 'extractor_version', '?')}",
+        f"[preflight] ok - {totals['relations']} relation(s) over {len(_PROBES)} "
+        f"probes, extractor_version={getattr(result, 'extractor_version', '?')}",
         flush=True,
     )
 
@@ -248,6 +283,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out", default="local_results/ocmr_arm")
     parser.add_argument("--no-write", action="store_true")
     parser.add_argument(
+        "--probe-only",
+        action="store_true",
+        help=(
+            "run the preflight, dump the full extraction JSON for each probe, and "
+            "exit. Use this to eyeball what the model actually emits before "
+            "committing to a multi-hour sweep."
+        ),
+    )
+    parser.add_argument(
         "--tolerate-extraction-errors",
         action="store_true",
         help=(
@@ -279,6 +323,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         tolerate_extraction_errors=args.tolerate_extraction_errors,
     )
     _preflight(extractor)
+
+    if args.probe_only:
+        print("\n[probe-only] full extraction JSON per probe:", flush=True)
+        for text, ref in _PROBES:
+            result = extractor.extract(text, ref) if extractor else None
+            print(f"\n--- {ref}: {text}", flush=True)
+            print(
+                json.dumps(result.model_dump(mode="json"), indent=2)
+                if result is not None
+                else "(offline mock: nothing to dump)",
+                flush=True,
+            )
+        if extractor is not None and hasattr(extractor, "save"):
+            extractor.save()
+        return 0
 
     print(SCOPE_NOTE, flush=True)
     print(
