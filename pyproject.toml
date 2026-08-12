@@ -19,6 +19,12 @@ dependencies = [
     "networkx>=3.2",
     "chromadb>=0.4.24",
     "sentence-transformers>=2.6",
+    # RAHGM evaluation: the escalation-policy fit and the random-intercept
+    # models in ocm/evaluation/rahgm/stats.py import these at module level.
+    # They were previously only present as transitive dependencies of
+    # sentence-transformers, so a fresh install could break the suite.
+    "numpy>=1.26",
+    "scipy>=1.11",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +45,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
     "property(n, text): tags a test as validating correctness Property n (Feature: ontology-constrained-memory, Property n: text).",
+    "slow: a test that replays a full benchmark; deselect with -m 'not slow'.",
 ]
 
 [tool.hypothesis]
