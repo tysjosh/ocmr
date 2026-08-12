@@ -83,7 +83,7 @@ def test_model_fault_is_re_raised_unchanged_and_counted() -> None:
         strict.extract("Alice owns Project Orion.", "s1")
     assert strict.stats["model_failures"] == 1
     assert strict.stats["environment_failures"] == 0
-    assert strict.stats["model_failure_rate"] == 1.0
+    assert strict.stats["unparseable_input_rate"] == 1.0
 
 
 def test_environment_fault_propagates_through_the_write_pipeline() -> None:
@@ -127,8 +127,10 @@ def test_successful_extraction_passes_through() -> None:
     assert result.extractor_version == "ok-v1"
     assert strict.stats == {
         "calls": 1,
+        "distinct_inputs": 1,
+        "distinct_unparseable_inputs": 0,
+        "unparseable_input_rate": 0.0,
         "model_failures": 0,
-        "model_failure_rate": 0.0,
         "environment_failures": 0,
         "model_failure_examples": [],
     }
@@ -193,3 +195,89 @@ def test_preflight_aborts_on_an_environment_fault() -> None:
     with pytest.raises(SystemExit) as excinfo:
         _preflight(StrictExtractor(_Boom(REAL_TRITON_MESSAGE)))
     assert "Python.h" in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------- #
+# Retry accounting: a failing input must not inflate the reported rate
+# --------------------------------------------------------------------------- #
+class _FailsOneInput:
+    """Succeeds on everything except one designated text."""
+
+    version = "selective-v1"
+
+    def __init__(self, bad_text: str) -> None:
+        self.bad_text = bad_text
+        self.calls = 0
+
+    def extract(self, text: str, source_ref: str) -> ExtractionResult:
+        self.calls += 1
+        if text == self.bad_text:
+            raise ExtractionError("transformers extractor produced invalid JSON: x")
+        return ExtractionResult(
+            relations=[{"subject": "A", "predicate": "OWNS", "object": "B"}],
+            extractor_version="selective-v1",
+        )
+
+
+def test_unparseable_rate_is_over_distinct_inputs_not_retries() -> None:
+    """One bad input retried by many arms is still one unparseable input."""
+    strict = StrictExtractor(_FailsOneInput("bad"))
+    for _ in range(10):  # ten arms all re-extract the same failing session
+        with pytest.raises(ExtractionError):
+            strict.extract("bad", "s1")
+    for _ in range(10):
+        strict.extract("good", "s2")
+
+    stats = strict.stats
+    assert stats["calls"] == 20
+    assert stats["model_failures"] == 10  # every retry counted
+    assert stats["distinct_inputs"] == 2
+    assert stats["distinct_unparseable_inputs"] == 1
+    assert stats["unparseable_input_rate"] == 0.5  # not 10/20 by accident
+    assert len(stats["model_failure_examples"]) == 1  # deduplicated
+
+
+def test_failure_caching_keeps_arms_consistent_and_skips_regeneration() -> None:
+    """With cache_failures, a failing input costs exactly one generation."""
+    from ocm.extraction.caching_extractor import CachingExtractor
+
+    base = _FailsOneInput("bad")
+    cached = CachingExtractor(base, cache_failures=True)
+    for _ in range(5):
+        with pytest.raises(ExtractionError):
+            cached.extract("bad", "s1")
+
+    assert base.calls == 1  # regenerated once, not five times
+    assert cached.stats["failure_hits"] == 4
+    assert cached.stats["distinct_failures"] == 1
+
+
+def test_failure_caching_is_off_by_default() -> None:
+    """Default behaviour is unchanged for existing callers."""
+    from ocm.extraction.caching_extractor import CachingExtractor
+
+    base = _FailsOneInput("bad")
+    cached = CachingExtractor(base)
+    for _ in range(3):
+        with pytest.raises(ExtractionError):
+            cached.extract("bad", "s1")
+    assert base.calls == 3
+
+
+def test_cached_failures_are_never_written_to_disk(tmp_path) -> None:
+    """A transient fault must not poison a cache that outlives the process."""
+    import json
+
+    from ocm.extraction.caching_extractor import CachingExtractor
+
+    path = tmp_path / "cache.json"
+    cached = CachingExtractor(
+        _FailsOneInput("bad"), cache_path=str(path), cache_failures=True
+    )
+    with pytest.raises(ExtractionError):
+        cached.extract("bad", "s1")
+    cached.extract("good", "s2")
+    cached.save()
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert len(payload) == 1  # only the success was persisted

@@ -124,7 +124,10 @@ def _build_extractor(
         base, tolerate_environment_errors=tolerate_extraction_errors
     )
     # Greedy decoding makes memoization exact, so the cache only changes timing.
-    return CachingExtractor(strict, cache_path=cache_path)
+    # cache_failures keeps every arm on the identical extraction outcome for an
+    # unparseable input, instead of re-generating it once per arm and relying on
+    # repeat greedy decoding being bit-identical.
+    return CachingExtractor(strict, cache_path=cache_path, cache_failures=True)
 
 
 #: Probe inputs for the preflight check. Taken verbatim from the benchmark's own
@@ -426,14 +429,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     extraction_stats = _strict_stats(extractor)
     if extraction_stats:
         print(
-            f"\nextraction: {extraction_stats['calls']} call(s), "
-            f"{extraction_stats['model_failures']} unparseable "
-            f"({extraction_stats['model_failure_rate']:.1%})",
+            f"\nextraction: {extraction_stats['distinct_inputs']} distinct input(s), "
+            f"{extraction_stats['distinct_unparseable_inputs']} unparseable "
+            f"({extraction_stats['unparseable_input_rate']:.1%}); "
+            f"{extraction_stats['calls']} generation call(s)",
             flush=True,
         )
         for example in extraction_stats["model_failure_examples"]:
             print(f"  e.g. {example}", flush=True)
-        if extraction_stats["model_failure_rate"] > 0.05:
+        if extraction_stats["unparseable_input_rate"] > 0.05:
             print(
                 "  WARNING: over 5% of extractions were unparseable, so memory is "
                 "under-populated relative to OCMR's published run. Check the "
