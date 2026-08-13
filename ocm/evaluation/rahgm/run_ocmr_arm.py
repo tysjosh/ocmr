@@ -71,7 +71,9 @@ DEFAULT_REVIEWERS: tuple[str, ...] = (
     "uphold_all",
     "random25",
     "random50",
+    "random67",
     "random75",
+    "random87",
 )
 
 #: OCMR's published Table III values, for the reproduction gate. Until the B0 and

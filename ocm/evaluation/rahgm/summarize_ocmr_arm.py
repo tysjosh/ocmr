@@ -341,9 +341,83 @@ def _frontier(report: dict[str, Any], agg: dict[str, dict[str, float]]) -> None:
         "  writes at random would keep. '±' is the combined seed-to-seed spread of\n"
         "  the reviewer and the interpolated frontier, and the last column is the\n"
         "  ratio between them. A verdict is claimed only past 2.0; anything inside\n"
-        "  is consistent with the reviewer choosing volume rather than writes.\n"
-        "  The frontier's own spread dominates here, so tightening it needs more\n"
-        "  seeds rather than a better reviewer."
+        "  is consistent with the reviewer choosing volume rather than writes."
+    )
+    _volume_matched(rows)
+
+
+def _volume_matched(rows: list[dict[str, Any]]) -> None:
+    """Compare each reviewer to a random control run at its own release volume.
+
+    Interpolating the frontier between bracketing rates contributes most of the
+    uncertainty above. A random control configured to release the same fraction
+    removes that term entirely, so the comparison rests only on the two arms being
+    contrasted. Cheaper and sharper than adding seeds.
+    """
+    controls = [
+        row
+        for row in rows
+        if row["random"] and row["released_frac"] == row["released_frac"]
+    ]
+    judged = [row for row in rows if not row["random"]]
+    if not controls or not judged:
+        print(
+            "\n  volume-matched controls absent from this run; the interpolated\n"
+            "  comparison above is the only one available."
+        )
+        return
+
+    # Pair each reviewer with whichever random control came closest to its own
+    # release volume, rather than a rate fixed in advance. Release volume depends
+    # on the escalated population, which shifts with extractor and scale, so a
+    # hardcoded pairing silently stops matching.
+    pairs = [
+        (
+            row["reviewer"],
+            row,
+            min(controls, key=lambda c: abs(c["released_frac"] - row["released_frac"])),
+        )
+        for row in judged
+    ]
+    if not pairs:
+        print(
+            "\n  volume-matched controls absent from this run; the interpolated\n"
+            "  comparison above is the only one available."
+        )
+        return
+
+    print("\n  volume-matched comparison (no interpolation):")
+    print(
+        f"    {'reviewer':12s} {'released':>9s} {'kept':>7s} | "
+        f"{'control':10s} {'released':>9s} {'kept':>7s} | {'excess':>8s} {'±':>6s} "
+        f"{'ratio':>6s}  verdict"
+    )
+    for reviewer, row, control in pairs:
+        gap = abs(row["released_frac"] - control["released_frac"])
+        excess = row["kept"] - control["kept"]
+        combined = (row["kept_sd"] ** 2 + control["kept_sd"] ** 2) ** 0.5
+        ratio = (excess / combined) if combined else float("nan")
+        if gap > 0.06:
+            verdict = f"volumes differ by {gap:.0%}, not matched"
+        elif not (ratio == ratio):
+            verdict = "indeterminate"
+        elif ratio > 2:
+            verdict = "DISCRIMINATES"
+        elif ratio < -2:
+            verdict = "ANTI-SELECTIVE (worse than chance)"
+        else:
+            verdict = "no evidence of discrimination"
+        print(
+            f"    {reviewer:12s} {row['released_frac']:9.1%} {row['kept']:7.0%} | "
+            f"{control['reviewer']:10s} {control['released_frac']:9.1%} "
+            f"{control['kept']:7.0%} | {excess:+8.0%} {combined:6.0%} {ratio:+6.1f}"
+            f"  {verdict}"
+        )
+    print(
+        "\n  This is the decisive test. If a reviewer releasing the same number of\n"
+        "  writes as a coin flip retains no more integrity than the coin flip, then\n"
+        "  its judgment about *which* writes to release carries no value, whatever\n"
+        "  its task-success number looks like."
     )
 
 
