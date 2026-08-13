@@ -286,16 +286,47 @@ def _render_gate(gate: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _strict_stats(extractor: Any) -> dict[str, Any] | None:
-    """Pull the :class:`StrictExtractor` counters out from under the cache."""
+def _find(extractor: Any, class_name: str) -> Any:
+    """Walk the wrapper chain for a component by class name."""
     node = extractor
-    for _ in range(4):  # walk a short wrapper chain
+    for _ in range(4):
         if node is None:
             return None
-        if type(node).__name__ == "StrictExtractor":
-            return node.stats
+        if type(node).__name__ == class_name:
+            return node
         node = getattr(node, "_base", None)
     return None
+
+
+def _strict_stats(extractor: Any) -> dict[str, Any] | None:
+    """Extraction counters, with the failure rate taken over the whole corpus.
+
+    The rate has to be computed at the cache boundary. :class:`StrictExtractor`
+    sits inside the cache and therefore only ever sees misses; on a warm cache
+    every success is a hit and only the previously-failing inputs are retried, so
+    a rate computed from its own counters reads 100% no matter how healthy the
+    run was. The honest denominator is the number of distinct inputs the cache
+    was asked for.
+    """
+    strict = _find(extractor, "StrictExtractor")
+    if strict is None:
+        return None
+    stats = dict(strict.stats)
+    cache = _find(extractor, "CachingExtractor")
+    if cache is not None:
+        cache_stats = cache.stats
+        requested = cache_stats.get("distinct_requested", 0)
+        failed = max(
+            stats.get("distinct_unparseable_inputs", 0),
+            cache_stats.get("distinct_failures", 0),
+        )
+        stats["distinct_corpus_inputs"] = requested
+        stats["distinct_unparseable_inputs"] = failed
+        stats["unparseable_input_rate"] = (failed / requested) if requested else 0.0
+        stats["cache"] = cache_stats
+    else:
+        stats["distinct_corpus_inputs"] = stats.get("distinct_inputs", 0)
+    return stats
 
 
 def _mean(values: Sequence[float]) -> float:
@@ -552,10 +583,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     extraction_stats = _strict_stats(extractor)
     if extraction_stats:
         print(
-            f"\nextraction: {extraction_stats['distinct_inputs']} distinct input(s), "
+            f"\nextraction: {extraction_stats['distinct_corpus_inputs']} distinct "
+            f"corpus input(s), "
             f"{extraction_stats['distinct_unparseable_inputs']} unparseable "
             f"({extraction_stats['unparseable_input_rate']:.1%}); "
-            f"{extraction_stats['calls']} generation call(s)",
+            f"{extraction_stats['calls']} generation call(s) this run",
             flush=True,
         )
         for example in extraction_stats["model_failure_examples"]:
