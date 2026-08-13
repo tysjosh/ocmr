@@ -250,11 +250,16 @@ def _frontier(report: dict[str, Any], agg: dict[str, dict[str, float]]) -> None:
             continue
         reviewer = name.split(":", 1)[-1]
         kept = ((ungoverned - values["contradiction_rate_mean"]) / gain) if gain else float("nan")
+        # Seed-to-seed spread on the contradiction rate, expressed on the same
+        # scale as `kept`, so an excess can be read against its own noise instead
+        # of against an arbitrary threshold.
+        kept_sd = (values["contradiction_rate_sd"] / gain) if gain else float("nan")
         rows.append(
             {
                 "reviewer": reviewer,
                 "released_frac": _released_fraction(report, name),
                 "kept": kept,
+                "kept_sd": kept_sd,
                 "task": values["task_success_mean"],
                 "random": reviewer.startswith("random") or reviewer in ("release_all", "uphold_all"),
             }
@@ -267,50 +272,152 @@ def _frontier(report: dict[str, Any], agg: dict[str, dict[str, float]]) -> None:
         [r for r in rows if r["random"]], key=lambda r: r["released_frac"]
     )
     print("  no-skill controls (release without judgment):")
-    print(f"    {'reviewer':12s} {'released':>9s} {'kept':>7s} {'task':>7s}")
+    print(f"    {'reviewer':12s} {'released':>9s} {'kept':>7s} {'±sd':>6s} {'task':>7s}")
     for row in controls:
         print(
             f"    {row['reviewer']:12s} {row['released_frac']:9.1%} "
-            f"{row['kept']:7.0%} {row['task']:7.2f}"
+            f"{row['kept']:7.0%} {row['kept_sd']:6.0%} {row['task']:7.2f}"
         )
 
-    def interpolate(fraction: float) -> float:
-        """Integrity a no-skill reviewer would keep at this release fraction."""
+    def interpolate(fraction: float) -> tuple[float, float]:
+        """No-skill retention at this release fraction, and its uncertainty.
+
+        The frontier is a linear interpolation between the two bracketing controls,
+        so its uncertainty inherits theirs. Returned so an excess can be judged
+        against noise rather than a fixed cutoff.
+        """
         if not controls or fraction != fraction:
-            return float("nan")
-        pts = [(c["released_frac"], c["kept"]) for c in controls if c["released_frac"] == c["released_frac"]]
+            return float("nan"), float("nan")
+        pts = [
+            (c["released_frac"], c["kept"], c["kept_sd"])
+            for c in controls
+            if c["released_frac"] == c["released_frac"]
+        ]
         if len(pts) < 2:
-            return float("nan")
+            return float("nan"), float("nan")
         if fraction <= pts[0][0]:
-            return pts[0][1]
+            return pts[0][1], pts[0][2]
         if fraction >= pts[-1][0]:
-            return pts[-1][1]
-        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            return pts[-1][1], pts[-1][2]
+        for (x0, y0, s0), (x1, y1, s1) in zip(pts, pts[1:]):
             if x0 <= fraction <= x1:
                 span = (x1 - x0) or 1.0
-                return y0 + (y1 - y0) * (fraction - x0) / span
-        return float("nan")
+                w = (fraction - x0) / span
+                # Variance of a linear interpolation of two independent estimates.
+                sd = (((1 - w) * s0) ** 2 + (w * s1) ** 2) ** 0.5
+                return y0 + (y1 - y0) * w, sd
+        return float("nan"), float("nan")
 
     print("\n  judgment-based reviewers vs the frontier at their own release rate:")
-    print(f"    {'reviewer':12s} {'released':>9s} {'kept':>7s} {'no-skill':>9s} {'excess':>8s}  verdict")
+    print(
+        f"    {'reviewer':12s} {'released':>9s} {'kept':>7s} {'no-skill':>9s} "
+        f"{'excess':>8s} {'±':>6s} {'ratio':>6s}  verdict"
+    )
     for row in rows:
         if row["random"]:
             continue
-        expected = interpolate(row["released_frac"])
+        expected, expected_sd = interpolate(row["released_frac"])
         excess = row["kept"] - expected
-        verdict = (
-            "no better than chance"
-            if not (excess == excess) or abs(excess) < 0.05
-            else ("DISCRIMINATES" if excess > 0 else "worse than chance")
-        )
+        # Combined spread of the reviewer and the interpolated frontier. Two of
+        # these is the bar for calling an effect real; anything inside it is
+        # consistent with no discrimination at all.
+        combined = (row["kept_sd"] ** 2 + expected_sd ** 2) ** 0.5
+        if not (excess == excess) or not (combined == combined):
+            verdict = "indeterminate"
+        elif excess > 2 * combined:
+            verdict = "DISCRIMINATES"
+        elif excess < -2 * combined:
+            verdict = "ANTI-SELECTIVE (worse than chance)"
+        else:
+            verdict = "no evidence of discrimination"
+        ratio = (excess / combined) if combined else float("nan")
         print(
             f"    {row['reviewer']:12s} {row['released_frac']:9.1%} "
-            f"{row['kept']:7.0%} {expected:9.0%} {excess:+8.0%}  {verdict}"
+            f"{row['kept']:7.0%} {expected:9.0%} {excess:+8.0%} {combined:6.0%} "
+            f"{ratio:+6.1f}  {verdict}"
         )
     print(
         "\n  'excess' is integrity kept above what releasing the same number of\n"
-        "  writes at random would keep. Near zero means the reviewer is choosing\n"
-        "  volume, not choosing writes, and the adjudication claim does not hold."
+        "  writes at random would keep. '±' is the combined seed-to-seed spread of\n"
+        "  the reviewer and the interpolated frontier, and the last column is the\n"
+        "  ratio between them. A verdict is claimed only past 2.0; anything inside\n"
+        "  is consistent with the reviewer choosing volume rather than writes."
+    )
+    _volume_matched(rows)
+
+
+def _volume_matched(rows: list[dict[str, Any]]) -> None:
+    """Compare each reviewer to a random control run at its own release volume.
+
+    Interpolating the frontier between bracketing rates contributes most of the
+    uncertainty above. A random control configured to release the same fraction
+    removes that term entirely, so the comparison rests only on the two arms being
+    contrasted. Cheaper and sharper than adding seeds.
+    """
+    controls = [
+        row
+        for row in rows
+        if row["random"] and row["released_frac"] == row["released_frac"]
+    ]
+    judged = [row for row in rows if not row["random"]]
+    if not controls or not judged:
+        print(
+            "\n  volume-matched controls absent from this run; the interpolated\n"
+            "  comparison above is the only one available."
+        )
+        return
+
+    # Pair each reviewer with whichever random control came closest to its own
+    # release volume, rather than a rate fixed in advance. Release volume depends
+    # on the escalated population, which shifts with extractor and scale, so a
+    # hardcoded pairing silently stops matching.
+    pairs = [
+        (
+            row["reviewer"],
+            row,
+            min(controls, key=lambda c: abs(c["released_frac"] - row["released_frac"])),
+        )
+        for row in judged
+    ]
+    if not pairs:
+        print(
+            "\n  volume-matched controls absent from this run; the interpolated\n"
+            "  comparison above is the only one available."
+        )
+        return
+
+    print("\n  volume-matched comparison (no interpolation):")
+    print(
+        f"    {'reviewer':12s} {'released':>9s} {'kept':>7s} | "
+        f"{'control':10s} {'released':>9s} {'kept':>7s} | {'excess':>8s} {'±':>6s} "
+        f"{'ratio':>6s}  verdict"
+    )
+    for reviewer, row, control in pairs:
+        gap = abs(row["released_frac"] - control["released_frac"])
+        excess = row["kept"] - control["kept"]
+        combined = (row["kept_sd"] ** 2 + control["kept_sd"] ** 2) ** 0.5
+        ratio = (excess / combined) if combined else float("nan")
+        if gap > 0.06:
+            verdict = f"volumes differ by {gap:.0%}, not matched"
+        elif not (ratio == ratio):
+            verdict = "indeterminate"
+        elif ratio > 2:
+            verdict = "DISCRIMINATES"
+        elif ratio < -2:
+            verdict = "ANTI-SELECTIVE (worse than chance)"
+        else:
+            verdict = "no evidence of discrimination"
+        print(
+            f"    {reviewer:12s} {row['released_frac']:9.1%} {row['kept']:7.0%} | "
+            f"{control['reviewer']:10s} {control['released_frac']:9.1%} "
+            f"{control['kept']:7.0%} | {excess:+8.0%} {combined:6.0%} {ratio:+6.1f}"
+            f"  {verdict}"
+        )
+    print(
+        "\n  This is the decisive test. If a reviewer releasing the same number of\n"
+        "  writes as a coin flip retains no more integrity than the coin flip, then\n"
+        "  its judgment about *which* writes to release carries no value, whatever\n"
+        "  its task-success number looks like."
     )
 
 

@@ -223,7 +223,13 @@ def make_random_reviewer(release_probability: float, seed: int = 20260812) -> Re
 
 #: Release rates for the no-skill frontier. 0.0 and 1.0 are omitted because
 #: ``uphold_all`` and ``release_all`` already cover those endpoints exactly.
-RANDOM_RELEASE_RATES: tuple[float, ...] = (0.25, 0.5, 0.75)
+#:
+#: 0.67 and 0.87 are not part of an even sweep: they match the release volumes
+#: measured for ``oracle`` (66.6%) and ``identity`` (87.0%). Comparing a reviewer
+#: against a random control at *its own* volume removes the interpolation between
+#: bracketing rates, which is what dominated the uncertainty when the frontier had
+#: to be interpolated. It buys precision far more cheaply than adding seeds.
+RANDOM_RELEASE_RATES: tuple[float, ...] = (0.25, 0.5, 0.67, 0.75, 0.87)
 
 #: Reviewer registry. ``release_all``, ``uphold_all`` and the ``random_*`` rows are
 #: controls that bound the measurement; only ``identity`` is deployable, and
@@ -234,9 +240,16 @@ REVIEWERS: dict[str, Reviewer] = {
     "release_all": release_all_reviewer,
     "uphold_all": uphold_all_reviewer,
     **{
-        f"random{int(rate * 100)}": make_random_reviewer(rate)
+        f"random{int(round(rate * 100))}": make_random_reviewer(rate)
         for rate in RANDOM_RELEASE_RATES
     },
+}
+
+#: Random control matched to each judgment-based reviewer's measured release
+#: volume, so the comparison needs no interpolation.
+VOLUME_MATCHED_CONTROL: dict[str, str] = {
+    "oracle": "random67",
+    "identity": "random87",
 }
 
 

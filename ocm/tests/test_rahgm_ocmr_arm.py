@@ -88,7 +88,9 @@ def test_reviewers_are_registered():
         "uphold_all",
         "random25",
         "random50",
+        "random67",
         "random75",
+        "random87",
     }
 
 
