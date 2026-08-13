@@ -632,6 +632,170 @@ def collect_benchmark_cases(
     return cases
 
 
+def _fit_from_cases(
+    cases: Sequence["BenchmarkCase"], *, iterations: int = 3000
+) -> dict[str, Any]:
+    """Fit weights and thresholds from already-collected routing cases.
+
+    Shared by both fitting modes so the labelling rule and threshold selection
+    cannot drift apart between them.
+    """
+    from ocm.governance.policy import RoutingCase as _RoutingCase
+    from ocm.governance.policy import TrainingSample, fit_policy, select_thresholds
+
+    # Labels come from the explicit escalation flag, not from the tier. A genuine
+    # quarantine is a negative: OCMR was right to hold it and no human was needed.
+    samples = [
+        TrainingSample(
+            features=c.case.features,
+            label=1 if c.should_escalate else 0,
+            consequential=c.case.consequential,
+        )
+        for c in cases
+    ]
+    fit = fit_policy(samples, iterations=iterations)
+    selection_cases = [
+        _RoutingCase(
+            features=c.case.features,
+            guards=c.case.guards,
+            gold_tier=Tier.review if c.should_escalate else Tier.accept,
+            consequential=c.case.consequential,
+        )
+        for c in cases
+    ]
+    selection = select_thresholds(selection_cases, fit.params)
+    params = fit.params.with_thresholds(selection.tau_l, selection.tau_h).project()
+    n_quarantined = sum(1 for c in cases if c.quarantined)
+    n_false = sum(1 for c in cases if c.false_quarantine)
+    return {
+        "params": params,
+        "fit": fit.as_dict(),
+        "thresholds": selection.as_dict(),
+        "n_fit_cases": len(cases),
+        "n_fit_quarantined": n_quarantined,
+        "n_fit_false_quarantine": n_false,
+        "n_fit_genuine_quarantine": n_quarantined - n_false,
+    }
+
+
+def is_anchor(example: BenchmarkExample) -> bool:
+    """Whether this is one of the six hand-authored anchor examples.
+
+    Anchors are injected verbatim by :class:`BenchmarkGenerator`, so they are
+    **byte-identical across every seed**. Pooling one seed's examples to fit a
+    policy that is then evaluated on another seed would therefore train on the
+    exact anchor trajectories it later scores. They are excluded from any fitting
+    pool and kept in evaluation, so the evaluation set stays the published 156.
+    """
+    return example.id.startswith("anchor-")
+
+
+def fit_policy_across_seeds(
+    held_out_seed: int,
+    *,
+    fit_seeds: Sequence[int],
+    per_category: int = 25,
+    iterations: int = 3000,
+    extractor: Any = None,
+    embeddings: Any = None,
+    settings_factory: Any = None,
+    case_cache: dict[int, list["BenchmarkCase"]] | None = None,
+) -> dict[str, Any]:
+    """Fit the escalation policy on other seeds, leaving one seed wholly unseen.
+
+    The dev-split mode in :func:`fit_policy_on_benchmark` costs 40% of the
+    benchmark: arms are then scored on the remaining 60%, while OCMR's published
+    Table III is scored on all 156 examples per seed. A row measured on a subset is
+    not strictly comparable to the published rows.
+
+    Fitting across seeds removes that cost. Seeds sample different names, projects,
+    and tasks, so a policy fitted on other seeds has not seen the held-out seed's
+    trajectories, and every arm can be scored on its full benchmark.
+
+    Args:
+        held_out_seed: The seed reserved for evaluation; contributes nothing here.
+        fit_seeds: Seeds pooled to fit. ``held_out_seed`` is dropped if present.
+        case_cache: Optional ``seed -> cases`` map, reused across calls. A seed's
+            cases do not depend on which seed is held out, so collecting them once
+            keeps leave-one-seed-out at the same cost as a single pass per seed.
+
+    Returns:
+        The fitted parameters, the fit diagnostics, and a leakage audit reporting
+        any session text shared between the fitting pool and the held-out seed.
+    """
+    from ocm.evaluation.benchmark import BenchmarkGenerator
+
+    pool_seeds = [s for s in fit_seeds if s != held_out_seed]
+    if not pool_seeds:
+        raise ValueError(
+            "leave-one-seed-out fitting needs at least two seeds; "
+            f"got fit_seeds={list(fit_seeds)} with held_out_seed={held_out_seed}"
+        )
+
+    cache = case_cache if case_cache is not None else {}
+    pooled: list[BenchmarkCase] = []
+    fit_texts: set[str] = set()
+    for seed in pool_seeds:
+        if seed not in cache:
+            examples = [
+                e
+                for e in BenchmarkGenerator(seed=seed).generate(
+                    per_category=per_category
+                )
+                if not is_anchor(e)
+            ]
+            cache[seed] = collect_benchmark_cases(
+                examples,
+                extractor=extractor,
+                embeddings=embeddings,
+                settings_factory=settings_factory,
+            )
+            cache[f"texts:{seed}"] = {  # type: ignore[index]
+                s.input for e in examples for s in e.sessions
+            }
+        pooled.extend(cache[seed])
+        fit_texts |= cache.get(f"texts:{seed}", set())  # type: ignore[arg-type]
+
+    result = _fit_from_cases(pooled, iterations=iterations)
+
+    # Example ids collide across seeds (`longitudinal-000` exists in every seed
+    # with different content), so leakage has to be audited on session text rather
+    # than on ids. Small vocabularies make some coincidental overlap likely, so it
+    # is reported rather than asserted away.
+    held_examples = BenchmarkGenerator(seed=held_out_seed).generate(
+        per_category=per_category
+    )
+    held_texts = {
+        s.input for e in held_examples if not is_anchor(e) for s in e.sessions
+    }
+    shared = fit_texts & held_texts
+    result.update(
+        {
+            "fit_mode": "leave-one-seed-out",
+            "held_out_seed": held_out_seed,
+            "fit_seeds": pool_seeds,
+            "n_eval_examples": len(held_examples),
+            "anchors_excluded_from_fit": True,
+            "leakage_audit": {
+                "n_fit_texts": len(fit_texts),
+                "n_held_texts": len(held_texts),
+                "n_shared_texts": len(shared),
+                "shared_fraction_of_held": (
+                    len(shared) / len(held_texts) if held_texts else 0.0
+                ),
+                "note": (
+                    "Session text shared between the fitting pool and the held-out "
+                    "seed, arising from the generator's small name/project/task "
+                    "vocabularies. Anchors are excluded from the pool because they "
+                    "are byte-identical across seeds."
+                ),
+            },
+            "eval_examples": held_examples,
+        }
+    )
+    return result
+
+
 def fit_policy_on_benchmark(
     examples: Sequence[BenchmarkExample],
     *,
@@ -650,12 +814,6 @@ def fit_policy_on_benchmark(
     see whether the features can separate false from genuine quarantines at all
     before reading any test-set result.
     """
-    from ocm.governance.policy import (
-        build_training_samples,
-        fit_policy,
-        select_thresholds,
-    )
-
     by_category: dict[str, list[BenchmarkExample]] = {}
     for example in examples:
         by_category.setdefault(example.category, []).append(example)
@@ -668,55 +826,27 @@ def fit_policy_on_benchmark(
     dev_ids = {e.id for e in dev}
     test = [e for e in examples if e.id not in dev_ids]
 
-    from ocm.governance.policy import TrainingSample
-
     dev_cases = collect_benchmark_cases(
         dev, extractor=extractor, embeddings=embeddings, settings_factory=settings_factory
     )
-    n_quarantined = sum(1 for c in dev_cases if c.quarantined)
-    n_false = sum(1 for c in dev_cases if c.false_quarantine)
-
-    # Labels come from the explicit escalation flag, not from the tier. A genuine
-    # quarantine is a negative: OCMR was right to hold it and no human was needed.
-    samples = [
-        TrainingSample(
-            features=c.case.features,
-            label=1 if c.should_escalate else 0,
-            consequential=c.case.consequential,
-        )
-        for c in dev_cases
-    ]
-    fit = fit_policy(samples, iterations=iterations)
-
-    # Threshold selection needs the same label, so the routing cases are rebuilt
-    # with gold_tier expressing "should escalate" rather than "what OCMR did".
-    from ocm.governance.policy import RoutingCase as _RoutingCase
-
-    selection_cases = [
-        _RoutingCase(
-            features=c.case.features,
-            guards=c.case.guards,
-            gold_tier=Tier.review if c.should_escalate else Tier.accept,
-            consequential=c.case.consequential,
-        )
-        for c in dev_cases
-    ]
-    selection = select_thresholds(selection_cases, fit.params)
-    params = fit.params.with_thresholds(selection.tau_l, selection.tau_h).project()
-
-    return {
-        "params": params,
-        "fit": fit.as_dict(),
-        "thresholds": selection.as_dict(),
-        "n_dev_examples": len(dev),
-        "n_test_examples": len(test),
-        "n_dev_cases": len(dev_cases),
-        "n_dev_quarantined": n_quarantined,
-        "n_dev_false_quarantine": n_false,
-        "n_dev_genuine_quarantine": n_quarantined - n_false,
-        "dev_examples": dev,
-        "test_examples": test,
-    }
+    result = _fit_from_cases(dev_cases, iterations=iterations)
+    result.update(
+        {
+            "fit_mode": "dev-split",
+            "n_dev_examples": len(dev),
+            "n_test_examples": len(test),
+            # Retained under the historical key names so existing callers and
+            # artifacts keep working.
+            "n_dev_cases": result["n_fit_cases"],
+            "n_dev_quarantined": result["n_fit_quarantined"],
+            "n_dev_false_quarantine": result["n_fit_false_quarantine"],
+            "n_dev_genuine_quarantine": result["n_fit_genuine_quarantine"],
+            "dev_examples": dev,
+            "test_examples": test,
+            "eval_examples": test,
+        }
+    )
+    return result
 
 
 def separability_report(
