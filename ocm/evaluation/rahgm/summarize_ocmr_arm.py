@@ -64,6 +64,50 @@ def _header(title: str) -> None:
     print(f"\n{'=' * 78}\n{title}\n{'=' * 78}", flush=True)
 
 
+def _fit_protocol(report: dict[str, Any]) -> None:
+    """How the policy was fitted, and what the arms were therefore scored on.
+
+    Reported before the gate because it determines whether the rows are on the
+    same population as OCMR's published Table III. A dev-split run scores arms on
+    60% of the benchmark, which is a fair sample but not the published population.
+    """
+    _header("0. FITTING PROTOCOL")
+    summaries = report.get("fit_summaries") or []
+    mode = (report.get("config") or {}).get("fit")
+    if not summaries:
+        print(
+            f"  fit mode: {mode or 'dev-split (implied; predates the --fit flag)'}\n"
+            "  Arms were scored on the held-out 60% split, so these rows are not on\n"
+            "  the same population as the published Table III rows."
+        )
+        return
+
+    modes = {s.get("fit_mode") for s in summaries}
+    n_eval = {s.get("n_eval_examples") for s in summaries}
+    print(f"  fit mode          : {'/'.join(sorted(m or '?' for m in modes))}")
+    print(f"  examples scored   : {sorted(n for n in n_eval if n)}")
+    print(f"  fit cases pooled  : {[s.get('n_fit_cases') for s in summaries]}")
+
+    audits = [s.get("leakage_audit") for s in summaries if s.get("leakage_audit")]
+    if not audits:
+        return
+    shared = [a["shared_fraction_of_held"] for a in audits]
+    print(
+        f"  text leakage      : {_mean(shared):.1%} of held-out session text also "
+        f"appears in the fitting pool\n"
+        "                      (range "
+        f"{min(shared):.1%}-{max(shared):.1%})"
+    )
+    print(
+        "\n  Leakage is not zero. Seeds draw names, projects, and tasks from small\n"
+        "  vocabularies, so some sentences recur across seeds by chance. The six\n"
+        "  hand-authored anchors are byte-identical across seeds and are excluded\n"
+        "  from the fitting pool for that reason. Given separability is ~0 and the\n"
+        "  router escalates the whole quarantine set, the fitted parameters carry\n"
+        "  little influence, but the overlap should be reported, not assumed away."
+    )
+
+
 def _gate(report: dict[str, Any]) -> None:
     _header("1. REPRODUCTION GATE")
     gate = report.get("reproduction_gate")
@@ -520,6 +564,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     print(f"elapsed: {report.get('elapsed_seconds')}s")
 
+    _fit_protocol(report)
     _gate(report)
     _extraction(report, args.path)
     agg = _arms(report)

@@ -53,6 +53,7 @@ from ocm.evaluation.experiment import make_settings_factory
 from ocm.evaluation.rahgm.ocmr_arm import (
     ARMS,
     REVIEWERS,
+    fit_policy_across_seeds,
     fit_policy_on_benchmark,
     run_ocmr_escalation_arm,
     separability_report,
@@ -443,6 +444,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="extraction cache JSON path; makes a qwen run cheap and resumable",
     )
+    parser.add_argument(
+        "--fit",
+        choices=("dev-split", "leave-one-seed-out"),
+        default="leave-one-seed-out",
+        help=(
+            "how the escalation policy is fitted. 'dev-split' holds out 40%% of "
+            "each seed's benchmark, so arms are scored on the remaining 60%% and "
+            "are not on the same population as OCMR's published Table III. "
+            "'leave-one-seed-out' fits on the other seeds and scores every arm on "
+            "the full 156-example benchmark, matching the published rows. Requires "
+            "at least two seeds."
+        ),
+    )
     parser.add_argument("--max-new-tokens", type=int, default=1024)
     parser.add_argument("--out", default="local_results/ocmr_arm")
     parser.add_argument("--no-write", action="store_true")
@@ -543,23 +557,73 @@ def main(argv: Sequence[str] | None = None) -> int:
         values["reviews"].append(arm["review_rate_per_100_writes"])
         values["halluc"].append(checks.get("memory_induced_hallucination_rate"))
 
+    if args.fit == "leave-one-seed-out" and len(seeds) < 2:
+        parser.error(
+            "--fit leave-one-seed-out needs at least two seeds; pass more seeds or "
+            "use --fit dev-split"
+        )
+    # Cases for a seed do not depend on which seed is held out, so they are
+    # collected once and reused across every fold.
+    case_cache: dict[int, Any] = {}
+    fit_summaries: list[dict[str, Any]] = []
+
     for seed in seeds:
         print(f"[seed {seed}] generating benchmark ...", flush=True)
         examples = BenchmarkGenerator(seed=seed).generate(
             per_category=args.per_category
         )
-        print(f"[seed {seed}] fitting policy on the development split ...", flush=True)
-        fitted = fit_policy_on_benchmark(
-            examples,
-            extractor=extractor,
-            embeddings=embeddings,
-            settings_factory=settings_factory,
+        if args.fit == "leave-one-seed-out":
+            print(
+                f"[seed {seed}] fitting policy on the other {len(seeds) - 1} seed(s) "
+                f"...",
+                flush=True,
+            )
+            fitted = fit_policy_across_seeds(
+                seed,
+                fit_seeds=seeds,
+                per_category=args.per_category,
+                extractor=extractor,
+                embeddings=embeddings,
+                settings_factory=settings_factory,
+                case_cache=case_cache,
+            )
+            audit = fitted["leakage_audit"]
+            print(
+                f"[seed {seed}] evaluating on all {fitted['n_eval_examples']} "
+                f"examples; fit pool shares {audit['n_shared_texts']} of "
+                f"{audit['n_held_texts']} session texts "
+                f"({audit['shared_fraction_of_held']:.1%})",
+                flush=True,
+            )
+        else:
+            print(
+                f"[seed {seed}] fitting policy on the development split ...",
+                flush=True,
+            )
+            fitted = fit_policy_on_benchmark(
+                examples,
+                extractor=extractor,
+                embeddings=embeddings,
+                settings_factory=settings_factory,
+            )
+        eval_examples = fitted["eval_examples"]
+        fit_summaries.append(
+            {
+                "seed": seed,
+                "fit_mode": fitted["fit_mode"],
+                "n_eval_examples": len(eval_examples),
+                "n_fit_cases": fitted["n_fit_cases"],
+                "n_fit_quarantined": fitted["n_fit_quarantined"],
+                "n_fit_false_quarantine": fitted["n_fit_false_quarantine"],
+                "thresholds": fitted["thresholds"],
+                "leakage_audit": fitted.get("leakage_audit"),
+            }
         )
         separability.append(
             {
                 "seed": seed,
                 **separability_report(
-                    fitted["test_examples"],
+                    eval_examples,
                     fitted["params"],
                     extractor=extractor,
                     embeddings=embeddings,
@@ -572,7 +636,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for reviewer in reviewers:
             print(f"[seed {seed}] arms with reviewer={reviewer} ...", flush=True)
             report = run_ocmr_escalation_arm(
-                examples=fitted["test_examples"],
+                examples=eval_examples,
                 seed=seed,
                 arms=arms,
                 reviewer=reviewer,
@@ -651,8 +715,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "embedding_model": (
                 args.embedding_model if embedding_kind == "local" else None
             ),
+            "fit": args.fit,
         },
         "reproduction_gate": gate,
+        "fit_summaries": fit_summaries,
         "aggregate": {
             name: {
                 "task_success_mean": _mean(v["task"]),
