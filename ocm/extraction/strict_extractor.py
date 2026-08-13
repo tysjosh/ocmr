@@ -133,6 +133,8 @@ class StrictExtractor:
     def __init__(self, base: Any, *, tolerate_environment_errors: bool = False) -> None:
         self._base = base
         self.version = getattr(base, "version", "strict-extractor")
+        #: Forwarded so a cache further out can still see the model's identity.
+        self.fingerprint = getattr(base, "fingerprint", None)
         self.tolerate_environment_errors = tolerate_environment_errors
         self.calls = 0
         self.model_failures = 0

@@ -151,7 +151,19 @@ def _build_extractor(
     # cache_failures keeps every arm on the identical extraction outcome for an
     # unparseable input, instead of re-generating it once per arm and relying on
     # repeat greedy decoding being bit-identical.
-    return CachingExtractor(strict, cache_path=cache_path, cache_failures=True)
+    try:
+        cache = CachingExtractor(strict, cache_path=cache_path, cache_failures=True)
+    except ValueError as exc:  # fingerprint mismatch
+        raise SystemExit(f"\n[cache REFUSED]\n{exc}") from exc
+    print(f"[extractor] fingerprint {strict.fingerprint}", flush=True)
+    if cache.unversioned_cache:
+        print(
+            "[cache] WARNING: this cache file predates fingerprinting, so its "
+            "provenance cannot be verified. It is being trusted. Re-saving will "
+            f"stamp it with {strict.fingerprint}.",
+            flush=True,
+        )
+    return cache
 
 
 #: Probe inputs for the preflight check. Taken verbatim from the benchmark's own

@@ -80,6 +80,9 @@ class CachingExtractor:
         #: run's cache file, and the wrapped extractor only ever sees misses, so
         #: neither can tell you what fraction of the corpus failed.
         self._requested: set[str] = set()
+        #: True when the loaded file predates fingerprinting, so its provenance is
+        #: unverifiable. Surfaced by the runner rather than silently ignored.
+        self.unversioned_cache = False
         if cache_path:
             self._load()
 
@@ -140,26 +143,82 @@ class CachingExtractor:
 
     # -- persistence -------------------------------------------------------
     def save(self) -> None:
-        """Persist the cache to ``cache_path`` atomically (no-op without a path)."""
+        """Persist the cache to ``cache_path`` atomically (no-op without a path).
+
+        Writes the extractor's fingerprint alongside the entries so a later run can
+        refuse a cache produced by a different model. Reusing one silently is the
+        failure mode this guards: the key is only ``(source_ref, text)``, so
+        nothing about the model appears in it.
+        """
         if not self._cache_path:
             return
         os.makedirs(os.path.dirname(self._cache_path) or ".", exist_ok=True)
-        payload = {key: result.model_dump(mode="json") for key, result in self._cache.items()}
+        payload = {
+            "__meta__": {
+                "format": 2,
+                "fingerprint": self._fingerprint(),
+                "n_entries": len(self._cache),
+            },
+            "entries": {
+                key: result.model_dump(mode="json") for key, result in self._cache.items()
+            },
+        }
         tmp = self._cache_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(payload, fh)
         os.replace(tmp, self._cache_path)
         self._unsaved = 0
 
+    def _fingerprint(self) -> Optional[dict]:
+        """The wrapped extractor's identity, when it exposes one."""
+        value = getattr(self._base, "fingerprint", None)
+        return dict(value) if isinstance(value, dict) else None
+
     def _load(self) -> None:
-        """Load a previously persisted cache (ignored when absent/corrupt)."""
+        """Load a previously persisted cache, refusing a mismatched one.
+
+        Accepts the flat ``{key: result}`` layout written before fingerprints
+        existed, since a cache is expensive to rebuild. Such a file carries no
+        provenance, so it is loaded with a warning rather than silently trusted.
+
+        Raises:
+            ValueError: If the file records a fingerprint that differs from the
+                current extractor's. Continuing would mix generations from two
+                models into one result set, which no downstream check would catch.
+        """
         if not self._cache_path or not os.path.exists(self._cache_path):
             return
         try:
             with open(self._cache_path, "r", encoding="utf-8") as fh:
                 payload = json.load(fh)
-            self._cache = {
-                key: ExtractionResult.model_validate(value) for key, value in payload.items()
-            }
         except Exception:  # pragma: no cover - corrupt/partial file: start fresh
+            self._cache = {}
+            return
+
+        meta = payload.get("__meta__") if isinstance(payload, dict) else None
+        if isinstance(meta, dict):
+            entries = payload.get("entries") or {}
+            stored = meta.get("fingerprint")
+            current = self._fingerprint()
+            if stored and current and stored != current:
+                raise ValueError(
+                    "Extraction cache was produced by a different extractor and "
+                    "cannot be reused. The cache key is only (source_ref, text), so "
+                    "reusing it would silently mix generations from two models.\n"
+                    f"  cache:   {stored}\n"
+                    f"  current: {current}\n"
+                    f"  file:    {self._cache_path}\n"
+                    "Point --cache at a different path, or delete this file to "
+                    "re-extract."
+                )
+        else:
+            entries = payload
+            self.unversioned_cache = True
+
+        try:
+            self._cache = {
+                key: ExtractionResult.model_validate(value)
+                for key, value in entries.items()
+            }
+        except Exception:  # pragma: no cover - partial file: start fresh
             self._cache = {}

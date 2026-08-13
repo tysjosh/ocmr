@@ -280,7 +280,7 @@ def test_cached_failures_are_never_written_to_disk(tmp_path) -> None:
     cached.save()
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert len(payload) == 1  # only the success was persisted
+    assert len(payload["entries"]) == 1  # only the success was persisted
 
 
 # --------------------------------------------------------------------------- #

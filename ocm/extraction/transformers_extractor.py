@@ -38,6 +38,7 @@ which the write pipeline turns into a recorded validation failure (Req 3.3).
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any, Callable, Optional
 
@@ -143,6 +144,32 @@ class TransformersExtractor:
         self.max_new_tokens = max_new_tokens
         self.system_prompt = system_prompt
         self.version = version
+
+    # -- provenance --------------------------------------------------------
+    @property
+    def fingerprint(self) -> dict[str, str | int]:
+        """Everything that changes what this extractor emits for a given input.
+
+        ``version`` alone is a constant string, so it cannot distinguish a 14B run
+        from a 32B one. A cache keyed only on ``(source_ref, text)`` would happily
+        serve entries produced by a different model, and nothing would raise. This
+        is the identity a cache must compare against before reusing anything.
+        """
+        model_id = "unknown"
+        config = getattr(self.model, "config", None)
+        for attr in ("_name_or_path", "name_or_path"):
+            value = getattr(config, attr, None) or getattr(self.model, attr, None)
+            if value:
+                model_id = str(value)
+                break
+        return {
+            "version": self.version,
+            "model": model_id,
+            "max_new_tokens": int(self.max_new_tokens),
+            "prompt_sha256": hashlib.sha256(
+                self.system_prompt.encode("utf-8")
+            ).hexdigest()[:16],
+        }
 
     # -- public API --------------------------------------------------------
     def extract(self, text: str, source_ref: str) -> ExtractionResult:
