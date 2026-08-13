@@ -211,6 +211,109 @@ def _integrity(agg: dict[str, dict[str, float]]) -> None:
     )
 
 
+def _released_fraction(report: dict[str, Any], label: str) -> float:
+    """Mean fraction of escalated writes that a reviewer released."""
+    released: list[float] = []
+    arm, _, reviewer = label.partition(":")
+    for seed_entry in report.get("per_seed", []):
+        rep = (seed_entry.get("reviewers") or {}).get(reviewer)
+        if not rep:
+            continue
+        arm_report = (rep.get("arms") or {}).get(arm)
+        if not arm_report:
+            continue
+        escalated = arm_report.get("escalated") or 0
+        if escalated:
+            released.append(arm_report.get("released", 0) / escalated)
+    return _mean(released)
+
+
+def _frontier(report: dict[str, Any], agg: dict[str, dict[str, float]]) -> None:
+    """Does any reviewer beat releasing at random with the same volume?
+
+    Retention and recovery are both monotone in release volume, so an intermediate
+    pair of numbers is not by itself evidence of judgment. The random rows trace
+    what no discrimination achieves; a reviewer earns the word "adjudication" only
+    by retaining more integrity than the random row at its own release rate.
+    """
+    _header("7. NO-SKILL FRONTIER (does adjudication beat release volume?)")
+    if "B0" not in agg or "B3" not in agg:
+        print("  need B0 and B3")
+        return
+    ungoverned = agg["B0"]["contradiction_rate_mean"]
+    governed = agg["B3"]["contradiction_rate_mean"]
+    gain = ungoverned - governed
+
+    rows = []
+    for name, values in agg.items():
+        if not name.startswith("B3R"):
+            continue
+        reviewer = name.split(":", 1)[-1]
+        kept = ((ungoverned - values["contradiction_rate_mean"]) / gain) if gain else float("nan")
+        rows.append(
+            {
+                "reviewer": reviewer,
+                "released_frac": _released_fraction(report, name),
+                "kept": kept,
+                "task": values["task_success_mean"],
+                "random": reviewer.startswith("random") or reviewer in ("release_all", "uphold_all"),
+            }
+        )
+    if not rows:
+        print("  no B3R rows")
+        return
+
+    controls = sorted(
+        [r for r in rows if r["random"]], key=lambda r: r["released_frac"]
+    )
+    print("  no-skill controls (release without judgment):")
+    print(f"    {'reviewer':12s} {'released':>9s} {'kept':>7s} {'task':>7s}")
+    for row in controls:
+        print(
+            f"    {row['reviewer']:12s} {row['released_frac']:9.1%} "
+            f"{row['kept']:7.0%} {row['task']:7.2f}"
+        )
+
+    def interpolate(fraction: float) -> float:
+        """Integrity a no-skill reviewer would keep at this release fraction."""
+        if not controls or fraction != fraction:
+            return float("nan")
+        pts = [(c["released_frac"], c["kept"]) for c in controls if c["released_frac"] == c["released_frac"]]
+        if len(pts) < 2:
+            return float("nan")
+        if fraction <= pts[0][0]:
+            return pts[0][1]
+        if fraction >= pts[-1][0]:
+            return pts[-1][1]
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            if x0 <= fraction <= x1:
+                span = (x1 - x0) or 1.0
+                return y0 + (y1 - y0) * (fraction - x0) / span
+        return float("nan")
+
+    print("\n  judgment-based reviewers vs the frontier at their own release rate:")
+    print(f"    {'reviewer':12s} {'released':>9s} {'kept':>7s} {'no-skill':>9s} {'excess':>8s}  verdict")
+    for row in rows:
+        if row["random"]:
+            continue
+        expected = interpolate(row["released_frac"])
+        excess = row["kept"] - expected
+        verdict = (
+            "no better than chance"
+            if not (excess == excess) or abs(excess) < 0.05
+            else ("DISCRIMINATES" if excess > 0 else "worse than chance")
+        )
+        print(
+            f"    {row['reviewer']:12s} {row['released_frac']:9.1%} "
+            f"{row['kept']:7.0%} {expected:9.0%} {excess:+8.0%}  {verdict}"
+        )
+    print(
+        "\n  'excess' is integrity kept above what releasing the same number of\n"
+        "  writes at random would keep. Near zero means the reviewer is choosing\n"
+        "  volume, not choosing writes, and the adjudication claim does not hold."
+    )
+
+
 def _per_category(report: dict[str, Any]) -> None:
     _header("5. PER-CATEGORY TASK SUCCESS (mean over seeds)")
     # arm -> category -> [values across seeds and reviewers]
@@ -316,6 +419,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     _integrity(agg)
     _per_category(report)
     _selectivity(report, agg)
+    _frontier(report, agg)
     return 0
 
 

@@ -172,13 +172,67 @@ def uphold_all_reviewer(item: ReviewItem, context: ReviewContext) -> ReviewActio
     return ReviewAction.quarantine
 
 
-#: Reviewer registry. ``release_all`` and ``uphold_all`` are controls that bound
-#: the measurement; only ``identity`` is deployable, and ``oracle`` is a ceiling.
+def make_random_reviewer(release_probability: float, seed: int = 20260812) -> Reviewer:
+    """A reviewer that releases at a fixed rate, exercising no judgment.
+
+    This is the control the integrity-retention claim actually needs. ``identity``
+    keeps 28% of the contradiction gain while recovering 95% of the recall cost,
+    but retention and recovery are *both* monotone in release volume: hold nothing
+    and you keep everything at no recall, release everything and you keep nothing
+    at full recall. Any reviewer that releases some intermediate fraction lands
+    somewhere in between **without discriminating at all**.
+
+    Sweeping ``release_probability`` traces that no-skill frontier. A reviewer only
+    demonstrates judgment by sitting *above* it: retaining more integrity than a
+    coin flip that releases the same number of writes. Without this comparison,
+    "28% kept at 95% recovered" is not evidence of adjudication.
+
+    Args:
+        release_probability: Chance of releasing any given escalated write.
+        seed: Fixed so the control is reproducible across arms and seeds.
+    """
+    import random as _random
+
+    def reviewer(item: ReviewItem, context: ReviewContext) -> ReviewAction:
+        # Keyed on the write's identity rather than call order, so the same write
+        # gets the same verdict in every arm and the comparison stays paired.
+        conflicting = list(item.decision.features.incumbent_ids) or list(
+            item.ocmr_verdict.conflicting_ids
+        )
+        candidate = item.candidate
+        key = (
+            f"{context.example.id}|{candidate.subject_id}|{candidate.predicate}"
+            f"|{candidate.object_id}|{sorted(conflicting)}"
+        )
+        rng = _random.Random(f"{seed}|{key}")
+        if rng.random() >= release_probability:
+            return ReviewAction.quarantine
+        return ReviewAction.supersede if conflicting else ReviewAction.accept
+
+    reviewer.__name__ = f"random_{release_probability:.2f}_reviewer"
+    reviewer.__doc__ = (
+        f"Control: releases each escalated write with probability "
+        f"{release_probability:.2f}, without judgment."
+    )
+    return reviewer
+
+
+#: Release rates for the no-skill frontier. 0.0 and 1.0 are omitted because
+#: ``uphold_all`` and ``release_all`` already cover those endpoints exactly.
+RANDOM_RELEASE_RATES: tuple[float, ...] = (0.25, 0.5, 0.75)
+
+#: Reviewer registry. ``release_all``, ``uphold_all`` and the ``random_*`` rows are
+#: controls that bound the measurement; only ``identity`` is deployable, and
+#: ``oracle`` is a ceiling.
 REVIEWERS: dict[str, Reviewer] = {
     "identity": identity_reviewer,
     "oracle": oracle_reviewer,
     "release_all": release_all_reviewer,
     "uphold_all": uphold_all_reviewer,
+    **{
+        f"random{int(rate * 100)}": make_random_reviewer(rate)
+        for rate in RANDOM_RELEASE_RATES
+    },
 }
 
 

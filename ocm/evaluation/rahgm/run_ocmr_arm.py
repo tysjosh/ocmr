@@ -61,8 +61,18 @@ from ocm.evaluation.rahgm.ocmr_arm import (
 #: Seeds OCMR's published table uses.
 DEFAULT_SEEDS: tuple[int, ...] = (1337, 7, 42, 99, 2024)
 
-#: Reviewers to run by default: the deployable policy, the ceiling, and both controls.
-DEFAULT_REVIEWERS: tuple[str, ...] = ("identity", "oracle", "release_all", "uphold_all")
+#: Reviewers to run by default: the deployable policy, the ceiling, the two
+#: endpoint controls, and the no-skill frontier that the deployable policy has to
+#: beat to count as adjudication rather than release volume.
+DEFAULT_REVIEWERS: tuple[str, ...] = (
+    "identity",
+    "oracle",
+    "release_all",
+    "uphold_all",
+    "random25",
+    "random50",
+    "random75",
+)
 
 #: OCMR's published Table III values, for the reproduction gate. Until the B0 and
 #: B3 rows land near these, no B3R row can join that table: a mismatch means this

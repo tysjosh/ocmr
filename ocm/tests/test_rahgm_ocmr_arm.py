@@ -80,8 +80,16 @@ def _context(example, authored_by=None, expects_conflict=False) -> ReviewContext
 
 
 def test_reviewers_are_registered():
-    """The deployable reviewer, the ceiling, and both controls are available."""
-    assert set(REVIEWERS) == {"identity", "oracle", "release_all", "uphold_all"}
+    """The deployable reviewer, the ceiling, and every control are available."""
+    assert set(REVIEWERS) == {
+        "identity",
+        "oracle",
+        "release_all",
+        "uphold_all",
+        "random25",
+        "random50",
+        "random75",
+    }
 
 
 def test_release_volume_alone_does_not_preserve_the_integrity_property(examples):
@@ -336,3 +344,82 @@ def test_features_do_not_separate_false_from_genuine_quarantines(examples):
     assert report["lift_over_base_rate"] < 0.10, (
         "features now carry discriminating signal; revisit the selectivity claim"
     )
+
+
+# --------------------------------------------------------------------------- #
+# The no-skill control
+# --------------------------------------------------------------------------- #
+def _review_fixture(subject_id: str = "ent_alice", predicate: str = "OWNS"):
+    """A minimal stand-in for the fields a reviewer is allowed to read.
+
+    Built as a stub rather than a real :class:`ReviewItem` so the test pins the
+    reviewer's *contract* — candidate identity, routing features, OCMR verdict,
+    and the example id — instead of the queue's construction details.
+    """
+    from types import SimpleNamespace
+
+    item = SimpleNamespace(
+        candidate=SimpleNamespace(
+            subject_id=subject_id, predicate=predicate, object_id="proj_orion"
+        ),
+        decision=SimpleNamespace(features=SimpleNamespace(incumbent_ids=())),
+        ocmr_verdict=SimpleNamespace(conflicting_ids=()),
+    )
+    context = SimpleNamespace(
+        example=SimpleNamespace(id="ex-001"), authored_by={}, expects_conflict=False
+    )
+    return item, context
+
+
+def test_random_reviewer_is_deterministic_per_write() -> None:
+    """The control must give the same write the same verdict in every arm.
+
+    Keyed on the candidate's identity rather than call order, so the comparison
+    against a judgment-based reviewer stays paired: both see the same population
+    and differ only in which writes they release.
+    """
+    from ocm.evaluation.rahgm.ocmr_arm import make_random_reviewer
+
+    reviewer = make_random_reviewer(0.5)
+    item, context = _review_fixture()
+    verdicts = {reviewer(item, context) for _ in range(20)}
+    assert len(verdicts) == 1
+
+
+def test_random_reviewer_release_rate_tracks_its_probability() -> None:
+    """Over many distinct writes the release rate approaches the parameter."""
+    from ocm.evaluation.rahgm.ocmr_arm import ReviewAction, make_random_reviewer
+
+    reviewer = make_random_reviewer(0.5)
+    released = 0
+    n = 400
+    for i in range(n):
+        item, context = _review_fixture(subject_id=f"per_{i}")
+        if reviewer(item, context) is not ReviewAction.quarantine:
+            released += 1
+    assert 0.4 < released / n < 0.6
+
+
+def test_random_rates_bracket_the_endpoints() -> None:
+    """Ordering the control by release probability must be monotone in volume."""
+    from ocm.evaluation.rahgm.ocmr_arm import ReviewAction, make_random_reviewer
+
+    def rate(p: float) -> float:
+        reviewer = make_random_reviewer(p)
+        released = 0
+        for i in range(300):
+            item, context = _review_fixture(subject_id=f"per_{i}")
+            if reviewer(item, context) is not ReviewAction.quarantine:
+                released += 1
+        return released / 300
+
+    low, mid, high = rate(0.25), rate(0.5), rate(0.75)
+    assert low < mid < high
+
+
+def test_all_default_reviewers_are_registered() -> None:
+    from ocm.evaluation.rahgm.ocmr_arm import REVIEWERS
+    from ocm.evaluation.rahgm.run_ocmr_arm import DEFAULT_REVIEWERS
+
+    assert set(DEFAULT_REVIEWERS) <= set(REVIEWERS)
+    assert {"random25", "random50", "random75"} <= set(REVIEWERS)
