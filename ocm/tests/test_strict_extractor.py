@@ -280,7 +280,7 @@ def test_cached_failures_are_never_written_to_disk(tmp_path) -> None:
     cached.save()
 
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert len(payload) == 1  # only the success was persisted
+    assert len(payload["entries"]) == 1  # only the success was persisted
 
 
 # --------------------------------------------------------------------------- #
@@ -333,3 +333,76 @@ def test_rate_is_not_inflated_when_only_failures_miss() -> None:
     assert stats["calls"] == 9
     assert stats["distinct_corpus_inputs"] == 51  # 50 warm + 1 failing
     assert stats["unparseable_input_rate"] < 0.05  # not 100%
+
+
+# --------------------------------------------------------------------------- #
+# The preflight must exercise generation, not the cache
+# --------------------------------------------------------------------------- #
+def test_preflight_bypasses_a_warm_cache() -> None:
+    """The regression: a warm cache made the preflight pass without touching the GPU.
+
+    Observed on a fresh host whose Triton toolchain was broken. The downloaded
+    cache already held both probe sentences, so the preflight returned hits, then
+    the run died on the first uncached input. A check that can pass without
+    exercising the thing it checks is not a check.
+    """
+    from ocm.evaluation.rahgm.run_ocmr_arm import _PROBES, _preflight
+    from ocm.extraction.caching_extractor import CachingExtractor
+
+    base = _Relational()
+    strict = StrictExtractor(base)
+    cached = CachingExtractor(strict, cache_failures=False)
+    # Warm the cache with exactly the probe inputs, as a prior run would.
+    for text, ref in _PROBES:
+        cached.extract(text, ref)
+    calls_after_warming = base_calls = strict.calls
+
+    _preflight(cached)
+    assert strict.calls > calls_after_warming, (
+        "preflight served probes from cache; it must reach the model"
+    )
+    assert cached.stats["hits"] == 0, "preflight should not consult the cache at all"
+    del base_calls
+
+
+def test_preflight_still_aborts_when_generation_is_broken_behind_a_warm_cache() -> None:
+    """A warm cache must not mask an environment fault."""
+    from ocm.evaluation.rahgm.run_ocmr_arm import _PROBES, _preflight
+    from ocm.extraction.caching_extractor import CachingExtractor
+    from ocm.memory.contracts import ExtractionResult as _ER
+
+    class _WorksThenBreaks:
+        """Succeeds while warming, then raises like a broken Triton install."""
+
+        version = "flaky-v1"
+
+        def __init__(self) -> None:
+            self.broken = False
+
+        def extract(self, text: str, source_ref: str) -> _ER:
+            if self.broken:
+                raise ExtractionError(REAL_TRITON_MESSAGE)
+            return _ER(
+                relations=[{"subject": "A", "predicate": "OWNS", "object": "B"}],
+                extractor_version="flaky-v1",
+            )
+
+    base = _WorksThenBreaks()
+    cached = CachingExtractor(StrictExtractor(base), cache_failures=False)
+    for text, ref in _PROBES:
+        cached.extract(text, ref)
+
+    base.broken = True  # environment degrades between runs
+    with pytest.raises(SystemExit) as excinfo:
+        _preflight(cached)
+    assert "Python.h" in str(excinfo.value)
+
+
+def test_preflight_does_not_pollute_the_cache() -> None:
+    """Probe entries must stay out of a cache that gets published."""
+    from ocm.evaluation.rahgm.run_ocmr_arm import _preflight
+    from ocm.extraction.caching_extractor import CachingExtractor
+
+    cached = CachingExtractor(StrictExtractor(_Relational()), cache_failures=False)
+    _preflight(cached)
+    assert cached.stats["size"] == 0
