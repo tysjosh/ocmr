@@ -281,3 +281,55 @@ def test_cached_failures_are_never_written_to_disk(tmp_path) -> None:
 
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert len(payload) == 1  # only the success was persisted
+
+
+# --------------------------------------------------------------------------- #
+# Warm-cache accounting: the rate needs a corpus-level denominator
+# --------------------------------------------------------------------------- #
+def test_rate_uses_the_corpus_denominator_on_a_warm_cache() -> None:
+    """The bug this covers: a warm cache reported 9/9 unparseable = 100%.
+
+    StrictExtractor sits inside the cache, so on a warm cache it only sees the
+    retried failures. Every success is a cache hit and invisible to it. The rate
+    must therefore be computed from the cache's distinct-requested count.
+    """
+    from ocm.evaluation.rahgm.run_ocmr_arm import _strict_stats
+    from ocm.extraction.caching_extractor import CachingExtractor
+
+    strict = StrictExtractor(_FailsOneInput("bad"))
+    cached = CachingExtractor(strict, cache_failures=False)
+
+    # Warm the cache with 99 good inputs, then a second pass that all hits.
+    for i in range(99):
+        cached.extract(f"good-{i}", "s")
+    for i in range(99):
+        cached.extract(f"good-{i}", "s")
+    with pytest.raises(ExtractionError):
+        cached.extract("bad", "s")
+
+    stats = _strict_stats(cached)
+    assert stats["distinct_corpus_inputs"] == 100
+    assert stats["distinct_unparseable_inputs"] == 1
+    assert stats["unparseable_input_rate"] == pytest.approx(0.01)
+
+
+def test_rate_is_not_inflated_when_only_failures_miss() -> None:
+    """Simulates the second GPU run: cache fully warm except the bad inputs."""
+    from ocm.evaluation.rahgm.run_ocmr_arm import _strict_stats
+    from ocm.extraction.caching_extractor import CachingExtractor
+
+    strict = StrictExtractor(_FailsOneInput("bad"))
+    cached = CachingExtractor(strict, cache_failures=False)
+    for i in range(50):
+        cached.extract(f"good-{i}", "s")
+    strict.calls = 0  # pretend those were loaded from a previous run's cache file
+    strict._seen.clear()
+
+    for _ in range(9):  # every arm retries the one failing input
+        with pytest.raises(ExtractionError):
+            cached.extract("bad", "s")
+
+    stats = _strict_stats(cached)
+    assert stats["calls"] == 9
+    assert stats["distinct_corpus_inputs"] == 51  # 50 warm + 1 failing
+    assert stats["unparseable_input_rate"] < 0.05  # not 100%

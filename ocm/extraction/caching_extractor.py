@@ -75,6 +75,11 @@ class CachingExtractor:
         self.misses = 0
         self.failure_hits = 0
         self._unsaved = 0
+        #: Distinct keys requested during *this* process. The denominator for any
+        #: corpus-level rate: ``size`` alone counts entries loaded from a previous
+        #: run's cache file, and the wrapped extractor only ever sees misses, so
+        #: neither can tell you what fraction of the corpus failed.
+        self._requested: set[str] = set()
         if cache_path:
             self._load()
 
@@ -98,6 +103,7 @@ class CachingExtractor:
     def extract(self, text: str, source_ref: str) -> ExtractionResult:
         """Return the (memoized) extraction for ``text`` / ``source_ref``."""
         key = self._key(text, source_ref)
+        self._requested.add(key)
         cached = self._cache.get(key)
         if cached is not None:
             self.hits += 1
@@ -129,6 +135,7 @@ class CachingExtractor:
             "size": len(self._cache),
             "failure_hits": self.failure_hits,
             "distinct_failures": len(self._failures),
+            "distinct_requested": len(self._requested),
         }
 
     # -- persistence -------------------------------------------------------

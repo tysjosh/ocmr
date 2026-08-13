@@ -38,6 +38,7 @@ def test_repeated_inputs_hit_cache_and_skip_base():
         "size": 2,
         "failure_hits": 0,
         "distinct_failures": 0,
+        "distinct_requested": 2,
     }
     # Cached result equals the first (deterministic), and is a distinct object.
     assert r1.entities == r2.entities
