@@ -194,15 +194,19 @@ def make_random_reviewer(release_probability: float, seed: int = 20260812) -> Re
     import random as _random
 
     def reviewer(item: ReviewItem, context: ReviewContext) -> ReviewAction:
-        # Keyed on the write's identity rather than call order, so the same write
-        # gets the same verdict in every arm and the comparison stays paired.
+        # Keyed on *content-derived* identity so the same write gets the same
+        # verdict in every arm and the comparison stays paired. Entity ids are
+        # unusable here: real embeddings imply deterministic_test_mode=False, which
+        # randomizes ids per container, and each arm builds its own container. An
+        # id-based key therefore released a different subset in each arm, which
+        # preserved the release *rate* but broke pairing.
         conflicting = list(item.decision.features.incumbent_ids) or list(
             item.ocmr_verdict.conflicting_ids
         )
         candidate = item.candidate
         key = (
-            f"{context.example.id}|{candidate.subject_id}|{candidate.predicate}"
-            f"|{candidate.object_id}|{sorted(conflicting)}"
+            f"{context.example.id}|{candidate.source_ref}|{candidate.predicate}"
+            f"|{candidate.write_intent.value}|{len(conflicting)}"
         )
         rng = _random.Random(f"{seed}|{key}")
         if rng.random() >= release_probability:

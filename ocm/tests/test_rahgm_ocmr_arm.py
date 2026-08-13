@@ -358,9 +358,15 @@ def _review_fixture(subject_id: str = "ent_alice", predicate: str = "OWNS"):
     """
     from types import SimpleNamespace
 
+    from ocm.ontology.enums import WriteIntent
+
     item = SimpleNamespace(
         candidate=SimpleNamespace(
-            subject_id=subject_id, predicate=predicate, object_id="proj_orion"
+            subject_id=subject_id,
+            predicate=predicate,
+            object_id="proj_orion",
+            source_ref=f"ex-001:{subject_id}",
+            write_intent=WriteIntent.new_fact,
         ),
         decision=SimpleNamespace(features=SimpleNamespace(incumbent_ids=())),
         ocmr_verdict=SimpleNamespace(conflicting_ids=()),
@@ -423,3 +429,41 @@ def test_all_default_reviewers_are_registered() -> None:
 
     assert set(DEFAULT_REVIEWERS) <= set(REVIEWERS)
     assert {"random25", "random50", "random75"} <= set(REVIEWERS)
+
+
+def test_random_reviewer_ignores_randomized_entity_ids() -> None:
+    """Pairing must survive id randomization.
+
+    With real embeddings ``deterministic_test_mode`` is False, so entity ids are
+    generated fresh per container and each arm builds its own. Keying the control
+    on ``subject_id`` released a different subset in every arm: the release rate
+    held, but B3R and B3Q stopped being comparable on the same writes. The key must
+    therefore derive only from content that is stable across containers.
+    """
+    from types import SimpleNamespace
+
+    from ocm.evaluation.rahgm.ocmr_arm import make_random_reviewer
+    from ocm.ontology.enums import WriteIntent
+
+    def item_with_ids(subject: str, obj: str):
+        return SimpleNamespace(
+            candidate=SimpleNamespace(
+                subject_id=subject,
+                predicate="OWNS",
+                object_id=obj,
+                source_ref="ex-001:s1",
+                write_intent=WriteIntent.new_fact,
+            ),
+            decision=SimpleNamespace(features=SimpleNamespace(incumbent_ids=())),
+            ocmr_verdict=SimpleNamespace(conflicting_ids=()),
+        )
+
+    context = SimpleNamespace(
+        example=SimpleNamespace(id="ex-001"), authored_by={}, expects_conflict=False
+    )
+    reviewer = make_random_reviewer(0.5)
+
+    # Same logical write, different randomly-assigned ids, as two arms would see.
+    first = reviewer(item_with_ids("ent_7f3a", "proj_91bc"), context)
+    second = reviewer(item_with_ids("ent_c4d1", "proj_2e8f"), context)
+    assert first == second
