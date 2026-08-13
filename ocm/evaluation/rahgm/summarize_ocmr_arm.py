@@ -85,21 +85,62 @@ def _gate(report: dict[str, Any]) -> None:
               "  published one, so no row from it can join Table III.")
 
 
-def _extraction(report: dict[str, Any]) -> None:
+def _cache_size(results_path: str) -> int:
+    """Count entries in the extraction cache sitting beside the results file.
+
+    Needed for files written before the rate was computed at the cache boundary.
+    In those, ``distinct_inputs`` counts only cache misses, so on a warm cache it
+    equals the number of perpetually-failing inputs and the rate reads 100%. The
+    cache file holds one entry per successfully extracted input, which is the
+    denominator that was missing.
+    """
+    import os
+
+    path = os.path.join(os.path.dirname(results_path) or ".", "extraction_cache.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return len(json.load(handle))
+    except Exception:
+        return 0
+
+
+def _extraction(report: dict[str, Any], results_path: str) -> None:
     _header("2. EXTRACTION HEALTH")
     ext = report.get("extraction")
     if not ext:
         print("  absent")
         return
-    denom = ext.get("distinct_corpus_inputs") or ext.get("distinct_inputs") or 0
-    cache = ext.get("cache") or {}
-    if cache.get("distinct_requested"):
-        denom = cache["distinct_requested"]
     failed = ext.get("distinct_unparseable_inputs", 0)
+    cache = ext.get("cache") or {}
+    denom = (
+        cache.get("distinct_requested")
+        or ext.get("distinct_corpus_inputs")
+        or 0
+    )
+    note = ""
+    if not denom:
+        # Pre-fix file: reconstruct the denominator from the cache on disk.
+        successes = _cache_size(results_path)
+        if successes:
+            denom = successes + failed
+            note = (
+                "  (denominator reconstructed from extraction_cache.json; this "
+                "results file\n   predates the cache-boundary fix and its own "
+                "figure reads 100%)"
+            )
+        else:
+            denom = ext.get("distinct_inputs") or 0
+            note = (
+                "  (WARNING: this file predates the cache-boundary fix and no "
+                "cache file was\n   found, so the rate below counts only cache "
+                "misses and is far too high)"
+            )
     rate = (failed / denom) if denom else 0.0
     print(f"  distinct corpus inputs : {denom}")
     print(f"  unparseable            : {failed}  ({rate:.2%})")
-    print(f"  generation calls       : {ext.get('calls')}")
+    print(f"  generation calls       : {ext.get('calls')} (this run only)")
+    if note:
+        print(note)
     if rate > 0.05:
         print("\n  WARNING: above 5%. Memory is under-populated relative to the\n"
               "  published run, so read the gate before trusting any row.")
@@ -270,7 +311,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"elapsed: {report.get('elapsed_seconds')}s")
 
     _gate(report)
-    _extraction(report)
+    _extraction(report, args.path)
     agg = _arms(report)
     _integrity(agg)
     _per_category(report)
