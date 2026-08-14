@@ -77,11 +77,26 @@ GOVERNED_ARMS: frozenset[str] = frozenset({"B3R", "B3Q"})
 #: Human-readable descriptions for the results table.
 ARM_DESCRIPTIONS: dict[str, str] = {
     "B0": "Text/vector memory, no write-time governance",
+    "B1": "Ontology/symbolic only, no vectors, no contradiction gate",
     "B2": "Hybrid retrieval, no write-time governance",
+    "Brag": "RAG-only: vectors-only retrieval, answer from text, no governance",
+    "Brtcf": "Read-time contradiction filter: no write gate, filter at query",
     "B3": "OCMR: write-time governance, quarantine is terminal",
     "B3R": "OCMR + risk-adaptive escalation and review-and-release",
     "B3Q": "OCMR + review every quarantine (recall ceiling)",
 }
+
+
+def valid_arms() -> frozenset[str]:
+    """Every arm name this module accepts.
+
+    OCMR's own baseline registry plus the two governed arms. Exposed so the CLI
+    can reject a typo up front rather than failing partway through a multi-hour
+    sweep, or worse, after it.
+    """
+    from ocm.evaluation.baselines import BASELINE_TOGGLES
+
+    return frozenset(BASELINE_TOGGLES) | GOVERNED_ARMS
 
 
 #: A reviewer decides what to do with one held write. It receives the review item
