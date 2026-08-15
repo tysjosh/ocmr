@@ -52,11 +52,13 @@ from ocm.evaluation.benchmark import BenchmarkGenerator
 from ocm.evaluation.experiment import make_settings_factory
 from ocm.evaluation.rahgm.ocmr_arm import (
     ARMS,
+    GOVERNED_ARMS,
     REVIEWERS,
     fit_policy_across_seeds,
     fit_policy_on_benchmark,
     run_ocmr_escalation_arm,
     separability_report,
+    valid_arms,
 )
 
 #: Seeds OCMR's published table uses.
@@ -487,6 +489,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     unknown = set(reviewers) - set(REVIEWERS)
     if unknown:
         parser.error(f"unknown reviewer(s): {sorted(unknown)}")
+    unknown_arms = set(arms) - valid_arms()
+    if unknown_arms:
+        parser.error(
+            f"unknown arm(s): {sorted(unknown_arms)}. Valid: {sorted(valid_arms())}. "
+            "Names are case-sensitive ('Brag', 'Brtcf', not 'BRAG')."
+        )
 
     cache_path = args.cache
     if args.extractor == "qwen" and cache_path is None:
@@ -647,9 +655,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             seed_entry["reviewers"][reviewer] = report
             for arm_name, arm in report["arms"].items():
-                # Ungoverned and plain-OCMR arms do not depend on the reviewer, so
-                # they are recorded once rather than duplicated per reviewer.
-                if arm_name in ("B0", "B2", "B3"):
+                # Only the governed arms install the review tier, so every other
+                # arm is reviewer-independent and is recorded once rather than
+                # duplicated, unlabelled, under each reviewer.
+                if arm_name not in GOVERNED_ARMS:
                     if reviewer == reviewers[0]:
                         _record(arm_name, arm)
                 else:

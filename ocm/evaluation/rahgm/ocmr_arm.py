@@ -77,11 +77,26 @@ GOVERNED_ARMS: frozenset[str] = frozenset({"B3R", "B3Q"})
 #: Human-readable descriptions for the results table.
 ARM_DESCRIPTIONS: dict[str, str] = {
     "B0": "Text/vector memory, no write-time governance",
+    "B1": "Ontology/symbolic only, no vectors, no contradiction gate",
     "B2": "Hybrid retrieval, no write-time governance",
+    "Brag": "RAG-only: vectors-only retrieval, answer from text, no governance",
+    "Brtcf": "Read-time contradiction filter: no write gate, filter at query",
     "B3": "OCMR: write-time governance, quarantine is terminal",
     "B3R": "OCMR + risk-adaptive escalation and review-and-release",
     "B3Q": "OCMR + review every quarantine (recall ceiling)",
 }
+
+
+def valid_arms() -> frozenset[str]:
+    """Every arm name this module accepts.
+
+    OCMR's own baseline registry plus the two governed arms. Exposed so the CLI
+    can reject a typo up front rather than failing partway through a multi-hour
+    sweep, or worse, after it.
+    """
+    from ocm.evaluation.baselines import BASELINE_TOGGLES
+
+    return frozenset(BASELINE_TOGGLES) | GOVERNED_ARMS
 
 
 #: A reviewer decides what to do with one held write. It receives the review item
@@ -265,6 +280,9 @@ class ArmResult:
     contradiction_rate: float
     constraint_violations: float
     typed_violations: int
+    #: Raw durable-violation count, so ``constraint_violations`` can be checked
+    #: against OCMR's published formula (count / responses) rather than trusted.
+    durable_violations: int
     n_records: int
     writes_accepted: int
     writes_superseded: int
@@ -294,6 +312,7 @@ class ArmResult:
             "contradiction_rate": self.contradiction_rate,
             "constraint_violations": self.constraint_violations,
             "typed_violations": self.typed_violations,
+            "durable_violations": self.durable_violations,
             "n_records": self.n_records,
             "n_candidates": self.n_candidates,
             "writes": {
@@ -965,8 +984,14 @@ def run_ocmr_escalation_arm(
         telemetry = runner.telemetry[arm]
         counts = telemetry["counts"]
 
-        accepted_count = telemetry["accepted_count"] or 1
-        violation_rate = 100.0 * telemetry["durable_violations"] / accepted_count
+        # Denominator must be the response count, matching OCMR's published
+        # definition: "durable-write constraint violation rate per 100 responses"
+        # (see ocm/evaluation/experiment.py, which divides by len(records)).
+        # Dividing by the accepted-assertion count instead produced a
+        # systematically smaller number -- B0 read 39.86 where the published run
+        # reports 50.72 -- and made the whole column incomparable to Table III.
+        n_responses = len(records) or 1
+        violation_rate = 100.0 * telemetry["durable_violations"] / n_responses
         decisive = decisive_metrics(records, constraint_violation_rate=violation_rate)
         n_writes = counts["candidates"] or 1
 
@@ -982,6 +1007,7 @@ def run_ocmr_escalation_arm(
                 decisive.get("constraint_violations", float("nan"))
             ),
             typed_violations=int(telemetry["typed_violations"]),
+            durable_violations=int(telemetry["durable_violations"]),
             n_records=len(records),
             writes_accepted=counts["accepted"],
             writes_superseded=counts["superseded"],
