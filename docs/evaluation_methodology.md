@@ -51,7 +51,7 @@ property, not a leaderboard win.
    On the full MultiWOZ 2.2 validation split (1,000 dialogues, oracle
    extraction), where a changed slot is an *authoritative update* rather than a
    conflicting `new_fact`, the governed arm **supersedes** the prior value:
-   constraint violations drop from 7.2 (ungoverned) to ≈ 0.01 **with no recall
+   constraint violations drop from 7.2 (ungoverned) to 0.00 **with no recall
    cost** (task success ≈ 100). *Scope:* this validates that *constraint
    governance generalizes to real dialogue* for the **single-valued cardinality**
    constraint, evaluated **given gold slots** — not end-to-end extraction, and
@@ -530,7 +530,7 @@ Result — **full MultiWOZ 2.2 validation (dev) split, 1,000 dialogues**, via
 | Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
 |--------|---------------|-----------------|------------------|
 | B0 / B2 (ungoverned) | 100.0 | 0.0 (N/A) | 7.2 |
-| B3 (write-time gate) | **100.0** | 0.0 (N/A) | **0.01** |
+| B3 (write-time gate) | **100.0** | 0.0 (N/A) | **0.00** |
 
 Write outcomes for B3 (8,710 candidate slot writes): **8,108 accepted, 602
 superseded, 0 quarantined, 0 rejected** — the 602 supersessions are the genuine
@@ -542,12 +542,17 @@ ungoverned store accumulates.)
 This complements the synthetic finding with a **near-tradeoff-free** real-data
 case: on MultiWOZ a changed slot is a legitimate, authoritative update, so the
 governed arm **supersedes** (one accepted value) — cutting durable constraint
-violations from 7.2 to ≈ 0.01 while **preserving recall** (task success ≈ 100.0,
-via the `HAS_VALUE` answer-derivation rule). The residual ≈ 0.01 is a small
-fraction of slots whose conflict is not resolved by supersession (e.g. a
-re-asserted distinct value on a path the policy does not cover), not a wholesale
-failure. Contradiction-surfacing is N/A here (a supersession is a resolved
-update, not an unresolved contradiction to surface).
+violations from 7.2 to 0.00 while **preserving recall** (task success ≈ 100.0,
+via the `HAS_VALUE` answer-derivation rule). Contradiction-surfacing is N/A here
+(a supersession is a resolved update, not an unresolved contradiction to
+surface).
+
+Artifact note: an earlier 0.012 value was traced to `PMUL3850.json`, where a
+case-variant reassertion of `restaurant-food = Latin American` created a second
+accepted durable row for the same triple before the later update to `Italian`.
+The commit path now treats already-active identical triples as idempotent
+accepts with additional provenance, leaving zero final accepted single-valued
+violations on the 8,104-question development split.
 
 **Caveats.** (i) Oracle extraction tests governance *given gold slots*, not
 end-to-end from raw text. (ii) The result is scoped to a single constraint

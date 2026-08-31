@@ -126,3 +126,10 @@ class Settings(BaseModel):
     # incorrect ``insert`` decision leaves two active values (a violation).
     # Off by default; enabled only by the opt-in Bmemgpt baseline.
     memgpt_intent_supersede: bool = False
+    # Fail-closed guard for entity-linking evasion. When write-time governance is
+    # enabled, a candidate for a covered single-valued entity relation whose
+    # protected subject was newly minted from unattributed text is quarantined if
+    # the store already contains accepted assertions for that predicate over the
+    # same subject type. This isolates the resolver recall gap: an unlinked or
+    # unknown attribution path no longer becomes ordinary accepted state.
+    fail_closed_unattributed_entity_writes: bool = True

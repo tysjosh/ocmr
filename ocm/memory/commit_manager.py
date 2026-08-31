@@ -166,6 +166,20 @@ class CommitManager:
     # -- accept (Req 10.1) -------------------------------------------------
     def _accept(self, candidate: CandidateAssertion, now: datetime) -> WriteOutcome:
         """Mint, persist, graph, embed, and record provenance for an accept."""
+        existing_id = self._existing_accepted_triple_id(candidate)
+        if existing_id is not None:
+            self.provenance_tracker.record(
+                subject_id=existing_id,
+                source_ref=candidate.source_ref,
+                created_at=now,
+                extractor_version=candidate.extractor_version,
+            )
+            return WriteOutcome(
+                candidate=candidate,
+                decision="accepted",
+                assertion_id=existing_id,
+            )
+
         assertion = self._build_accepted_assertion(candidate, now)
         self._persist_accepted(assertion)
         return WriteOutcome(
@@ -173,6 +187,35 @@ class CommitManager:
             decision="accepted",
             assertion_id=assertion.id,
         )
+
+    def _existing_accepted_triple_id(self, candidate: CandidateAssertion) -> str | None:
+        """Return the accepted assertion id for an already-active identical triple.
+
+        The accepted graph stores one edge per ``(subject, predicate, object)``
+        triple. Treating a repeated identical assertion as a fresh durable row
+        lets the graph edge metadata hide the earlier row; a later supersession
+        can then retire only the graph-visible duplicate and leave the older row
+        accepted in SQLite. Re-asserting the same triple is therefore an
+        idempotent accept with additional provenance on the existing assertion.
+        """
+        edge = self.graph.get_assertion_edge(
+            candidate.subject_id, candidate.object_id, candidate.predicate
+        )
+        if edge is None:
+            return None
+        assertion_id = edge.get("assertion_id")
+        if not assertion_id:
+            return None
+        existing = self.repo.get_assertion(str(assertion_id))
+        if (
+            existing is None
+            or existing.status is not AssertionStatus.accepted
+            or existing.subject_id != candidate.subject_id
+            or existing.object_id != candidate.object_id
+            or existing.predicate != candidate.predicate
+        ):
+            return None
+        return existing.id
 
     # -- supersede (Req 10.2, 12.3, 2.13) ----------------------------------
     def _supersede(

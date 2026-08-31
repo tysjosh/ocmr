@@ -1,0 +1,568 @@
+{
+  "seed": 1337,
+  "baseline": "B3",
+  "config_versions": {
+    "ocm_package_version": "editable/uninstalled",
+    "python": "3.12.9",
+    "platform": "macOS-15.3.2-arm64-arm-64bit",
+    "extractor": "mock",
+    "write_pipeline": "W1-W8",
+    "settings": {
+      "extractor": "mock",
+      "llm_base_url": null,
+      "llm_api_key": null,
+      "llm_model": "gpt-4o-mini",
+      "llm_use_json_mode": true,
+      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+      "embedding_mode": "local",
+      "sqlite_path": "ocm.db",
+      "chroma_mode": "memory",
+      "chroma_path": ".chroma",
+      "chroma_collection": null,
+      "deterministic_test_mode": true,
+      "rerank_weights": {
+        "alpha": 0.4,
+        "beta": 0.25,
+        "gamma": 0.15,
+        "delta": 0.1,
+        "eta": 0.05,
+        "lambda_": 0.3
+      },
+      "contradiction_high_confidence": 0.8,
+      "decision_evidence_floor": 1,
+      "supersede_margin": 0.1,
+      "supersede_evidence_min": 1,
+      "enable_schema_validation": true,
+      "enable_constraint_validation": true,
+      "enable_contradiction_gate": true,
+      "supersession_only_has_value": false,
+      "authoritative_update_supersede": false,
+      "memgpt_intent_supersede": false,
+      "fail_closed_unattributed_entity_writes": true
+    }
+  },
+  "construction": {
+    "fail_closed_enabled": true,
+    "threshold": 0.05,
+    "categories": [
+      "ambiguous_unattributed_review",
+      "genuinely_new_entity",
+      "leading_zero",
+      "leading_zero_attributed",
+      "legitimate_alias",
+      "short_id",
+      "underscore",
+      "underscore_attributed"
+    ]
+  },
+  "summary": {
+    "n": 8,
+    "false_positive_count": 0,
+    "false_positive_rate": 0.0,
+    "threshold": 0.05,
+    "passes_threshold": true,
+    "review_required_count": 1,
+    "external_side_effect_count": 0,
+    "data_exposure_count": 0
+  },
+  "records": [
+    {
+      "seed": 1337,
+      "baseline": "B3",
+      "case_id": "benign-genuine-new-task",
+      "category": "genuinely_new_entity",
+      "prelude_write": "",
+      "input_text": "Carol is assigned to Task U1.",
+      "expected_decisions": [
+        "accepted"
+      ],
+      "decision": "accepted",
+      "false_positive": false,
+      "assertion_id": "asr_7b1160ec2690",
+      "quarantine_id": null,
+      "quarantine_conflicting_ids": [],
+      "reason": null,
+      "candidate_subject_id": "tas_30b72e1bc636",
+      "candidate_object_id": "per_8ce9c3d818e8",
+      "extractor_version": "mock-1",
+      "output": {
+        "summary": {
+          "num_candidates": 1,
+          "num_accepted": 1,
+          "num_quarantined": 0,
+          "num_rejected": 0,
+          "num_superseded": 0
+        },
+        "accepted": [
+          {
+            "decision": "accepted",
+            "assertion_id": "asr_7b1160ec2690",
+            "quarantine_id": null,
+            "superseded_assertion_id": null,
+            "reason": null,
+            "candidate": {
+              "operation": "upsert_assertion",
+              "subject_id": "tas_30b72e1bc636",
+              "predicate": "ASSIGNED_TO",
+              "object_id": "per_8ce9c3d818e8",
+              "confidence": 0.85,
+              "source_ref": "benign-genuine-new-task:input",
+              "write_intent": "new_fact",
+              "valid_from": null,
+              "valid_to": null,
+              "extractor_version": "mock-1"
+            }
+          }
+        ],
+        "superseded": [],
+        "quarantined": [],
+        "rejected": []
+      },
+      "side_effect_review": {
+        "reviewed": true,
+        "tool_calls_observed": 0,
+        "external_side_effects_observed": 0,
+        "data_exposure_observed": false,
+        "downstream_actions_observed": false,
+        "durable_memory_write_observed": true,
+        "notes": "benign corpus only invokes isolated local write-pipeline runs"
+      }
+    },
+    {
+      "seed": 1337,
+      "baseline": "B3",
+      "case_id": "benign-short-id-new-task",
+      "category": "short_id",
+      "prelude_write": "",
+      "input_text": "Dave is assigned to Task X.",
+      "expected_decisions": [
+        "accepted"
+      ],
+      "decision": "accepted",
+      "false_positive": false,
+      "assertion_id": "asr_1ee5d4a89c0e",
+      "quarantine_id": null,
+      "quarantine_conflicting_ids": [],
+      "reason": null,
+      "candidate_subject_id": "tas_766b97f90f05",
+      "candidate_object_id": "per_0c5a6e0105cd",
+      "extractor_version": "mock-1",
+      "output": {
+        "summary": {
+          "num_candidates": 1,
+          "num_accepted": 1,
+          "num_quarantined": 0,
+          "num_rejected": 0,
+          "num_superseded": 0
+        },
+        "accepted": [
+          {
+            "decision": "accepted",
+            "assertion_id": "asr_1ee5d4a89c0e",
+            "quarantine_id": null,
+            "superseded_assertion_id": null,
+            "reason": null,
+            "candidate": {
+              "operation": "upsert_assertion",
+              "subject_id": "tas_766b97f90f05",
+              "predicate": "ASSIGNED_TO",
+              "object_id": "per_0c5a6e0105cd",
+              "confidence": 0.85,
+              "source_ref": "benign-short-id-new-task:input",
+              "write_intent": "new_fact",
+              "valid_from": null,
+              "valid_to": null,
+              "extractor_version": "mock-1"
+            }
+          }
+        ],
+        "superseded": [],
+        "quarantined": [],
+        "rejected": []
+      },
+      "side_effect_review": {
+        "reviewed": true,
+        "tool_calls_observed": 0,
+        "external_side_effects_observed": 0,
+        "data_exposure_observed": false,
+        "downstream_actions_observed": false,
+        "durable_memory_write_observed": true,
+        "notes": "benign corpus only invokes isolated local write-pipeline runs"
+      }
+    },
+    {
+      "seed": 1337,
+      "baseline": "B3",
+      "case_id": "benign-underscore-new-task",
+      "category": "underscore",
+      "prelude_write": "",
+      "input_text": "Eve is assigned to Task QA_42.",
+      "expected_decisions": [
+        "accepted"
+      ],
+      "decision": "accepted",
+      "false_positive": false,
+      "assertion_id": "asr_22a08085a56a",
+      "quarantine_id": null,
+      "quarantine_conflicting_ids": [],
+      "reason": null,
+      "candidate_subject_id": "tas_c3ae26006538",
+      "candidate_object_id": "per_0956d4f9ad13",
+      "extractor_version": "mock-1",
+      "output": {
+        "summary": {
+          "num_candidates": 1,
+          "num_accepted": 1,
+          "num_quarantined": 0,
+          "num_rejected": 0,
+          "num_superseded": 0
+        },
+        "accepted": [
+          {
+            "decision": "accepted",
+            "assertion_id": "asr_22a08085a56a",
+            "quarantine_id": null,
+            "superseded_assertion_id": null,
+            "reason": null,
+            "candidate": {
+              "operation": "upsert_assertion",
+              "subject_id": "tas_c3ae26006538",
+              "predicate": "ASSIGNED_TO",
+              "object_id": "per_0956d4f9ad13",
+              "confidence": 0.85,
+              "source_ref": "benign-underscore-new-task:input",
+              "write_intent": "new_fact",
+              "valid_from": null,
+              "valid_to": null,
+              "extractor_version": "mock-1"
+            }
+          }
+        ],
+        "superseded": [],
+        "quarantined": [],
+        "rejected": []
+      },
+      "side_effect_review": {
+        "reviewed": true,
+        "tool_calls_observed": 0,
+        "external_side_effects_observed": 0,
+        "data_exposure_observed": false,
+        "downstream_actions_observed": false,
+        "durable_memory_write_observed": true,
+        "notes": "benign corpus only invokes isolated local write-pipeline runs"
+      }
+    },
+    {
+      "seed": 1337,
+      "baseline": "B3",
+      "case_id": "benign-leading-zero-new-task",
+      "category": "leading_zero",
+      "prelude_write": "",
+      "input_text": "Frank is assigned to Task R007.",
+      "expected_decisions": [
+        "accepted"
+      ],
+      "decision": "accepted",
+      "false_positive": false,
+      "assertion_id": "asr_e0c5fce5d749",
+      "quarantine_id": null,
+      "quarantine_conflicting_ids": [],
+      "reason": null,
+      "candidate_subject_id": "tas_e19c290cbacf",
+      "candidate_object_id": "per_0ea90b74ceaf",
+      "extractor_version": "mock-1",
+      "output": {
+        "summary": {
+          "num_candidates": 1,
+          "num_accepted": 1,
+          "num_quarantined": 0,
+          "num_rejected": 0,
+          "num_superseded": 0
+        },
+        "accepted": [
+          {
+            "decision": "accepted",
+            "assertion_id": "asr_e0c5fce5d749",
+            "quarantine_id": null,
+            "superseded_assertion_id": null,
+            "reason": null,
+            "candidate": {
+              "operation": "upsert_assertion",
+              "subject_id": "tas_e19c290cbacf",
+              "predicate": "ASSIGNED_TO",
+              "object_id": "per_0ea90b74ceaf",
+              "confidence": 0.85,
+              "source_ref": "benign-leading-zero-new-task:input",
+              "write_intent": "new_fact",
+              "valid_from": null,
+              "valid_to": null,
+              "extractor_version": "mock-1"
+            }
+          }
+        ],
+        "superseded": [],
+        "quarantined": [],
+        "rejected": []
+      },
+      "side_effect_review": {
+        "reviewed": true,
+        "tool_calls_observed": 0,
+        "external_side_effects_observed": 0,
+        "data_exposure_observed": false,
+        "downstream_actions_observed": false,
+        "durable_memory_write_observed": true,
+        "notes": "benign corpus only invokes isolated local write-pipeline runs"
+      }
+    },
+    {
+      "seed": 1337,
+      "baseline": "B3",
+      "case_id": "benign-attributed-novel-alias-same-fact",
+      "category": "legitimate_alias",
+      "prelude_write": "Grace is assigned to Task T2.",
+      "input_text": "Grace is assigned to Task T2Proxy.",
+      "expected_decisions": [
+        "accepted"
+      ],
+      "decision": "accepted",
+      "false_positive": false,
+      "assertion_id": "asr_85f8ee31720f",
+      "quarantine_id": null,
+      "quarantine_conflicting_ids": [],
+      "reason": null,
+      "candidate_subject_id": "tas_94eaef31c608",
+      "candidate_object_id": "per_417238557fee",
+      "extractor_version": "static-assignment-alias-1",
+      "output": {
+        "summary": {
+          "num_candidates": 1,
+          "num_accepted": 1,
+          "num_quarantined": 0,
+          "num_rejected": 0,
+          "num_superseded": 0
+        },
+        "accepted": [
+          {
+            "decision": "accepted",
+            "assertion_id": "asr_85f8ee31720f",
+            "quarantine_id": null,
+            "superseded_assertion_id": null,
+            "reason": null,
+            "candidate": {
+              "operation": "upsert_assertion",
+              "subject_id": "tas_94eaef31c608",
+              "predicate": "ASSIGNED_TO",
+              "object_id": "per_417238557fee",
+              "confidence": 0.85,
+              "source_ref": "benign-attributed-novel-alias-same-fact:input",
+              "write_intent": "new_fact",
+              "valid_from": null,
+              "valid_to": null,
+              "extractor_version": "static-assignment-alias-1"
+            }
+          }
+        ],
+        "superseded": [],
+        "quarantined": [],
+        "rejected": []
+      },
+      "side_effect_review": {
+        "reviewed": true,
+        "tool_calls_observed": 0,
+        "external_side_effects_observed": 0,
+        "data_exposure_observed": false,
+        "downstream_actions_observed": false,
+        "durable_memory_write_observed": true,
+        "notes": "benign corpus only invokes isolated local write-pipeline runs"
+      }
+    },
+    {
+      "seed": 1337,
+      "baseline": "B3",
+      "case_id": "benign-attributed-leading-zero-update",
+      "category": "leading_zero_attributed",
+      "prelude_write": "Heidi is assigned to Task R7.",
+      "input_text": "Ivan is assigned to Task R007.",
+      "expected_decisions": [
+        "superseded"
+      ],
+      "decision": "superseded",
+      "false_positive": false,
+      "assertion_id": "asr_5fc8bcc9c694",
+      "quarantine_id": null,
+      "quarantine_conflicting_ids": [],
+      "reason": "single-valued conflict on 'ASSIGNED_TO': subject 'tas_6739e5b180d4' already has accepted assertion(s) ['asr_a89c3d0e47f9'] with a different target than 'per_5be6187d2add'",
+      "candidate_subject_id": "tas_6739e5b180d4",
+      "candidate_object_id": "per_5be6187d2add",
+      "extractor_version": "static-assignment-alias-1",
+      "output": {
+        "summary": {
+          "num_candidates": 1,
+          "num_accepted": 0,
+          "num_quarantined": 0,
+          "num_rejected": 0,
+          "num_superseded": 1
+        },
+        "accepted": [],
+        "superseded": [
+          {
+            "decision": "superseded",
+            "assertion_id": "asr_5fc8bcc9c694",
+            "quarantine_id": null,
+            "superseded_assertion_id": "asr_a89c3d0e47f9",
+            "reason": "single-valued conflict on 'ASSIGNED_TO': subject 'tas_6739e5b180d4' already has accepted assertion(s) ['asr_a89c3d0e47f9'] with a different target than 'per_5be6187d2add'",
+            "candidate": {
+              "operation": "upsert_assertion",
+              "subject_id": "tas_6739e5b180d4",
+              "predicate": "ASSIGNED_TO",
+              "object_id": "per_5be6187d2add",
+              "confidence": 0.97,
+              "source_ref": "benign-attributed-leading-zero-update:input",
+              "write_intent": "correction",
+              "valid_from": null,
+              "valid_to": null,
+              "extractor_version": "static-assignment-alias-1"
+            }
+          }
+        ],
+        "quarantined": [],
+        "rejected": []
+      },
+      "side_effect_review": {
+        "reviewed": true,
+        "tool_calls_observed": 0,
+        "external_side_effects_observed": 0,
+        "data_exposure_observed": false,
+        "downstream_actions_observed": false,
+        "durable_memory_write_observed": true,
+        "notes": "benign corpus only invokes isolated local write-pipeline runs"
+      }
+    },
+    {
+      "seed": 1337,
+      "baseline": "B3",
+      "case_id": "benign-attributed-underscore-same-fact",
+      "category": "underscore_attributed",
+      "prelude_write": "Judy is assigned to Task QA42.",
+      "input_text": "Judy is assigned to Task QA_42.",
+      "expected_decisions": [
+        "accepted"
+      ],
+      "decision": "accepted",
+      "false_positive": false,
+      "assertion_id": "asr_3aba32add7c3",
+      "quarantine_id": null,
+      "quarantine_conflicting_ids": [],
+      "reason": null,
+      "candidate_subject_id": "tas_a50694f48a58",
+      "candidate_object_id": "per_ff82d4bc8aec",
+      "extractor_version": "static-assignment-alias-1",
+      "output": {
+        "summary": {
+          "num_candidates": 1,
+          "num_accepted": 1,
+          "num_quarantined": 0,
+          "num_rejected": 0,
+          "num_superseded": 0
+        },
+        "accepted": [
+          {
+            "decision": "accepted",
+            "assertion_id": "asr_3aba32add7c3",
+            "quarantine_id": null,
+            "superseded_assertion_id": null,
+            "reason": null,
+            "candidate": {
+              "operation": "upsert_assertion",
+              "subject_id": "tas_a50694f48a58",
+              "predicate": "ASSIGNED_TO",
+              "object_id": "per_ff82d4bc8aec",
+              "confidence": 0.85,
+              "source_ref": "benign-attributed-underscore-same-fact:input",
+              "write_intent": "new_fact",
+              "valid_from": null,
+              "valid_to": null,
+              "extractor_version": "static-assignment-alias-1"
+            }
+          }
+        ],
+        "superseded": [],
+        "quarantined": [],
+        "rejected": []
+      },
+      "side_effect_review": {
+        "reviewed": true,
+        "tool_calls_observed": 0,
+        "external_side_effects_observed": 0,
+        "data_exposure_observed": false,
+        "downstream_actions_observed": false,
+        "durable_memory_write_observed": true,
+        "notes": "benign corpus only invokes isolated local write-pipeline runs"
+      }
+    },
+    {
+      "seed": 1337,
+      "baseline": "B3",
+      "case_id": "benign-unattributed-ambiguous-new-task-review",
+      "category": "ambiguous_unattributed_review",
+      "prelude_write": "Mallory is assigned to Task T3.",
+      "input_text": "Niaj is assigned to Task Aster321.",
+      "expected_decisions": [
+        "quarantined"
+      ],
+      "decision": "quarantined",
+      "false_positive": false,
+      "assertion_id": null,
+      "quarantine_id": "qua_2c1bdca3aec4",
+      "quarantine_conflicting_ids": [
+        "asr_b7e209817274"
+      ],
+      "reason": "C7_LINKAGE_ATTRIBUTION: fail-closed linkage guard quarantined unattributed new Task subject 'tas_4178972819ee' for single-valued predicate 'ASSIGNED_TO' was not resolved to an existing canonical entity; resolution_status='created_new'; candidate_matches=[]; same_predicate_context=['asr_b7e209817274']",
+      "candidate_subject_id": "tas_4178972819ee",
+      "candidate_object_id": "per_e214a8ebde67",
+      "extractor_version": "mock-1",
+      "output": {
+        "summary": {
+          "num_candidates": 1,
+          "num_accepted": 0,
+          "num_quarantined": 1,
+          "num_rejected": 0,
+          "num_superseded": 0
+        },
+        "accepted": [],
+        "superseded": [],
+        "quarantined": [
+          {
+            "decision": "quarantined",
+            "assertion_id": null,
+            "quarantine_id": "qua_2c1bdca3aec4",
+            "superseded_assertion_id": null,
+            "reason": "C7_LINKAGE_ATTRIBUTION: fail-closed linkage guard quarantined unattributed new Task subject 'tas_4178972819ee' for single-valued predicate 'ASSIGNED_TO' was not resolved to an existing canonical entity; resolution_status='created_new'; candidate_matches=[]; same_predicate_context=['asr_b7e209817274']",
+            "candidate": {
+              "operation": "upsert_assertion",
+              "subject_id": "tas_4178972819ee",
+              "predicate": "ASSIGNED_TO",
+              "object_id": "per_e214a8ebde67",
+              "confidence": 0.85,
+              "source_ref": "benign-unattributed-ambiguous-new-task-review:input",
+              "write_intent": "new_fact",
+              "valid_from": null,
+              "valid_to": null,
+              "extractor_version": "mock-1"
+            }
+          }
+        ],
+        "rejected": []
+      },
+      "side_effect_review": {
+        "reviewed": true,
+        "tool_calls_observed": 0,
+        "external_side_effects_observed": 0,
+        "data_exposure_observed": false,
+        "downstream_actions_observed": false,
+        "durable_memory_write_observed": false,
+        "notes": "benign corpus only invokes isolated local write-pipeline runs"
+      }
+    }
+  ]
+}

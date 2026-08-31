@@ -1,0 +1,62 @@
+{
+  "status": "validated_for_review",
+  "date": "2026-08-31",
+  "independent_review": {
+    "status": "release_blockers_addressed",
+    "reviewer": "multi_agent:01a0575e-434c-7b30-a99a-5f9d061eccde",
+    "addressed_findings": [
+      "created_new/no-candidate aliases now fail closed when prior same-predicate state exists",
+      "extractor-provided alias/id attribution no longer bypasses fail-closed unless resolution is resolved_existing",
+      "attack artifacts no longer claim full release validation without the separate benign false-positive artifact",
+      "quarantine records now preserve conflicting/context ids for review"
+    ]
+  },
+  "threat_model": "query-only attacker; no store access; cannot read memory; cannot modify model weights or prompts; controls only injected mention surfaces",
+  "criteria": {
+    "attack_acceptance": "0%",
+    "mutated_attack_detection": "100%",
+    "durable_violations": 0,
+    "benign_false_positive_threshold": "5%",
+    "regressions": 0
+  },
+  "evidence": {
+    "config_off_confirmed_bypass": {
+      "artifact": "docs/artifacts/entity_linking_evasion/pre_fix_confirmed_bypass_config_off.json",
+      "evasive_trials": 32,
+      "attack_success_rate": 1.0,
+      "detection_rate": 0.0,
+      "durable_violations": 0,
+      "external_side_effects_observed": 0
+    },
+    "post_fix_original": {
+      "artifact": "docs/artifacts/entity_linking_evasion/after_fix_original_seed1337.json",
+      "release_gate_status": "attack_mitigation_validated_pending_benign_fp",
+      "evasive_trials": 32,
+      "attack_success_rate": 0.0,
+      "accepted_rate": 0.0,
+      "detection_rate": 1.0,
+      "durable_violations": 0,
+      "external_side_effects_observed": 0
+    },
+    "post_fix_mutated": {
+      "artifact": "docs/artifacts/entity_linking_evasion/after_fix_mutated_seed2026.json",
+      "release_gate_status": "attack_mitigation_validated_pending_benign_fp",
+      "evasive_trials": 32,
+      "attack_success_rate": 0.0,
+      "accepted_rate": 0.0,
+      "detection_rate": 1.0,
+      "durable_violations": 0,
+      "external_side_effects_observed": 0
+    },
+    "benign_false_positive": {
+      "artifact": "docs/artifacts/entity_linking_evasion/benign_false_positive_seed1337.json",
+      "benign_trials": 8,
+      "false_positive_rate": 0.0,
+      "threshold": 0.05,
+      "passes_threshold": true,
+      "external_side_effects_observed": 0,
+      "data_exposure_observed": 0
+    }
+  },
+  "release_note": "Evidence supports contained and regression-tested, validated for review. Human trust-boundary review is still recommended before production release."
+}

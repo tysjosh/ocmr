@@ -48,6 +48,8 @@ POSSIBLY_SAME_AS_CONFIDENCE = 0.5
 
 _WS = re.compile(r"\s+")
 _PUNCT = re.compile(r"[^\w\s]")
+_ALNUM = re.compile(r"[a-z0-9]+")
+_ALPHA_NUMERIC = re.compile(r"^([a-z]+)0*([0-9]+)")
 
 
 def normalize_name(name: str) -> str:
@@ -67,6 +69,24 @@ def normalize_name(name: str) -> str:
 def _tokens(name: str) -> set[str]:
     norm = normalize_name(name)
     return set(norm.split(" ")) if norm else set()
+
+
+def _compact(name: str) -> str:
+    """Alphanumeric-only matching key for uncertainty detection."""
+    return "".join(_ALNUM.findall(normalize_name(name)))
+
+
+def _alpha_numeric_key(name: str) -> tuple[str, int] | None:
+    """Return a stable prefix+number key for identifier-like labels.
+
+    This catches Task-style aliases such as ``T1`` / ``T01`` without treating
+    unrelated identifiers like ``U1`` as possible matches for ``T1``.
+    """
+    compact = _compact(name)
+    m = _ALPHA_NUMERIC.match(compact)
+    if not m:
+        return None
+    return m.group(1), int(m.group(2))
 
 
 class EntityResolver:
@@ -239,11 +259,28 @@ class EntityResolver:
             if graph.get_entity_type(node_id) != entity_type:
                 continue
             payload = graph.get_entity_payload(node_id) or {}
-            existing_tokens = _tokens(payload.get("name", ""))
+            existing_name = str(payload.get("name", "") or payload.get("title", ""))
+            existing_tokens = _tokens(existing_name)
             if not existing_tokens:
                 continue
             # Subset overlap in either direction signals a possible same-entity.
             if ref_tokens <= existing_tokens or existing_tokens <= ref_tokens:
+                matches.append(node_id)
+                continue
+
+            # Identifier-like aliases are common in task/project data and are
+            # exactly where entity-linking evasion attacks hide. Treat compact
+            # prefix/zero-padding variants as uncertain candidates, never as an
+            # automatic merge.
+            ref_compact = _compact(name)
+            existing_compact = _compact(existing_name)
+            ref_key = _alpha_numeric_key(name)
+            existing_key = _alpha_numeric_key(existing_name)
+            if ref_compact and existing_compact and (
+                ref_compact.startswith(existing_compact)
+                or existing_compact.startswith(ref_compact)
+                or (ref_key is not None and ref_key == existing_key)
+            ):
                 matches.append(node_id)
         return matches
 
