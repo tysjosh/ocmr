@@ -176,6 +176,20 @@ def test_run_full_suite_shape_and_significance_excludes_b3():
     assert "task_success_by_intensity" in report["stress"]
 
 
+def test_run_full_suite_supports_bsup_only_reviewer_rerun():
+    report = exp.run_full_suite(
+        seeds=[1337],
+        per_category=1,
+        baselines=["Bsup"],
+        stress_per_class=1,
+    )
+
+    assert "Bsup" in report["methods"]
+    assert report["significance_vs_best_baseline"]["skipped"] is True
+    assert report["threshold_sweep"]["skipped"] is True
+    assert "Bsup" in report["stress"]["task_success_by_intensity"]
+
+
 def test_run_full_suite_checkpoint_resume(tmp_path):
     import os
     d = str(tmp_path / "ckpt")

@@ -972,12 +972,24 @@ def run_full_suite(
     raw = per_seed_raw(ms)
     task_success_by_category = aggregate_task_success_by_category(ms)
     non_ocmr = [b for b in baselines if b != "B3"]
-    significance = significance_vs_best_baseline(ms, "B3", non_ocmr or baselines)
-    sweep = threshold_sweep(
-        taus=taus, seed=seeds[0], per_category=per_category,
-        settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
-        checkpoint_dir=checkpoint_dir,
-    )
+    if "B3" in ms.per_seed and non_ocmr:
+        significance = significance_vs_best_baseline(ms, "B3", non_ocmr)
+    else:
+        significance = {
+            "skipped": True,
+            "reason": "B3 and at least one non-B3 baseline are required.",
+        }
+    if "B3" in baselines:
+        sweep = threshold_sweep(
+            taus=taus, seed=seeds[0], per_category=per_category,
+            settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+            checkpoint_dir=checkpoint_dir,
+        )
+    else:
+        sweep = {
+            "skipped": True,
+            "reason": "B3 is required for the contradiction-threshold sweep.",
+        }
     stress = stress_by_intensity(
         methods=baselines, seeds=seeds[:1], per_class=stress_per_class,
         settings_factory=settings_factory, extractor=stress_extractor, embeddings=embeddings,
@@ -1070,12 +1082,16 @@ def print_report(report: dict[str, Any]) -> None:
             print(f"{method:<22}{cells}")
 
     print("\n=== Significance: B3 vs strongest non-OCMR baseline (Holm-Bonferroni) ===")
-    for metric, t in report["significance_vs_best_baseline"]["metric_tests"].items():
-        eff = t["effect_size"]
-        eff_s = f"{eff:.3f}" if isinstance(eff, (int, float)) else str(eff)
-        print(f"  {metric:<22} vs {t['vs_baseline']:<4} {t['test']:<14} "
-              f"corrected_p={t['corrected_p']:.4f} reject={t['reject_null']} "
-              f"{t['effect_name']}={eff_s}")
+    sig = report["significance_vs_best_baseline"]
+    if sig.get("skipped"):
+        print(f"  skipped: {sig.get('reason')}")
+    else:
+        for metric, t in sig["metric_tests"].items():
+            eff = t["effect_size"]
+            eff_s = f"{eff:.3f}" if isinstance(eff, (int, float)) else str(eff)
+            print(f"  {metric:<22} vs {t['vs_baseline']:<4} {t['test']:<14} "
+                  f"corrected_p={t['corrected_p']:.4f} reject={t['reject_null']} "
+                  f"{t['effect_name']}={eff_s}")
 
     write_outcomes = report.get("write_outcomes")
     if write_outcomes:
@@ -1089,11 +1105,15 @@ def print_report(report: dict[str, Any]) -> None:
                   f"{w.get('superseded', 0):<8}{w.get('quarantined', 0):<8}{w.get('rejected', 0):<8}")
 
     print("\n=== Threshold sweep (tau) + calibration ===")
-    print(f"{'tau':<8}{'ContrRate':<12}{'FalseQuar':<12}{'ECE':<10}{'Brier':<10}{'J(tau)':<10}")
-    for row in report["threshold_sweep"]["rows"]:
-        print(f"{row['tau']:<8}{row['contradiction_rate']:<12.2f}{row['false_quarantine']:<12.2f}"
-              f"{row['ece']:<10.3f}{row['brier']:<10.3f}{row['objective_j']:<10.3f}")
-    print(f"  selected tau (min J): {report['threshold_sweep']['selected_tau']}")
+    sweep = report["threshold_sweep"]
+    if sweep.get("skipped"):
+        print(f"  skipped: {sweep.get('reason')}")
+    else:
+        print(f"{'tau':<8}{'ContrRate':<12}{'FalseQuar':<12}{'ECE':<10}{'Brier':<10}{'J(tau)':<10}")
+        for row in sweep["rows"]:
+            print(f"{row['tau']:<8}{row['contradiction_rate']:<12.2f}{row['false_quarantine']:<12.2f}"
+                  f"{row['ece']:<10.3f}{row['brier']:<10.3f}{row['objective_j']:<10.3f}")
+        print(f"  selected tau (min J): {sweep['selected_tau']}")
 
     print("\n=== Stress: task success by perturbation intensity ===")
     ti = report["stress"]["task_success_by_intensity"]
