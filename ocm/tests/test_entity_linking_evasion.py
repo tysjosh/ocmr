@@ -3,10 +3,12 @@ from __future__ import annotations
 import pytest
 
 from ocm.evaluation.entity_linking_evasion import (
+    PAPER_ATTACK_AXES,
     generate_evasion_cases,
     run_benign_linkage_corpus,
     run_entity_linking_evasion_attack,
     run_injection_case,
+    run_paper_grade_linkage_evasion_suite,
 )
 
 _REGRESSION_AXES = (
@@ -140,3 +142,29 @@ def test_case_generation_is_seeded_and_has_distance_curve_fields():
     assert a == b
     assert {case.axis for case in a} == {"novel_alias", "spacing_variant"}
     assert all(0.0 < case.mention_distance <= 1.0 for case in a)
+
+
+def test_paper_suite_covers_adaptive_axes_baselines_and_benign_utility():
+    report = run_paper_grade_linkage_evasion_suite(
+        seeds=(1, 2),
+        baselines=("B2", "Bsup", "B3"),
+        axes=("adaptive_alias", "role_description", "unrelated_alias"),
+        per_axis=2,
+        benign_per_family=2,
+    )
+
+    assert report["release_gate"]["status"] == "validated_for_paper_grade_synthetic_eval"
+    assert set(report["freeze"]["axes"]) <= set(PAPER_ATTACK_AXES)
+
+    rows = {
+        (row["baseline"], row["mutation"]): row
+        for row in report["baseline_comparison"]["rows"]
+    }
+    assert rows[("B3", "mutated")]["conditions"]["evasive"]["accepted_rate"]["mean"] == 0.0
+    assert rows[("B3", "mutated")]["conditions"]["evasive"]["detection_rate"]["mean"] == 1.0
+    assert rows[("B2", "mutated")]["conditions"]["evasive"]["accepted_rate"]["mean"] == 1.0
+    assert rows[("Bsup", "mutated")]["conditions"]["evasive"]["accepted_rate"]["mean"] == 1.0
+
+    c7_off = report["defense_ablations"]["c7_fail_closed_off_b3"]
+    assert c7_off["conditions"]["evasive"]["accepted_rate"]["mean"] == 1.0
+    assert report["benign_utility"]["summary"]["false_positive_rate"]["mean"] == 0.0
