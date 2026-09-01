@@ -596,23 +596,55 @@ governance. Two arms (`ocm/evaluation/datasets/longmemeval_adapter.py`):
   (`longmemeval_s.json`); governance acts on noisy candidates. Extraction is run
   once and cached; a per-question belief assigns `update` vs `new_fact`.
 
+Arm-B result — **72-question LongMemEval full-haystack run**,
+Qwen2.5-14B-Instruct bf16, LongMemEval extraction prompt, Qwen slot linker at
+0.75, 5 seeds:
+
+| Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
+|--------|---------------|-----------------|------------------|
+| B0 (text-only) | 15.3 [15.3, 15.3] | 0.0 [0.0, 0.0] | 294.4 [294.4, 294.4] |
+| B2 (hybrid, no governance) | 15.3 [15.3, 15.3] | 0.0 [0.0, 0.0] | 294.4 [294.4, 294.4] |
+| `Bsup` (supersession-only) | **18.1 [18.1, 18.1]** | 0.0 [0.0, 0.0] | **0.0 [0.0, 0.0]** |
+| B3 (OCMR) | 16.7 [16.7, 16.7] | 0.0 [0.0, 0.0] | **0.0 [0.0, 0.0]** |
+
+Write outcomes: B0/B2 accepted all 3,405 candidates. `Bsup` and B3 had identical
+write outcomes (2,310 accepted, 1,095 superseded, 0 quarantined, 0 rejected),
+so the LongMemEval update gain in this end-to-end condition is explained by
+latest-value supersession rather than the broader ontology/provenance/temporal
+governance stack. This is the intended role of `Bsup`: it narrows the
+LongMemEval claim instead of overstating it.
+
+Artifact: `results_longmemeval_e2e.json`; caches:
+`lme_e2e_extract_cache_longmemeval.json` (4,609 entries) and
+`lme_e2e_link_cache_longmemeval.json` (839 entries).
+
+Arm-B abstention result — **30 `_abs` questions**, same configuration:
+
+| Method | Abstention ↑ | False answer ↓ | Support diagnostic |
+|--------|--------------|----------------|--------------------|
+| B0 | 100.0 [100.0, 100.0] | 0.0 [0.0, 0.0] | 93.3 [93.3, 93.3] |
+| B2 | 100.0 [100.0, 100.0] | 0.0 [0.0, 0.0] | 93.3 [93.3, 93.3] |
+| `Bsup` | 100.0 [100.0, 100.0] | 0.0 [0.0, 0.0] | 93.3 [93.3, 93.3] |
+| B3 | 100.0 [100.0, 100.0] | 0.0 [0.0, 0.0] | 93.3 [93.3, 93.3] |
+
 **Honest framing of the Arm-B result (this is the intended claim — do not
-overstate it).** End-to-end, write-time governance holds **constraint violations
-at 0** while the ungoverned arm accumulates many (e.g. B0/B2 ≈ 644 vs B3 = 0 on
-the 72-question knowledge-update subset). Governance suppresses **nothing
-correct**: B3 shows 0 rejected and 0 quarantined, so it is not the bottleneck.
-Raw task success is **extraction-bound, not governance-bound** — a diagnostic
-(`run_longmemeval_diagnostics.py`) shows the gold answer was *ever extracted*
-into any candidate for only ≈ 20% of questions, and B3 task success (≈ 18%) sits
-right at that extraction ceiling. The Arm-A → Arm-B gap therefore measures the
+overstate it).** End-to-end, write-time governance/supersession holds
+**constraint violations at 0** while the ungoverned arms accumulate many
+violations (294.4). Raw task success remains **extraction/linking-bound, not
+governance-bound** — a diagnostic (`run_longmemeval_diagnostics.py`) shows the
+gold answer was *ever extracted* into any candidate for only a minority of
+questions. The Arm-A → Arm-B gap therefore measures the
 **extraction/entity-resolution cost, not a governance cost**.
 
 Consequently:
 
-- **Do not claim Arm B out-recalls the ungoverned baseline.** The ungoverned arm
-  "wins" raw recall only by retaining hundreds of contradictory facts — the very
-  failure the paper argues against. The governed value is *durable consistency at
-  no correctness cost from the gate*, with recall limited upstream by extraction.
+- **Do not claim B3 uniquely explains the LongMemEval Arm-B gain.** `Bsup`
+  slightly exceeds B3 on raw task success while matching B3's zero durable
+  violations, so the LongMemEval end-to-end update result should be framed as a
+  latest-value-supersession validation plus an extraction/linking stress test.
+  The broader OCMR claim comes from the synthetic constraint-heavy, provenance,
+  temporal, abstention/conflict, and entity-linking-evasion results where
+  supersession alone is insufficient.
 - **Extractor-prompt honesty (fitted vs generic).** The broadened Arm-B
   extraction prompt (`longmemeval`) lists fact *categories* (counts, dates,
   schedules, third-party facts). A `generic` prompt variant with the same
