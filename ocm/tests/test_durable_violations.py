@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
-from ocm.evaluation.baselines import baseline_settings_overrides, build_baseline
+from ocm.evaluation.arms import baseline_settings_overrides, build_baseline
 from ocm.evaluation.experiment import durable_constraint_violations
 
 

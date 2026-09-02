@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
-from ocm.evaluation.baselines import build_baseline
+from ocm.evaluation.arms import build_baseline
 from ocm.evaluation.datasets.multiwoz_adapter import (
     build_from_dialogues,
     normalize_hf_multiwoz,

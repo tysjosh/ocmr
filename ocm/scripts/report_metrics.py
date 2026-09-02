@@ -28,7 +28,7 @@ import json
 from pathlib import Path
 from typing import Optional, Sequence
 
-from ocm.evaluation.baselines import DEFAULT_RUN_BASELINES
+from ocm.evaluation.arms import DEFAULT_RUN_BASELINES
 from ocm.evaluation.benchmark import DEFAULT_SEED, generate_jsonl
 from ocm.evaluation.metrics import MetricsReporter
 from ocm.evaluation.runner import BaselineRunner, load_benchmark

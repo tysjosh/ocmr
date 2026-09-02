@@ -260,7 +260,10 @@ deltas vs. B0.
 ### Baselines
 
 Baselines are the same memory strategy with different governance toggles
-([`ocm/evaluation/baselines.py`](ocm/evaluation/baselines.py)):
+([`ocm/evaluation/arms/baselines.py`](ocm/evaluation/arms/baselines.py)). They
+are one of three arm families registered in
+[`ocm/evaluation/arms/`](ocm/evaluation/arms/) — baselines, ablations, and
+stress arms — all reachable by name through `build_arm`:
 
 | Baseline | Description |
 | --- | --- |

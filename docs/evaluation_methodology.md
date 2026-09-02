@@ -417,7 +417,7 @@ write-time governance switches and retrieval composition differ.
 
 Beyond the canonical B0–B4 toggle matrix, extended baselines isolate
 alternative designs (opt-in via `baselines=(..., "Brag", "Brtcf", "Bsup")`;
-`ocm/evaluation/baselines.py`). All baselines share the same pipeline
+`ocm/evaluation/arms/baselines.py`). All baselines share the same pipeline
 implementation; these differ in retrieval composition and write-time gating.
 
 - **`Brag` — RAG-only.** Vectors-only similarity retrieval with the answer read
@@ -596,52 +596,40 @@ governance. Two arms (`ocm/evaluation/datasets/longmemeval_adapter.py`):
   (`longmemeval_s.json`); governance acts on noisy candidates. Extraction is run
   once and cached; a per-question belief assigns `update` vs `new_fact`.
 
-Arm-B result — **72-question LongMemEval full-haystack run**,
-Qwen2.5-14B-Instruct bf16, LongMemEval extraction prompt, Qwen slot linker at
-0.75, 5 seeds:
+Arm-B artifact status: **blocked pending fingerprinted rerun.** Existing raw
+LongMemEval result files are materially inconsistent and must not be cited as
+final paper evidence:
 
-| Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
-|--------|---------------|-----------------|------------------|
-| B0 (text-only) | 15.3 [15.3, 15.3] | 0.0 [0.0, 0.0] | 294.4 [294.4, 294.4] |
-| B2 (hybrid, no governance) | 15.3 [15.3, 15.3] | 0.0 [0.0, 0.0] | 294.4 [294.4, 294.4] |
-| `Bsup` (supersession-only) | **18.1 [18.1, 18.1]** | 0.0 [0.0, 0.0] | **0.0 [0.0, 0.0]** |
-| B3 (OCMR) | 16.7 [16.7, 16.7] | 0.0 [0.0, 0.0] | **0.0 [0.0, 0.0]** |
+| Result version | B0/B2 task | `Bsup` task | B3 task | Candidate writes |
+|----------------|-----------:|------------:|--------:|-----------------:|
+| paper draft | 54.17 | — | 54.17 | 17,697 |
+| older local JSON | 22.22 | 18.06 | 18.06 | 9,780 |
+| new Colab run | 15.28 | 18.06 | 16.67 | 3,405 |
 
-Write outcomes: B0/B2 accepted all 3,405 candidates. `Bsup` and B3 had identical
-write outcomes (2,310 accepted, 1,095 superseded, 0 quarantined, 0 rejected),
-so the LongMemEval update gain in this end-to-end condition is explained by
-latest-value supersession rather than the broader ontology/provenance/temporal
-governance stack. This is the intended role of `Bsup`: it narrows the
-LongMemEval claim instead of overstating it.
-
-Artifact: `results_longmemeval_e2e.json`; caches:
-`lme_e2e_extract_cache_longmemeval.json` (4,609 entries) and
-`lme_e2e_link_cache_longmemeval.json` (839 entries).
-
-Arm-B abstention result — **30 `_abs` questions**, same configuration:
-
-| Method | Abstention ↑ | False answer ↓ | Support diagnostic |
-|--------|--------------|----------------|--------------------|
-| B0 | 100.0 [100.0, 100.0] | 0.0 [0.0, 0.0] | 93.3 [93.3, 93.3] |
-| B2 | 100.0 [100.0, 100.0] | 0.0 [0.0, 0.0] | 93.3 [93.3, 93.3] |
-| `Bsup` | 100.0 [100.0, 100.0] | 0.0 [0.0, 0.0] | 93.3 [93.3, 93.3] |
-| B3 | 100.0 [100.0, 100.0] | 0.0 [0.0, 0.0] | 93.3 [93.3, 93.3] |
+This spread is too large for seed variance. The likely root cause is artifact
+identity drift: old prompt-only caches and checkpoint directories allowed
+outputs produced under different token budgets, cache contents, code revisions,
+or extracted example sets to be compared as if they were one experiment. The
+runner now records a run manifest, fingerprints the dataset/prompt/model/token
+budget/code state, writes identity-stamped prompt caches, and includes the
+extracted-example digest in LongMemEval checkpoint keys. Only reruns produced
+under that fingerprinted configuration should be used for the final Arm-B table.
 
 **Honest framing of the Arm-B result (this is the intended claim — do not
-overstate it).** End-to-end, write-time governance/supersession holds
-**constraint violations at 0** while the ungoverned arms accumulate many
-violations (294.4). Raw task success remains **extraction/linking-bound, not
-governance-bound** — a diagnostic (`run_longmemeval_diagnostics.py`) shows the
-gold answer was *ever extracted* into any candidate for only a minority of
-questions. The Arm-A → Arm-B gap therefore measures the
+overstate it).** Once rerun under the fingerprinted configuration, interpret
+Arm B as an extraction/linking stress test plus a latest-value update probe. Raw
+task success is expected to be **extraction/linking-bound, not
+governance-bound**; `run_longmemeval_diagnostics.py` should be reported beside
+the table to show how often the gold answer was ever extracted into any
+candidate. The Arm-A → Arm-B gap therefore measures the
 **extraction/entity-resolution cost, not a governance cost**.
 
 Consequently:
 
-- **Do not claim B3 uniquely explains the LongMemEval Arm-B gain.** `Bsup`
-  slightly exceeds B3 on raw task success while matching B3's zero durable
-  violations, so the LongMemEval end-to-end update result should be framed as a
-  latest-value-supersession validation plus an extraction/linking stress test.
+- **Do not claim B3 uniquely explains any LongMemEval Arm-B gain until `Bsup` is
+  rerun under the same fingerprint.** If `Bsup` matches or beats B3 on raw task
+  success while both keep durable violations at zero, frame LongMemEval Arm B as
+  a latest-value-supersession validation plus an extraction/linking stress test.
   The broader OCMR claim comes from the synthetic constraint-heavy, provenance,
   temporal, abstention/conflict, and entity-linking-evasion results where
   supersession alone is insufficient.
@@ -680,4 +668,11 @@ run_full_suite(per_category=25, tau=0.95)"
 # Governed-write evidence + false-quarantine reconciliation
 python -m ocm.evaluation.replay_governed_writes --per-category 25
 python -m ocm.evaluation.replay_governed_writes --per-category 25 --isolate-per-example
+
+# Fingerprinted LongMemEval Arm B rerun (same defaults are in OCM_Colab.ipynb 7f)
+python run_7f_local.py --full --baselines B0,B2,Bsup,B3 \
+  --slot-linker qwen --extract-prompt longmemeval --llm-max-tokens 512
+
+# Only use this to reproduce old prompt-only cache artifacts, not new paper runs
+python run_7f_local.py --full --legacy-cache-keys
 ```

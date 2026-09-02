@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from ocm.core.config import Settings
 from ocm.evaluation import experiment as exp
-from ocm.evaluation.ablations import ABLATIONS, DEFAULT_ABLATIONS, build_ablation_strategy
+from ocm.evaluation.arms import ABLATIONS, DEFAULT_ABLATIONS, build_ablation_strategy
 from ocm.evaluation.benchmark import BenchmarkGenerator
 from ocm.evaluation.stress import (
     INTENSITY_LEVELS,
@@ -103,7 +103,7 @@ def test_entity_resolution_eval_returns_metrics():
 def test_decisive_metrics_shapes():
     examples = BenchmarkGenerator(seed=1337).generate(per_category=2)
     from ocm.evaluation.runner import BaselineRunner
-    from ocm.evaluation.baselines import build_baseline
+    from ocm.evaluation.arms import build_baseline
     from ocm.core.container import CoreContainer
 
     runner = BaselineRunner(settings_factory=_settings)

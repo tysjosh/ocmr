@@ -695,6 +695,15 @@ class WritePipeline:
             outcome = self.commit_manager.commit(candidate, vr, created_at=now)
             return outcome, 0 if vr.valid else 1, 0
 
+        # Reviewer baseline: one of Toki's production contradiction-resolution
+        # operators as the sole write policy. Bypasses the W6/W7 stack entirely so
+        # the arm measures that operator and nothing else.
+        toki_operator = str(getattr(self.settings, "toki_operator", "off") or "off")
+        if toki_operator != "off":
+            vr = self._toki_operator_verdict(candidate, toki_operator)
+            outcome = self.commit_manager.commit(candidate, vr, created_at=now)
+            return outcome, 0 if vr.valid else 1, 0
+
         # W6 (+W7) — graph-level constraints incl. the contradiction gate. The
         # contradiction-gate ablation disables C7 by passing no checker, so
         # contradictions are no longer blocked/quarantined at write time.
@@ -873,6 +882,116 @@ class WritePipeline:
             reason=f"MemGPT-style overwrite (LLM update) replaces {current_ids}",
             conflicting_ids=current_ids,
             recommended_action="supersede",
+        )
+
+    # -- Toki operator baselines (arXiv:2606.06240) ------------------------
+    def _toki_operator_verdict(
+        self, candidate: CandidateAssertion, operator: str
+    ) -> ValidationResult:
+        """Dispatch to the configured Toki winner-selector.
+
+        Raises:
+            ValueError: If ``operator`` is not a recognized Toki operator. Failing
+                loudly here means a typo in a baseline's settings override cannot
+                silently behave like an ungoverned arm.
+        """
+        if operator == "evidence":
+            return self._evidence_weighted_verdict(candidate)
+        raise ValueError(
+            f"unknown toki_operator {operator!r}; supported: 'off', 'evidence'"
+        )
+
+    def _single_valued_incumbents(
+        self, candidate: CandidateAssertion
+    ) -> list[tuple[str, float]] | None:
+        """Accepted ``(assertion_id, confidence)`` conflicting with ``candidate``.
+
+        Returns ``None`` when the predicate is not single-valued (so the candidate
+        is admissible as an additional value and no operator applies), and an
+        empty list when it is single-valued but uncontested.
+
+        Scoped to the **subject** side, matching Toki's ``(subj, pred)`` conflict
+        key. Confidence and creation time are read from the accepted graph edge,
+        which mirrors them from the durable row.
+        """
+        sig = RELATION_SIGNATURES.get(candidate.predicate)
+        if sig is None or sig.cardinality not in {
+            Cardinality.M_TO_ONE,
+            Cardinality.ONE_TO_ONE,
+        }:
+            return None
+        incumbents: list[tuple[str, float]] = []
+        for _s, object_id, _k, data in self.graph.out_edges(
+            candidate.subject_id, candidate.predicate
+        ):
+            if object_id == candidate.object_id:
+                continue  # same value re-asserted: not a contradiction
+            assertion_id = data.get("assertion_id")
+            if not assertion_id:
+                continue
+            incumbents.append(
+                (str(assertion_id), float(data.get("confidence", 0.0) or 0.0))
+            )
+        return incumbents
+
+    def _evidence_weighted_verdict(
+        self, candidate: CandidateAssertion
+    ) -> ValidationResult:
+        """Evidence-weighted merge, Toki's ``+p`` operator (the ``Bevi`` baseline).
+
+        The higher-confidence side of a single-valued conflict wins. A tie is
+        broken by system time, and the candidate is always the newer write, so on
+        equal confidence the candidate wins — which means this operator degrades
+        to last-writer-wins whenever confidence is uniform across writes.
+
+        Unlike OCMR's gate this operator **always elects a winner**: it never
+        quarantines, applies no confidence margin, and requires no supporting
+        evidence. When the incumbent wins, the candidate is *rejected* rather than
+        quarantined, so it neither becomes current nor registers as a governed
+        hold — a losing write here is a log line, not a surfaced conflict.
+
+        Two documented deviations from Toki: the loser is not preserved in a
+        recoverable audit row on the reject path (OCMR's rejection is logged, not
+        durable), and validity-window overlap is not consulted when detecting the
+        conflict (matching the other narrow write-policy baselines in this module).
+        """
+        incumbents = self._single_valued_incumbents(candidate)
+        if incumbents is None or not incumbents:
+            return ValidationResult(valid=True, recommended_action="accept")
+
+        conflicting_ids = [assertion_id for assertion_id, _conf in incumbents]
+        incumbent_conf = max(conf for _assertion_id, conf in incumbents)
+        candidate_conf = float(candidate.confidence)
+
+        if candidate_conf >= incumbent_conf:
+            tie = candidate_conf == incumbent_conf
+            return ValidationResult(
+                valid=True,
+                reason=(
+                    "Bevi evidence-weighted merge: candidate confidence "
+                    f"{candidate_conf:.3f} "
+                    + (
+                        "ties incumbent (newer write wins on system time)"
+                        if tie
+                        else f"exceeds incumbent {incumbent_conf:.3f}"
+                    )
+                    + f"; supersedes {conflicting_ids}"
+                ),
+                conflicting_ids=conflicting_ids,
+                recommended_action="supersede",
+            )
+
+        return ValidationResult(
+            valid=False,
+            failed_check="TOKI_EVI",
+            severity=Severity.low,
+            reason=(
+                "Bevi evidence-weighted merge: incumbent confidence "
+                f"{incumbent_conf:.3f} exceeds candidate {candidate_conf:.3f}; "
+                f"candidate loses to {conflicting_ids} and does not become current"
+            ),
+            conflicting_ids=conflicting_ids,
+            recommended_action="reject",
         )
 
     # ====================================================================

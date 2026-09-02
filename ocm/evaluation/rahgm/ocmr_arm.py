@@ -51,7 +51,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Sequence
 
 from ocm.core.container import CoreContainer
-from ocm.evaluation.baselines import baseline_settings_overrides, build_baseline
+from ocm.evaluation.arms import baseline_settings_overrides, build_baseline
 from ocm.evaluation.benchmark import BenchmarkExample
 from ocm.evaluation.experiment import (
     _default_settings,
@@ -94,7 +94,7 @@ def valid_arms() -> frozenset[str]:
     can reject a typo up front rather than failing partway through a multi-hour
     sweep, or worse, after it.
     """
-    from ocm.evaluation.baselines import BASELINE_TOGGLES
+    from ocm.evaluation.arms import BASELINE_TOGGLES
 
     return frozenset(BASELINE_TOGGLES) | GOVERNED_ARMS
 

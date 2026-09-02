@@ -126,6 +126,20 @@ class Settings(BaseModel):
     # incorrect ``insert`` decision leaves two active values (a violation).
     # Off by default; enabled only by the opt-in Bmemgpt baseline.
     memgpt_intent_supersede: bool = False
+    # Reviewer baseline family: one of Toki's production contradiction-resolution
+    # operators as the sole write policy (arXiv:2606.06240, Table 13). When set to
+    # anything other than ``"off"``, a single-valued conflict on
+    # ``(subject, predicate)`` is resolved by that operator's winner-selector and
+    # no OCMR governance runs. Supported values:
+    #
+    # * ``"off"``      — not a Toki arm (default).
+    # * ``"evidence"`` — evidence-weighted merge (Toki's ``+p``): the higher-
+    #   confidence side wins, ties broken by system time (the candidate is newer).
+    #   Always elects a winner; never quarantines. This is the ``Bevi`` baseline.
+    #
+    # An unrecognized value raises at write time rather than silently degrading,
+    # so a typo in a baseline override cannot masquerade as a valid arm.
+    toki_operator: str = "off"
     # Fail-closed guard for entity-linking evasion. When write-time governance is
     # enabled, a candidate for a covered single-valued entity relation whose
     # protected subject was newly minted from unattributed text is quarantined if

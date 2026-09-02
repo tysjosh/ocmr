@@ -307,7 +307,7 @@ def run_b3_failures(
 ) -> dict[str, Any]:
     from ocm.core.config import Settings
     from ocm.core.container import CoreContainer
-    from ocm.evaluation.baselines import baseline_settings_overrides, build_baseline
+    from ocm.evaluation.arms import baseline_settings_overrides, build_baseline
     from ocm.evaluation.runner import BaselineRunner
 
     def settings_factory() -> Settings:

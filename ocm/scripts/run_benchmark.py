@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from ocm.core.logging import ResearchLogger
-from ocm.evaluation.baselines import DEFAULT_RUN_BASELINES
+from ocm.evaluation.arms import DEFAULT_RUN_BASELINES
 from ocm.evaluation.benchmark import DEFAULT_SEED, generate_jsonl
 from ocm.evaluation.runner import DEFAULT_TOP_K, BaselineRunner, load_benchmark
 

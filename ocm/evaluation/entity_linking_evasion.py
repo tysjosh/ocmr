@@ -29,7 +29,7 @@ from typing import Iterable, Sequence
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
-from ocm.evaluation.baselines import baseline_settings_overrides, build_baseline
+from ocm.evaluation.arms import baseline_settings_overrides, build_baseline
 from ocm.evaluation.experiment import durable_constraint_violations
 from ocm.evaluation import stats
 from ocm.memory.contracts import ExtractionResult, WriteOutcome
@@ -46,7 +46,13 @@ PAPER_ATTACK_AXES = (
     "role_description",
     "unrelated_alias",
 )
-PAPER_ATTACK_BASELINES = ("B0", "B2", "Bsup", "B3")
+#: Baselines compared in the paper-grade attack suite. ``Bsup`` and ``Bevi`` are
+#: both ungoverned resolvers whose settings switch off the fail-closed linkage
+#: guard, so both are exposed to the evasion path. ``Bevi`` is the stronger of the
+#: two here: ``Bsup``'s rule is scoped to ``HAS_VALUE`` and never fires on the
+#: single-valued *entity* relation (``ASSIGNED_TO``) these attacks target, while
+#: ``Bevi`` resolves it by confidence.
+PAPER_ATTACK_BASELINES = ("B0", "B2", "Bsup", "Bevi", "B3")
 PAPER_ATTACK_SEEDS = (1337, 7, 42, 99, 2024)
 DEFAULT_BENIGN_PER_FAMILY = 8
 _ALL_ATTACK_AXES = frozenset(PAPER_ATTACK_AXES)

@@ -21,13 +21,13 @@ import pytest
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
-from ocm.evaluation.baselines import (
+from ocm.evaluation.arms import (
     BASELINE_REGISTRY,
     BASELINE_TOGGLES,
     build_all_baselines,
     build_baseline,
 )
-from ocm.evaluation.strategies import MemoryStrategy, StrategyToggles
+from ocm.evaluation.arms import MemoryStrategy, StrategyToggles
 from ocm.ontology.enums import TaskStatus
 from ocm.retrieval.evidence_packager import EvidencePackage
 

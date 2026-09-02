@@ -169,6 +169,17 @@ class CachingExtractor:
         os.replace(tmp, self._cache_path)
         self._unsaved = 0
 
+    @property
+    def fingerprint(self) -> Optional[dict]:
+        """The wrapped extractor's identity, when it exposes one.
+
+        Exposed publicly so callers that need the extraction stack's identity —
+        e.g. :func:`ocm.evaluation.run_identity.extractor_identity`, which folds it
+        into checkpoint keys — can read it through the cache wrapper instead of
+        having to unwrap it themselves.
+        """
+        return self._fingerprint()
+
     def _fingerprint(self) -> Optional[dict]:
         """The wrapped extractor's identity, when it exposes one."""
         value = getattr(self._base, "fingerprint", None)

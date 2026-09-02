@@ -45,13 +45,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional
 
 from ocm.core.config import Settings
-from ocm.core.container import CoreContainer
 from ocm.evaluation import stats
-from ocm.evaluation.ablations import DEFAULT_ABLATIONS, build_ablation_strategy
-from ocm.evaluation.baselines import build_baseline, baseline_settings_overrides
+from ocm.evaluation.arms import DEFAULT_ABLATIONS, MemoryStrategy, build_arm
 from ocm.evaluation.benchmark import BenchmarkGenerator
+from ocm.evaluation.run_identity import fingerprint_suffix
 from ocm.evaluation.runner import BaselineRunner
-from ocm.evaluation.strategies import MemoryStrategy
 
 
 # --------------------------------------------------------------------------- #
@@ -302,20 +300,17 @@ def _build_strategy(
     extractor: object | None = None,
     embeddings: object | None = None,
 ) -> MemoryStrategy:
-    """Build a strategy for a method name (a B-baseline or a named ablation).
+    """Build a strategy for a method name (any registered arm).
+
+    Thin wrapper over :func:`ocm.evaluation.arms.build_arm`, kept because several
+    modules already import this name. ``method`` may be a baseline, an ablation,
+    or a stress arm; the arm registry resolves the family explicitly rather than
+    inferring it from a ``"B"`` name prefix as this function previously did.
 
     A shared ``extractor`` / ``embeddings`` (loaded once) is injected into every
     container so a heavy model is not reloaded per arm.
     """
-    if method.startswith("B"):
-        settings = settings_factory().model_copy(
-            update=baseline_settings_overrides(method)
-        )
-        container = CoreContainer(
-            settings, extractor=extractor, embeddings=embeddings
-        )
-        return build_baseline(method, container)
-    return build_ablation_strategy(
+    return build_arm(
         method, settings_factory, extractor=extractor, embeddings=embeddings
     )
 
@@ -720,6 +715,7 @@ def threshold_sweep(
     extractor: object | None = None,
     embeddings: object | None = None,
     checkpoint_dir: Optional[str] = None,
+    key_suffix: str = "",
 ) -> dict[str, Any]:
     """Sweep the contradiction threshold τ and report calibration (Table VI).
 
@@ -737,7 +733,7 @@ def threshold_sweep(
     examples = None
     rows: list[dict[str, float]] = []
     for tau in taus:
-        key = f"tau__{method}__{tau}__seed{seed}__pc{per_category}"
+        key = f"tau__{method}__{tau}__seed{seed}__pc{per_category}{key_suffix}"
         cached = ckpt.load(key)
         if cached is not None:
             rows.append(cached)
@@ -902,6 +898,7 @@ def run_full_suite(
     out_path: Optional[str] = None,
     token_counter: Optional[Any] = None,
     warmup: bool = True,
+    run_fingerprint: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run the **entire** research protocol and return a structured result.
 
@@ -936,6 +933,16 @@ def run_full_suite(
     overrides \u03c4 per row regardless). When ``None`` the configured default
     (0.8) is used and checkpoint keys are unchanged (backward compatible).
 
+    ``run_fingerprint`` is a short digest of the extraction stack (build it with
+    :func:`ocm.evaluation.run_identity.run_fingerprint`). It is appended to every
+    checkpoint key in this suite — the multi-seed arms, the τ-sweep, and the stress
+    block — so changing model / token budget / prompt recomputes instead of
+    resuming onto results produced by the previous stack. The extraction cache
+    already refuses a mismatched fingerprint; these keys are what stops the
+    *downstream* per-arm results from being reused across configurations. Omitting
+    it reproduces the previous key layout exactly, so existing checkpoints stay
+    addressable.
+
     ``warmup`` (default ``True``) runs one throwaway write+query before the first
     *timed* arm so the one-time, process-global lazy-init cost (model first
     forward pass, torch kernel autotuning, first embed) is amortized up front
@@ -961,6 +968,13 @@ def run_full_suite(
     else:
         key_suffix = ""
 
+    # Fold the extraction stack's identity into every checkpoint key. Without it a
+    # changed extractor (model, token budget, prompt) re-extracts but still resumes
+    # onto per-(method, seed) results computed by the previous stack, mixing two
+    # configurations into one reported run. Empty when not supplied, so existing
+    # checkpoints stay addressable.
+    key_suffix += fingerprint_suffix(run_fingerprint)
+
     ms = run_multiseed(
         methods, seeds=seeds, per_category=per_category,
         settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
@@ -984,6 +998,7 @@ def run_full_suite(
             taus=taus, seed=seeds[0], per_category=per_category,
             settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
             checkpoint_dir=checkpoint_dir,
+            key_suffix=fingerprint_suffix(run_fingerprint),
         )
     else:
         sweep = {
