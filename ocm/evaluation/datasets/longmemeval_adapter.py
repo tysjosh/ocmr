@@ -42,11 +42,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
 from ocm.evaluation.benchmark import BenchmarkExample, Question, Session
 from ocm.memory.contracts import ExtractionResult
+
+logger = logging.getLogger(__name__)
 
 #: Confidence for a brand-new fact value (first assertion). Mirrors the MultiWOZ
 #: adapter / mock extractor so the contradiction gate treats it as a strong fact.
@@ -906,16 +909,70 @@ def parse_facts_json(text: str) -> list[dict[str, Any]]:
     return []
 
 
+def looks_truncated(text: str) -> bool:
+    """True when a fact response looks cut off mid-array rather than empty.
+
+    :func:`parse_facts_json` returns ``[]`` both for "this session states no
+    memory fact" (a legitimate outcome the prompt explicitly asks for) and for
+    "generation hit ``max_new_tokens`` mid-array", which silently discards **every
+    fact in the session** because the JSON never closes. Those two cases are
+    indistinguishable downstream, so a low extraction yield cannot be attributed
+    to the prompt rather than the token budget.
+
+    A response is judged truncated when it opened an array that never balanced.
+    That is the signature of a cut-off generation; a model declining to extract
+    emits ``[]``, which balances immediately.
+    """
+    if not text:
+        return False
+    start = text.find("[")
+    if start == -1:
+        return False
+    depth = 0
+    for char in text[start:]:
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth == 0:
+                return False  # a balanced array exists somewhere
+    return True  # opened and never closed
+
+
 #: A fact extractor maps one session's text → a list of ``{attribute, value}``.
 def build_fact_extract_fn(
     chat_fn,
     *,
     prompt_template: str = FACT_EXTRACTION_PROMPT,
+    truncation_counter: Optional[dict[str, int]] = None,
 ) -> Any:
-    """Build a per-session fact extractor from a chat callable (``prompt -> text``)."""
+    """Build a per-session fact extractor from a chat callable (``prompt -> text``).
+
+    ``truncation_counter``, when supplied, accumulates ``calls``, ``empty`` and
+    ``truncated`` counts so a run can report how often the token budget — rather
+    than the session content — produced zero facts. Pass the same dict across a
+    run and read it afterwards; a non-zero ``truncated`` means raising
+    ``max_new_tokens`` will recover real facts.
+    """
 
     def _extract(text: str) -> list[dict[str, Any]]:
-        return parse_facts_json(chat_fn(prompt_template.format(text=text)))
+        response = chat_fn(prompt_template.format(text=text))
+        facts = parse_facts_json(response)
+        if truncation_counter is not None:
+            truncation_counter["calls"] = truncation_counter.get("calls", 0) + 1
+            if not facts:
+                truncation_counter["empty"] = truncation_counter.get("empty", 0) + 1
+                if looks_truncated(response):
+                    truncation_counter["truncated"] = (
+                        truncation_counter.get("truncated", 0) + 1
+                    )
+                    logger.warning(
+                        "fact extraction looks truncated (%d chars, unbalanced "
+                        "array) — raise max_new_tokens; this discards ALL facts "
+                        "for the session",
+                        len(response or ""),
+                    )
+        return facts
 
     return _extract
 

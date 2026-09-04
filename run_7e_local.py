@@ -169,7 +169,7 @@ def main() -> int:
     parser.add_argument("--annotations", type=Path, default=None)
     parser.add_argument("--limit", type=int, default=None, help="Optional question cap.")
     parser.add_argument("--seeds", default="1337,7,42,99,2024")
-    parser.add_argument("--baselines", default="B0,B2,Bevi,B3")
+    parser.add_argument("--baselines", default="B0,B2,Bsup,Bevi,B3")
     parser.add_argument(
         "--annotate",
         action="store_true",
