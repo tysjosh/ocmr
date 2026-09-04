@@ -80,8 +80,18 @@ def _sig(
     )
 
 
-# Frozen registry of all 14 relations (Req 2.1-2.13, incl. SUPERSEDES 2.13, and
-# the derived HAS_STATUS status-assertion relation).
+# Frozen registry of all 15 relations: the 13 specified in Req 2.1-2.13 (incl.
+# SUPERSEDES 2.13), plus two derived ones — HAS_STATUS (Req 8.11, promotes an
+# entity's status to a first-class assertion) and HAS_VALUE (added with the
+# MultiWOZ adapter, maps an external single-valued field onto governed memory).
+#
+# Three are single-valued (m:1): ASSIGNED_TO, HAS_STATUS, HAS_VALUE. Those are the
+# only relations on which a second distinct object is a contradiction, and so the
+# only ones the durable-violation metric can measure.
+#
+# Rendered as a diagram by ``python -m ocm.scripts.render_ontology_graph``; re-run
+# it after changing this registry (``--check`` fails if docs/ontology_graph.md is
+# stale) so the documentation cannot drift from the declaration again.
 RELATION_SIGNATURES: dict[str, RelationSignature] = {
     "PARTICIPATES_IN": _sig("PARTICIPATES_IN", {"Person"}, {"Event"}, Cardinality.M_TO_N),
     "MEMBER_OF": _sig("MEMBER_OF", {"Person"}, {"Organization"}, Cardinality.M_TO_N),

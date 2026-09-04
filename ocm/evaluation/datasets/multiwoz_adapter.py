@@ -8,9 +8,14 @@ the synthetic benchmark. The mapping is faithful and minimal:
   qualified per dialogue (``<dialogue_id>:hotel-area``).
 * Each slot value becomes a :class:`SlotValue` node.
 * The current value is a ``Slot -[HAS_VALUE]-> SlotValue`` assertion, which is
-  **1:1** (one accepted value per slot), so the governance gate treats a changed
-  value as a single-valued contradiction: under ``correction`` intent it
-  **supersedes** the prior value (the natural belief-state update), and under
+  **m:1** — single-valued on the *slot* (at most one accepted value per slot), but
+  **not** a bijection: a value may be shared across slots, since ``centre`` is
+  legitimately both a restaurant area and a hotel area. Declaring it ``1:1`` made
+  every shared value look like a contradiction and produced the quarantine flood
+  fixed in ``7383cbe``; do not reintroduce that reading.
+  The gate therefore treats a *changed* value as a single-valued contradiction:
+  under ``update`` intent it **supersedes** the prior value (the natural
+  belief-state update, via ``authoritative_update_supersede``), and under
   ``new_fact`` it would **quarantine** the conflict.
 
 Why an *oracle* extractor (`MultiWOZOracleExtractor`)
@@ -19,7 +24,7 @@ Rather than ask the LLM to re-extract slots from utterances (which would conflat
 dialogue-state-tracking error with governance behaviour), the adapter keys an
 oracle extractor off MultiWOZ's **gold per-turn belief state**: for each turn it
 emits exactly the slots that are *new* or *changed* at that turn (the delta),
-with ``new_fact`` / ``correction`` intent respectively. This isolates the
+with ``new_fact`` / ``update`` intent respectively. This isolates the
 governance evaluation — the experiment measures what the governed write path does
 *given* correct slots — and lets the entire existing pipeline, baselines, and
 metrics run unchanged (the oracle plugs in via the container's ``extractor``
@@ -110,7 +115,12 @@ def build_from_dialogues(
     turn is ``{"utterance": str, "state": {slot: value, ...}}`` and ``state`` is
     the **cumulative** gold belief state after that turn (MultiWOZ 2.2 form).
     For every turn we emit the *delta* versus the previous turn: a brand-new slot
-    as ``new_fact`` and a changed slot as ``correction``. ``source_ref`` is
+    as ``new_fact`` and a changed slot as ``update``. The distinction matters: an
+    ``update`` takes the ``authoritative_update_supersede`` path in C7 (the latest
+    value replaces the incumbent unconditionally, no confidence margin), whereas a
+    ``correction`` must dominate the incumbent by ``supersede_margin`` and carry
+    ``supersede_evidence_min`` evidence. MultiWOZ slots are authoritative state the
+    user just changed, so ``update`` is the correct label. ``source_ref`` is
     ``"<dialogue_id>:t<i>"`` so the oracle and the harness agree.
 
     Returns ``(examples, oracle_extractor)``; pass the extractor into the
