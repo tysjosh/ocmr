@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
-from ocm.evaluation.baselines import build_baseline
+from ocm.evaluation.arms import build_baseline
 from ocm.evaluation.datasets.multiwoz_adapter import (
     build_from_dialogues,
     normalize_hf_multiwoz,
@@ -163,6 +163,62 @@ def test_authoritative_update_supersedes_serial_changes():
     }
     assert values == {"east"}
     assert durable_constraint_violations(container)[0] == 0
+
+
+def test_case_variant_reassertion_does_not_leave_durable_duplicate():
+    # Regression for PMUL3850.json: a surface-form-only reassertion of the same
+    # normalized value must not leave a hidden accepted duplicate in SQLite that
+    # survives a later supersession.
+    dialogues = [
+        {
+            "dialogue_id": "d",
+            "turns": [
+                {
+                    "utterance": "latin american",
+                    "state": {"restaurant-food": "Latin American"},
+                },
+                {
+                    "utterance": "same food",
+                    "state": {"restaurant-food": "latin american"},
+                },
+                {"utterance": "change food", "state": {"restaurant-food": "Italian"}},
+            ],
+        }
+    ]
+    examples, oracle = build_from_dialogues(dialogues)
+    container = CoreContainer(
+        Settings(
+            deterministic_test_mode=True,
+            chroma_mode="memory",
+            authoritative_update_supersede=True,
+        ),
+        extractor=oracle,
+    )
+    ex = examples[0]
+    outcomes = [
+        container.write_pipeline.run(s.input, f"{ex.id}:{s.session_id}")
+        for s in ex.sessions
+    ]
+
+    assert sum(len(r.superseded) for r in outcomes) == 1
+    assert durable_constraint_violations(container)[0] == 0
+
+    slot_subjects = []
+    for s, _o, _k, _d in container.graph.find_edges_by_predicate("HAS_VALUE"):
+        slot_name = (container.graph.get_entity_payload(s) or {}).get("name", "")
+        if slot_name.lower() == "d:restaurant-food":
+            slot_subjects.append(s)
+    assert len(slot_subjects) == 1
+    accepted_rows = [
+        a
+        for a in container.repo.list_assertions("accepted")
+        if a.subject_id == slot_subjects[0] and a.predicate == "HAS_VALUE"
+    ]
+    assert len({a.object_id for a in accepted_rows}) == 1
+    value_payload = (
+        container.graph.get_entity_payload(accepted_rows[0].object_id) or {}
+    )
+    assert value_payload.get("value", "").lower() == "italian"
 
 
 def test_without_policy_serial_updates_quarantine():

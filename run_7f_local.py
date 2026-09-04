@@ -11,6 +11,7 @@ Examples:
     python run_7f_local.py
     python run_7f_local.py --full
     python run_7f_local.py --full --baselines B0,B2,Bsup,B3 --slot-linker qwen
+    python run_7f_local.py --full --legacy-cache-keys  # deliberate old artifacts
     python run_7f_local.py --full --manager memgpt   # MemGPT-style Bmemgpt row
 """
 
@@ -20,6 +21,7 @@ import argparse
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -61,6 +63,57 @@ def _limit_segment(value: Optional[int]) -> str:
 def _safe_segment(value: str) -> str:
     cleaned = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in value)
     return cleaned.strip("_") or "run"
+
+
+def _json_digest(value: Any, *, length: int = 16) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:length]
+
+
+def _text_sha256(value: str, *, length: int | None = 16) -> str:
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return digest if length is None else digest[:length]
+
+
+def _file_sha256(path: Path, *, length: int | None = 16) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    digest = h.hexdigest()
+    return digest if length is None else digest[:length]
+
+
+def _git_revision(repo_dir: Path) -> str:
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return "unknown"
+    return proc.stdout.strip() or "unknown"
+
+
+def _git_diff_sha256(repo_dir: Path) -> str:
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_dir), "diff", "--binary", "HEAD"],
+            check=True,
+            capture_output=True,
+        )
+    except Exception:
+        return "unknown"
+    if not proc.stdout:
+        return "clean"
+    return hashlib.sha256(proc.stdout).hexdigest()
 
 
 def _ci(row: dict, key: str) -> str:
@@ -181,23 +234,80 @@ class CachedChat:
         path: Path,
         chat_factory,
         *,
+        namespace: dict[str, Any] | None = None,
         flush_every: int = 50,
+        legacy_keys: bool = False,
     ) -> None:
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.cache: dict[str, str] = {}
+        self.namespace = namespace or {}
+        self.legacy_keys = bool(legacy_keys)
+        self.unversioned_cache = False
         if path.exists():
             with path.open("r", encoding="utf-8") as fh:
                 raw = json.load(fh)
             if isinstance(raw, dict):
-                self.cache = {str(k): str(v) for k, v in raw.items()}
+                meta = raw.get("__meta__")
+                if isinstance(meta, dict):
+                    stored_mode = meta.get("key_mode")
+                    current_mode = self._key_mode
+                    if stored_mode and stored_mode != current_mode:
+                        raise ValueError(
+                            "Prompt cache key mode mismatch.\n"
+                            f"  cache:   {stored_mode}\n"
+                            f"  current: {current_mode}\n"
+                            f"  file:    {self.path}"
+                        )
+                    stored_namespace = meta.get("namespace")
+                    if (
+                        stored_namespace
+                        and self.namespace
+                        and stored_namespace != self.namespace
+                    ):
+                        raise ValueError(
+                            "Prompt cache was produced by a different run identity.\n"
+                            f"  cache:   {stored_namespace}\n"
+                            f"  current: {self.namespace}\n"
+                            f"  file:    {self.path}\n"
+                            "Use a different cache path, delete the cache, or "
+                            "pass --legacy-cache-keys only for deliberate old "
+                            "md5(prompt) reuse."
+                        )
+                    entries = raw.get("entries") or {}
+                    if isinstance(entries, dict):
+                        self.cache = {str(k): str(v) for k, v in entries.items()}
+                elif self.legacy_keys:
+                    self.cache = {str(k): str(v) for k, v in raw.items()}
+                    self.unversioned_cache = True
+                else:
+                    raise ValueError(
+                        "Prompt cache predates identity metadata and would be "
+                        "unsafe to reuse by default.\n"
+                        f"  file: {self.path}\n"
+                        "Use a new cache path, delete the old cache, or pass "
+                        "--legacy-cache-keys to intentionally reproduce the old "
+                        "md5(prompt)-only behavior."
+                    )
         self._chat_factory = chat_factory
         self._chat = None
         self._dirty = 0
         self.flush_every = max(1, int(flush_every))
 
+    @property
+    def _key_mode(self) -> str:
+        return "legacy-md5-prompt" if self.legacy_keys else "identity-sha256-v1"
+
+    def _key(self, prompt: str) -> str:
+        if self.legacy_keys:
+            return hashlib.md5(prompt.encode("utf-8")).hexdigest()
+        return _json_digest(
+            {"namespace": self.namespace, "prompt": prompt},
+            length=64,
+        )
+
     def __call__(self, prompt: str) -> str:
-        key = hashlib.md5(prompt.encode("utf-8")).hexdigest()
+        key = self._key(prompt)
         if key in self.cache:
             return self.cache[key]
         if self._chat is None:
@@ -212,7 +322,19 @@ class CachedChat:
     def flush(self) -> None:
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         with tmp.open("w", encoding="utf-8") as fh:
-            json.dump(self.cache, fh, ensure_ascii=False)
+            json.dump(
+                {
+                    "__meta__": {
+                        "format": 2,
+                        "key_mode": self._key_mode,
+                        "namespace": self.namespace,
+                        "n_entries": len(self.cache),
+                    },
+                    "entries": self.cache,
+                },
+                fh,
+                ensure_ascii=False,
+            )
         tmp.replace(self.path)
         self._dirty = 0
 
@@ -286,7 +408,7 @@ def main() -> int:
     parser.add_argument("--abst-limit", default="30", help="Abstention cap; use full/none/all for full split.")
     parser.add_argument("--full", action="store_true", help="Set both limits to full.")
     parser.add_argument("--seeds", default="1337,7,42,99,2024")
-    parser.add_argument("--baselines", default="B0,B2,B3")
+    parser.add_argument("--baselines", default="B0,B2,Bsup,Bevi,B3")
     parser.add_argument(
         "--manager",
         choices=("governed", "memgpt"),
@@ -314,7 +436,7 @@ def main() -> int:
     parser.add_argument(
         "--slot-linker",
         choices=("none", "deterministic", "qwen"),
-        default="none",
+        default="qwen",
         help="Canonicalize extracted attributes before Slot creation.",
     )
     parser.add_argument(
@@ -351,7 +473,16 @@ def main() -> int:
         default=None,
         help=(
             "Generation budget for cache misses. Defaults to 256 for the old "
-            "durable prompt and 768 for the LongMemEval memory prompt."
+            "durable prompt and 512 for the LongMemEval/generic memory prompts."
+        ),
+    )
+    parser.add_argument(
+        "--legacy-cache-keys",
+        action="store_true",
+        help=(
+            "Deliberately use the old md5(prompt)-only prompt cache keys. This "
+            "is only for reproducing legacy artifacts; new paper runs should "
+            "leave it off."
         ),
     )
     parser.add_argument("--allow-offload", action="store_true")
@@ -394,53 +525,127 @@ def main() -> int:
 
     data_dir = (args.data_dir or repo_dir / "data").resolve()
     output_dir = (args.output_dir or repo_dir / "local_results").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    data_dir.mkdir(parents=True, exist_ok=True)
+
     llm_max_tokens = (
         args.llm_max_tokens
         if args.llm_max_tokens is not None
-        else (768 if args.extract_prompt in ("longmemeval", "generic") else 256)
+        else (512 if args.extract_prompt in ("longmemeval", "generic") else 256)
     )
-    extract_cache_name = (
-        "lme_e2e_extract_cache.json"
+    seeds = _parse_seeds(args.seeds)
+    baselines = _parse_csv(args.baselines)
+    lme_s_path = data_dir / "longmemeval_s.json"
+    _download_if_missing(lme_s_path, LME_S_URL)
+
+    dataset_sha256 = _file_sha256(lme_s_path, length=None)
+    extract_prompt_sha256 = _text_sha256(
+        FACT_EXTRACTION_PROMPTS[args.extract_prompt],
+        length=None,
+    )
+    code_revision = _git_revision(repo_dir)
+    code_diff_sha256 = _git_diff_sha256(repo_dir)
+    cache_base_identity: dict[str, Any] = {
+        "dataset": "longmemeval_s",
+        "dataset_sha256": dataset_sha256,
+        "extract_backend": args.extract_backend,
+        "llm_model": args.llm_model,
+        "llm_max_tokens": llm_max_tokens,
+        "decoding": {"temperature": 0, "do_sample": False},
+        "system_prompt_sha256": _text_sha256(SYSTEM_PROMPT, length=None),
+        "code_revision": code_revision,
+        "code_diff_sha256": code_diff_sha256,
+    }
+    extract_cache_identity = {
+        **cache_base_identity,
+        "task": "fact_extraction",
+        "extract_prompt": args.extract_prompt,
+        "extract_prompt_sha256": extract_prompt_sha256,
+    }
+    link_cache_identity = {
+        **cache_base_identity,
+        "task": "slot_linking",
+        "slot_linker": args.slot_linker,
+        "slot_link_prompt": "longmemeval-slot-link-v1",
+    }
+    cache_suffix = (
+        ""
         if args.extract_prompt == "durable"
-        else f"lme_e2e_extract_cache_{_safe_segment(args.extract_prompt)}.json"
+        else f"_{_safe_segment(args.extract_prompt)}"
     )
-    link_cache_name = (
-        "lme_e2e_link_cache.json"
-        if args.extract_prompt == "durable"
-        else f"lme_e2e_link_cache_{_safe_segment(args.extract_prompt)}.json"
-    )
-    extract_cache = (
-        args.extract_cache or output_dir / extract_cache_name
-    ).resolve()
-    link_cache = (
-        args.link_cache or output_dir / link_cache_name
-    ).resolve()
+    extract_cache_id = _json_digest(extract_cache_identity, length=12)
+    link_cache_id = _json_digest(link_cache_identity, length=12)
+    if args.legacy_cache_keys:
+        extract_cache_name = f"lme_e2e_extract_cache{cache_suffix}.json"
+        link_cache_name = f"lme_e2e_link_cache{cache_suffix}.json"
+    else:
+        extract_cache_name = (
+            f"lme_e2e_extract_cache{cache_suffix}__{extract_cache_id}.json"
+        )
+        link_cache_name = f"lme_e2e_link_cache{cache_suffix}__{link_cache_id}.json"
+    extract_cache = (args.extract_cache or output_dir / extract_cache_name).resolve()
+    link_cache = (args.link_cache or output_dir / link_cache_name).resolve()
+
+    link_segment = ""
+    if args.slot_linker != "none":
+        link_segment = (
+            f"__link_{_safe_segment(args.slot_linker)}"
+            f"_t{int(round(args.link_threshold * 100))}"
+        )
+    manager_segment = "" if args.manager == "governed" else "__mgr_memgpt"
+    run_identity: dict[str, Any] = {
+        "dataset": "longmemeval_s",
+        "dataset_sha256": dataset_sha256,
+        "extract_prompt": args.extract_prompt,
+        "extract_prompt_sha256": extract_prompt_sha256,
+        "extract_backend": args.extract_backend,
+        "llm_model": args.llm_model,
+        "llm_max_tokens": llm_max_tokens,
+        "slot_linker": args.slot_linker,
+        "link_threshold": args.link_threshold,
+        "intent_mode": args.intent_mode,
+        "knowledge_update_limit": e2e_limit,
+        "abstention_limit": abst_limit,
+        "baselines": baselines,
+        "seeds": seeds,
+        "embeddings": args.embeddings,
+        "manager": args.manager,
+        "code_revision": code_revision,
+        "code_diff_sha256": code_diff_sha256,
+        "legacy_cache_keys": args.legacy_cache_keys,
+    }
+    run_fingerprint = _json_digest(run_identity, length=12)
     if args.checkpoint_dir is not None:
         checkpoint_root = args.checkpoint_dir.resolve()
     else:
-        link_segment = ""
-        if args.slot_linker != "none":
-            link_segment = (
-                f"__link_{_safe_segment(args.slot_linker)}"
-                f"_t{int(round(args.link_threshold * 100))}"
-            )
-        manager_segment = "" if args.manager == "governed" else "__mgr_memgpt"
         run_segment = (
             f"extract_{args.extract_prompt}__intent_{args.intent_mode}"
             f"__ku_{_limit_segment(e2e_limit)}"
-            f"__abs_{_limit_segment(abst_limit)}{link_segment}{manager_segment}"
+            f"__abs_{_limit_segment(abst_limit)}"
+            f"{link_segment}{manager_segment}__run_{run_fingerprint}"
         )
         checkpoint_root = (
             output_dir / "checkpoints" / "qwen_e2e" / _safe_segment(run_segment)
         ).resolve()
-    lme_s_path = data_dir / "longmemeval_s.json"
 
-    output_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_root.mkdir(parents=True, exist_ok=True)
-    _download_if_missing(lme_s_path, LME_S_URL)
+    manifest = {
+        "run_fingerprint": run_fingerprint,
+        "run_identity": run_identity,
+        "extract_cache": str(extract_cache),
+        "extract_cache_identity": extract_cache_identity,
+        "link_cache": str(link_cache),
+        "link_cache_identity": link_cache_identity,
+        "checkpoint_root": str(checkpoint_root),
+    }
+    manifest_path = checkpoint_root / "run_manifest.json"
+    with manifest_path.open("w", encoding="utf-8") as fh:
+        json.dump(manifest, fh, indent=2, sort_keys=True)
     print(f"LongMemEval (full haystack): {lme_s_path}")
     print(f"extract prompt: {args.extract_prompt}; max tokens: {llm_max_tokens}")
+    print(f"run fingerprint: {run_fingerprint}")
     print(f"checkpoint root: {checkpoint_root}")
+    print(f"run manifest: {manifest_path}")
     print(f"extraction cache: {extract_cache}")
     if args.slot_linker == "qwen":
         print(f"slot-link cache: {link_cache}")
@@ -481,8 +686,15 @@ def main() -> int:
     cached_chat = CachedChat(
         extract_cache,
         shared_chat_factory,
+        namespace=extract_cache_identity,
         flush_every=args.flush_every,
+        legacy_keys=args.legacy_cache_keys,
     )
+    if cached_chat.unversioned_cache:
+        print(
+            "WARNING: extraction cache is legacy md5(prompt)-only; "
+            "do not cite as a new reproducible paper run."
+        )
     fact_extract_fn = build_fact_extract_fn(
         cached_chat,
         prompt_template=FACT_EXTRACTION_PROMPTS[args.extract_prompt],
@@ -495,8 +707,15 @@ def main() -> int:
         link_cached_chat = CachedChat(
             link_cache,
             shared_chat_factory,
+            namespace=link_cache_identity,
             flush_every=args.flush_every,
+            legacy_keys=args.legacy_cache_keys,
         )
+        if link_cached_chat.unversioned_cache:
+            print(
+                "WARNING: slot-link cache is legacy md5(prompt)-only; "
+                "do not cite as a new reproducible paper run."
+            )
         slot_link_fn = build_slot_link_fn(
             link_cached_chat,
             confidence_threshold=args.link_threshold,
@@ -508,14 +727,35 @@ def main() -> int:
     decide_cached_chat = None
     memgpt_decide_fn = None
     if args.manager == "memgpt":
+        decide_cache_identity = {
+            **cache_base_identity,
+            "task": "memgpt_decision",
+            "extract_prompt": args.extract_prompt,
+        }
+        decide_cache_id = _json_digest(decide_cache_identity, length=12)
+        decide_cache_name = (
+            f"lme_e2e_memgpt_decide_cache_{_safe_segment(args.extract_prompt)}.json"
+            if args.legacy_cache_keys
+            else (
+                f"lme_e2e_memgpt_decide_cache_{_safe_segment(args.extract_prompt)}"
+                f"__{decide_cache_id}.json"
+            )
+        )
         decide_cache = (
-            output_dir / f"lme_e2e_memgpt_decide_cache_{_safe_segment(args.extract_prompt)}.json"
+            output_dir / decide_cache_name
         ).resolve()
         decide_cached_chat = CachedChat(
             decide_cache,
             shared_chat_factory,
+            namespace=decide_cache_identity,
             flush_every=args.flush_every,
+            legacy_keys=args.legacy_cache_keys,
         )
+        if decide_cached_chat.unversioned_cache:
+            print(
+                "WARNING: MemGPT decision cache is legacy md5(prompt)-only; "
+                "do not cite as a new reproducible paper run."
+            )
         memgpt_decide_fn = build_memgpt_decide_fn(decide_cached_chat)
         print(f"manager: MemGPT-style (Bmemgpt); decision cache: {decide_cache}")
         if not args.skip_abstention:
@@ -530,9 +770,7 @@ def main() -> int:
     else:
         embeddings = LocalEmbeddingProvider()
 
-    seeds = _parse_seeds(args.seeds)
-    baselines = _parse_csv(args.baselines)
-    result: dict[str, Any] = {}
+    result: dict[str, Any] = {"_run_manifest": manifest}
 
     try:
         if not args.skip_knowledge_update:
@@ -604,6 +842,21 @@ def main() -> int:
             link_cached_chat.flush()
         if decide_cached_chat is not None:
             decide_cached_chat.flush()
+        manifest["extract_cache_entries"] = len(cached_chat.cache)
+        if link_cached_chat is not None:
+            manifest["link_cache_entries"] = len(link_cached_chat.cache)
+        if decide_cached_chat is not None:
+            manifest["memgpt_decision_cache_entries"] = len(decide_cached_chat.cache)
+        if "knowledge_update" in result:
+            manifest["knowledge_update_examples_fingerprint"] = result[
+                "knowledge_update"
+            ].get("examples_fingerprint")
+        if "abstention" in result:
+            manifest["abstention_examples_fingerprint"] = result["abstention"].get(
+                "examples_fingerprint"
+            )
+        with manifest_path.open("w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, indent=2, sort_keys=True)
         print(f"extraction cache entries: {len(cached_chat.cache)} -> {extract_cache}")
         if link_cached_chat is not None:
             print(f"slot-link cache entries: {len(link_cached_chat.cache)} -> {link_cache}")

@@ -3,7 +3,7 @@
 The :class:`BaselineRunner` drives the evaluation harness end to end. For each
 baseline (B0–B3 by default, per Req 22.6 / 28.9) it builds a **fresh**
 :class:`~ocm.core.container.CoreContainer` and
-:class:`~ocm.evaluation.strategies.MemoryStrategy` so the baselines never share
+:class:`~ocm.evaluation.arms.strategies.MemoryStrategy` so the baselines never share
 governed-memory state, then replays every
 :class:`~ocm.evaluation.benchmark.BenchmarkExample`:
 
@@ -41,13 +41,13 @@ from typing import Any, Iterable, Optional
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
 from ocm.core.logging import ResearchLogger
-from ocm.evaluation.baselines import (
+from ocm.evaluation.arms import (
     DEFAULT_RUN_BASELINES,
     baseline_settings_overrides,
     build_baseline,
 )
 from ocm.evaluation.benchmark import BenchmarkExample
-from ocm.evaluation.strategies import MemoryStrategy
+from ocm.evaluation.arms import MemoryStrategy
 from ocm.retrieval.evidence_packager import EvidencePackage
 
 #: Default retrieval depth used per question (matches the baseline tests).

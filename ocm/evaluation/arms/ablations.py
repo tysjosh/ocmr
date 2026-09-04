@@ -25,7 +25,7 @@ from typing import Any, Callable
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
-from ocm.evaluation.strategies import MemoryStrategy, StrategyToggles
+from ocm.evaluation.arms.strategies import MemoryStrategy, StrategyToggles
 
 
 @dataclass(frozen=True)

@@ -51,7 +51,7 @@ property, not a leaderboard win.
    On the full MultiWOZ 2.2 validation split (1,000 dialogues, oracle
    extraction), where a changed slot is an *authoritative update* rather than a
    conflicting `new_fact`, the governed arm **supersedes** the prior value:
-   constraint violations drop from 7.2 (ungoverned) to ≈ 0.01 **with no recall
+   constraint violations drop from 7.2 (ungoverned) to 0.00 **with no recall
    cost** (task success ≈ 100). *Scope:* this validates that *constraint
    governance generalizes to real dialogue* for the **single-valued cardinality**
    constraint, evaluated **given gold slots** — not end-to-end extraction, and
@@ -417,7 +417,7 @@ write-time governance switches and retrieval composition differ.
 
 Beyond the canonical B0–B4 toggle matrix, extended baselines isolate
 alternative designs (opt-in via `baselines=(..., "Brag", "Brtcf", "Bsup")`;
-`ocm/evaluation/baselines.py`). All baselines share the same pipeline
+`ocm/evaluation/arms/baselines.py`). All baselines share the same pipeline
 implementation; these differ in retrieval composition and write-time gating.
 
 - **`Brag` — RAG-only.** Vectors-only similarity retrieval with the answer read
@@ -530,7 +530,7 @@ Result — **full MultiWOZ 2.2 validation (dev) split, 1,000 dialogues**, via
 | Method | TaskSuccess ↑ | Contradiction ↓ | ConstraintViol ↓ |
 |--------|---------------|-----------------|------------------|
 | B0 / B2 (ungoverned) | 100.0 | 0.0 (N/A) | 7.2 |
-| B3 (write-time gate) | **100.0** | 0.0 (N/A) | **0.01** |
+| B3 (write-time gate) | **100.0** | 0.0 (N/A) | **0.00** |
 
 Write outcomes for B3 (8,710 candidate slot writes): **8,108 accepted, 602
 superseded, 0 quarantined, 0 rejected** — the 602 supersessions are the genuine
@@ -542,12 +542,17 @@ ungoverned store accumulates.)
 This complements the synthetic finding with a **near-tradeoff-free** real-data
 case: on MultiWOZ a changed slot is a legitimate, authoritative update, so the
 governed arm **supersedes** (one accepted value) — cutting durable constraint
-violations from 7.2 to ≈ 0.01 while **preserving recall** (task success ≈ 100.0,
-via the `HAS_VALUE` answer-derivation rule). The residual ≈ 0.01 is a small
-fraction of slots whose conflict is not resolved by supersession (e.g. a
-re-asserted distinct value on a path the policy does not cover), not a wholesale
-failure. Contradiction-surfacing is N/A here (a supersession is a resolved
-update, not an unresolved contradiction to surface).
+violations from 7.2 to 0.00 while **preserving recall** (task success ≈ 100.0,
+via the `HAS_VALUE` answer-derivation rule). Contradiction-surfacing is N/A here
+(a supersession is a resolved update, not an unresolved contradiction to
+surface).
+
+Artifact note: an earlier 0.012 value was traced to `PMUL3850.json`, where a
+case-variant reassertion of `restaurant-food = Latin American` created a second
+accepted durable row for the same triple before the later update to `Italian`.
+The commit path now treats already-active identical triples as idempotent
+accepts with additional provenance, leaving zero final accepted single-valued
+violations on the 8,104-question development split.
 
 **Caveats.** (i) Oracle extraction tests governance *given gold slots*, not
 end-to-end from raw text. (ii) The result is scoped to a single constraint
@@ -591,23 +596,43 @@ governance. Two arms (`ocm/evaluation/datasets/longmemeval_adapter.py`):
   (`longmemeval_s.json`); governance acts on noisy candidates. Extraction is run
   once and cached; a per-question belief assigns `update` vs `new_fact`.
 
+Arm-B artifact status: **blocked pending fingerprinted rerun.** Existing raw
+LongMemEval result files are materially inconsistent and must not be cited as
+final paper evidence:
+
+| Result version | B0/B2 task | `Bsup` task | B3 task | Candidate writes |
+|----------------|-----------:|------------:|--------:|-----------------:|
+| paper draft | 54.17 | — | 54.17 | 17,697 |
+| older local JSON | 22.22 | 18.06 | 18.06 | 9,780 |
+| new Colab run | 15.28 | 18.06 | 16.67 | 3,405 |
+
+This spread is too large for seed variance. The likely root cause is artifact
+identity drift: old prompt-only caches and checkpoint directories allowed
+outputs produced under different token budgets, cache contents, code revisions,
+or extracted example sets to be compared as if they were one experiment. The
+runner now records a run manifest, fingerprints the dataset/prompt/model/token
+budget/code state, writes identity-stamped prompt caches, and includes the
+extracted-example digest in LongMemEval checkpoint keys. Only reruns produced
+under that fingerprinted configuration should be used for the final Arm-B table.
+
 **Honest framing of the Arm-B result (this is the intended claim — do not
-overstate it).** End-to-end, write-time governance holds **constraint violations
-at 0** while the ungoverned arm accumulates many (e.g. B0/B2 ≈ 644 vs B3 = 0 on
-the 72-question knowledge-update subset). Governance suppresses **nothing
-correct**: B3 shows 0 rejected and 0 quarantined, so it is not the bottleneck.
-Raw task success is **extraction-bound, not governance-bound** — a diagnostic
-(`run_longmemeval_diagnostics.py`) shows the gold answer was *ever extracted*
-into any candidate for only ≈ 20% of questions, and B3 task success (≈ 18%) sits
-right at that extraction ceiling. The Arm-A → Arm-B gap therefore measures the
+overstate it).** Once rerun under the fingerprinted configuration, interpret
+Arm B as an extraction/linking stress test plus a latest-value update probe. Raw
+task success is expected to be **extraction/linking-bound, not
+governance-bound**; `run_longmemeval_diagnostics.py` should be reported beside
+the table to show how often the gold answer was ever extracted into any
+candidate. The Arm-A → Arm-B gap therefore measures the
 **extraction/entity-resolution cost, not a governance cost**.
 
 Consequently:
 
-- **Do not claim Arm B out-recalls the ungoverned baseline.** The ungoverned arm
-  "wins" raw recall only by retaining hundreds of contradictory facts — the very
-  failure the paper argues against. The governed value is *durable consistency at
-  no correctness cost from the gate*, with recall limited upstream by extraction.
+- **Do not claim B3 uniquely explains any LongMemEval Arm-B gain until `Bsup` is
+  rerun under the same fingerprint.** If `Bsup` matches or beats B3 on raw task
+  success while both keep durable violations at zero, frame LongMemEval Arm B as
+  a latest-value-supersession validation plus an extraction/linking stress test.
+  The broader OCMR claim comes from the synthetic constraint-heavy, provenance,
+  temporal, abstention/conflict, and entity-linking-evasion results where
+  supersession alone is insufficient.
 - **Extractor-prompt honesty (fitted vs generic).** The broadened Arm-B
   extraction prompt (`longmemeval`) lists fact *categories* (counts, dates,
   schedules, third-party facts). A `generic` prompt variant with the same
@@ -643,4 +668,11 @@ run_full_suite(per_category=25, tau=0.95)"
 # Governed-write evidence + false-quarantine reconciliation
 python -m ocm.evaluation.replay_governed_writes --per-category 25
 python -m ocm.evaluation.replay_governed_writes --per-category 25 --isolate-per-example
+
+# Fingerprinted LongMemEval Arm B rerun (same defaults are in OCM_Colab.ipynb 7f)
+python run_7f_local.py --full --baselines B0,B2,Bsup,B3 \
+  --slot-linker qwen --extract-prompt longmemeval --llm-max-tokens 512
+
+# Only use this to reproduce old prompt-only cache artifacts, not new paper runs
+python run_7f_local.py --full --legacy-cache-keys
 ```

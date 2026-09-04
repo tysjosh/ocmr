@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
-from ocm.evaluation.baselines import (
+from ocm.evaluation.arms import (
     baseline_settings_overrides,
     build_all_baselines,
     build_baseline,
@@ -23,7 +23,7 @@ from ocm.evaluation.experiment import (
     durable_constraint_violations,
     run_multiseed,
 )
-from ocm.evaluation.strategies import MemoryStrategy
+from ocm.evaluation.arms import MemoryStrategy
 
 
 def test_build_all_baselines_excludes_extended():

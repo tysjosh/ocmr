@@ -52,6 +52,11 @@ from typing import Callable
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
+from ocm.evaluation.arms.stress import (
+    DECISIVE_ARM,
+    STRESS_ARMS,
+    stress_arm_settings_factory,
+)
 from ocm.evaluation.benchmark import BenchmarkExample
 from ocm.evaluation.datasets.stress_workload import (
     StressCase,
@@ -75,40 +80,13 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Arm definitions (Req 9.1-9.5) — toggle triples of the EXISTING Settings
-# governance switches; no new toggle is introduced.
+# Arm definitions (Req 9.1-9.5)
 # --------------------------------------------------------------------------- #
-#: The four ablation arms as triples of the existing ``Settings`` governance
-#: toggles ``enable_schema_validation`` (W5) / ``enable_constraint_validation``
-#: (W6, containing C1-C10 incl. C9/C2 and the C7 gate) / ``enable_contradiction_gate``
-#: (C7). Applied via ``Settings.model_copy(update=STRESS_ARMS[arm])`` so each arm is
-#: configured *exclusively* through existing toggles (Req 9.5, 12.2).
-STRESS_ARMS: dict[str, dict[str, bool]] = {
-    "Ungoverned_Arm": {
-        "enable_schema_validation": False,
-        "enable_constraint_validation": False,
-        "enable_contradiction_gate": False,
-    },
-    "Gate_Only_Arm": {
-        "enable_schema_validation": False,
-        "enable_constraint_validation": False,
-        "enable_contradiction_gate": True,
-    },
-    "Schema_Provenance_Arm": {
-        "enable_schema_validation": True,
-        "enable_constraint_validation": True,
-        "enable_contradiction_gate": False,
-    },
-    "Full_Arm": {
-        "enable_schema_validation": True,
-        "enable_constraint_validation": True,
-        "enable_contradiction_gate": True,
-    },
-}
-
-#: The decisive comparison row (Req 10.4): fed the same inputs as every arm, it
-#: still leaves the invalid durable state the Schema_Provenance_Arm removes.
-DECISIVE_ARM: str = "Gate_Only_Arm"
+# :data:`STRESS_ARMS` and :data:`DECISIVE_ARM` are defined in
+# :mod:`ocm.evaluation.arms.stress` alongside the baseline and ablation arm
+# definitions, and re-exported here (via ``__all__``) so existing importers of
+# this module are unaffected. They remain toggle triples of the EXISTING
+# ``Settings`` governance switches; no new toggle is introduced (Req 9.5, 12.2).
 
 #: The mandatory honesty statement (Req 14.1, 14.2, 14.4) emitted with every
 #: artifact. Declares the workload a targeted diagnostic, identifies the
@@ -178,23 +156,6 @@ def _default_settings() -> Settings:
         chroma_mode="memory",
         extractor="mock",
     )
-
-
-def _arm_settings_factory(
-    base_factory: Callable[[], Settings], arm: str
-) -> Callable[[], Settings]:
-    """Return a settings factory that applies ``arm``'s toggle triple.
-
-    The arm overrides are applied on top of ``base_factory()`` via
-    ``model_copy(update=...)`` so ``run_multiseed`` can drive the arm through the
-    existing harness without a ``B*`` baseline override masking the arm toggles.
-    """
-    overrides = STRESS_ARMS[arm]
-
-    def factory() -> Settings:
-        return base_factory().model_copy(update=overrides)
-
-    return factory
 
 
 # --------------------------------------------------------------------------- #
@@ -275,7 +236,7 @@ def run_stress_ablation(
     # The typed four-type breakdown is computed from the per-arm container above
     # (run_multiseed does not expose containers); the two agree by determinism.
     for arm in STRESS_ARMS:
-        arm_factory = _arm_settings_factory(base_factory, arm)
+        arm_factory = stress_arm_settings_factory(base_factory, arm)
         ms = run_multiseed(
             ["full"],
             seeds=[seed],

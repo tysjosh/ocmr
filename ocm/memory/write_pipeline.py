@@ -80,6 +80,7 @@ from ocm.ontology.models import (
     StatusValue,
     Task,
 )
+from ocm.ontology.relations import Cardinality, RELATION_SIGNATURES
 from ocm.resolution.entity_resolver import EntityResolver, normalize_name
 from ocm.resolution.normalizer import Normalizer
 from ocm.validation.constraints import (
@@ -270,12 +271,17 @@ class WritePipeline:
 
         # --- W3: resolve + persist entities, events, and other memory ----
         ref_to_id: dict[str, str] = {}
+        ref_to_resolution: dict[str, dict[str, Any]] = {}
         status_reconciles: list[dict[str, Any]] = []
-        self._persist_entities(extraction, source_ref, now, ref_to_id, status_reconciles)
-        self._persist_events(extraction, source_ref, now, ref_to_id)
+        self._persist_entities(
+            extraction, source_ref, now, ref_to_id, ref_to_resolution, status_reconciles
+        )
+        self._persist_events(extraction, source_ref, now, ref_to_id, ref_to_resolution)
         self._persist_claims(extraction, source_ref, now)
-        self._persist_documents(extraction, source_ref, now, ref_to_id)
-        self._persist_decisions(extraction, source_ref, now, ref_to_id, status_reconciles)
+        self._persist_documents(extraction, source_ref, now, ref_to_id, ref_to_resolution)
+        self._persist_decisions(
+            extraction, source_ref, now, ref_to_id, ref_to_resolution, status_reconciles
+        )
 
         accepted: list[WriteOutcome] = []
         superseded: list[WriteOutcome] = []
@@ -287,7 +293,7 @@ class WritePipeline:
         # --- W4–W8: per-candidate (independent failure routing) ----------
         for relation in extraction.relations:
             outcome, vfail, cfail = self._process_relation(
-                relation, ref_to_id, source_ref, version, run_intent, now
+                relation, ref_to_id, ref_to_resolution, source_ref, version, run_intent, now
             )
             if outcome is None:
                 continue
@@ -333,6 +339,7 @@ class WritePipeline:
         source_ref: str,
         now: datetime,
         ref_to_id: dict[str, str],
+        ref_to_resolution: dict[str, dict[str, Any]],
         status_reconciles: list[dict[str, Any]],
     ) -> None:
         """Resolve every extracted entity to an id and persist new nodes (W3)."""
@@ -355,6 +362,17 @@ class WritePipeline:
             model = self._build_entity_model(etype, entity_id, ent)
             desired_status = self._desired_status(etype, ent)
             is_new = not self.graph.has_entity(entity_id)
+            ref_to_resolution[normalize_name(name)] = {
+                "entity_id": entity_id,
+                "entity_type": etype,
+                "surface": name,
+                "resolution_status": outcome.resolution_status.value,
+                "candidate_matches": list(outcome.candidate_matches or []),
+                "has_explicit_id": bool(ent.get("id")),
+                "has_alias_attribution": bool((ent.get("fields") or {}).get("aliases")),
+                "was_new_entity": is_new,
+                "source_ref": source_ref,
+            }
 
             if is_new:
                 node_model = model
@@ -396,6 +414,7 @@ class WritePipeline:
         source_ref: str,
         now: datetime,
         ref_to_id: dict[str, str],
+        ref_to_resolution: dict[str, dict[str, Any]],
     ) -> None:
         """Resolve events to Event entities and persist them (W3)."""
         for ev in extraction.events:
@@ -406,6 +425,17 @@ class WritePipeline:
                 continue
             event_id = outcome.entity_id
             ref_to_id[normalize_name(name)] = event_id
+            ref_to_resolution[normalize_name(name)] = {
+                "entity_id": event_id,
+                "entity_type": "Event",
+                "surface": name,
+                "resolution_status": outcome.resolution_status.value,
+                "candidate_matches": list(outcome.candidate_matches or []),
+                "has_explicit_id": False,
+                "has_alias_attribution": False,
+                "was_new_entity": outcome.resolution_status != ResolutionStatus.resolved_existing,
+                "source_ref": source_ref,
+            }
             if outcome.resolution_status == ResolutionStatus.resolved_existing:
                 continue
             model = Event(
@@ -455,6 +485,7 @@ class WritePipeline:
         source_ref: str,
         now: datetime,
         ref_to_id: dict[str, str],
+        ref_to_resolution: dict[str, dict[str, Any]],
     ) -> None:
         """Persist every extracted document and embed it (Req 16.6)."""
         for doc in extraction.documents:
@@ -476,6 +507,17 @@ class WritePipeline:
             # mirror it as a graph node too.
             self._persist_node("Document", model, name=title, persist_repo=False)
             ref_to_id[normalize_name(title)] = doc_id
+            ref_to_resolution[normalize_name(title)] = {
+                "entity_id": doc_id,
+                "entity_type": "Document",
+                "surface": title,
+                "resolution_status": ResolutionStatus.resolved_existing.value,
+                "candidate_matches": [],
+                "has_explicit_id": True,
+                "has_alias_attribution": False,
+                "was_new_entity": False,
+                "source_ref": source_ref,
+            }
             self.provenance_tracker.record(
                 subject_id=doc_id,
                 source_ref=source_ref,
@@ -490,6 +532,7 @@ class WritePipeline:
         source_ref: str,
         now: datetime,
         ref_to_id: dict[str, str],
+        ref_to_resolution: dict[str, dict[str, Any]],
         status_reconciles: list[dict[str, Any]],
     ) -> None:
         """Persist every extracted decision as a graph entity (W3).
@@ -525,6 +568,22 @@ class WritePipeline:
             )
             ref_to_id[normalize_name(summary)] = dec_id
             ref_to_id[normalize_name(topic)] = dec_id
+            trace = {
+                "entity_id": dec_id,
+                "entity_type": "Decision",
+                "surface": topic,
+                "resolution_status": (
+                    ResolutionStatus.created_new.value
+                    if is_new else ResolutionStatus.resolved_existing.value
+                ),
+                "candidate_matches": [],
+                "has_explicit_id": True,
+                "has_alias_attribution": False,
+                "was_new_entity": is_new,
+                "source_ref": source_ref,
+            }
+            ref_to_resolution[normalize_name(summary)] = trace
+            ref_to_resolution[normalize_name(topic)] = trace
 
             if status == DecisionStatus.final.value:
                 # A brand-new final decision is mirrored into the graph (durable
@@ -560,6 +619,7 @@ class WritePipeline:
         self,
         relation: dict,
         ref_to_id: dict[str, str],
+        ref_to_resolution: dict[str, dict[str, Any]],
         source_ref: str,
         version: str,
         run_intent: WriteIntent,
@@ -606,6 +666,15 @@ class WritePipeline:
                 outcome = self.commit_manager.commit(candidate, vr, created_at=now)
                 return outcome, 1, 0
 
+        fail_closed = self._fail_closed_linkage_verdict(
+            candidate,
+            subject_ref=subject_ref,
+            ref_to_resolution=ref_to_resolution,
+        )
+        if fail_closed is not None:
+            outcome = self.commit_manager.commit(candidate, fail_closed, created_at=now)
+            return outcome, 1, 1
+
         # Reviewer ablation: latest-value supersession for Slot HAS_VALUE only.
         # This bypasses the broader W6/W7 governance stack and asks whether the
         # observed gains are explained by a plain "keep the newest slot value"
@@ -623,6 +692,15 @@ class WritePipeline:
         # MemGPT failure mode OCMR's gate prevents.
         if getattr(self.settings, "memgpt_intent_supersede", False):
             vr = self._memgpt_intent_verdict(candidate)
+            outcome = self.commit_manager.commit(candidate, vr, created_at=now)
+            return outcome, 0 if vr.valid else 1, 0
+
+        # Reviewer baseline: one of Toki's production contradiction-resolution
+        # operators as the sole write policy. Bypasses the W6/W7 stack entirely so
+        # the arm measures that operator and nothing else.
+        toki_operator = str(getattr(self.settings, "toki_operator", "off") or "off")
+        if toki_operator != "off":
+            vr = self._toki_operator_verdict(candidate, toki_operator)
             outcome = self.commit_manager.commit(candidate, vr, created_at=now)
             return outcome, 0 if vr.valid else 1, 0
 
@@ -644,6 +722,79 @@ class WritePipeline:
         vfail = 0 if vr.valid else 1
         cfail = 1 if (not vr.valid and vr.failed_check == "C7") else 0
         return outcome, vfail, cfail
+
+    def _fail_closed_linkage_verdict(
+        self,
+        candidate: CandidateAssertion,
+        *,
+        subject_ref: str,
+        ref_to_resolution: dict[str, dict[str, Any]],
+    ) -> ValidationResult | None:
+        """Quarantine unattributed new subjects on covered single-valued writes.
+
+        The contradiction checker can only compare a new assertion with an
+        incumbent when both land on the same canonical subject. If the protected
+        subject of a single-valued entity relation was minted as a new node from
+        text that carries no stable id/alias attribution, accepting it can turn
+        a resolver miss into a gate bypass. Under full governance we therefore
+        fail closed once the store already has accepted assertions for that
+        predicate over the same subject type.
+        """
+        if not getattr(self.settings, "fail_closed_unattributed_entity_writes", True):
+            return None
+        if not getattr(self.settings, "enable_constraint_validation", True):
+            return None
+        if not getattr(self.settings, "enable_contradiction_gate", True):
+            return None
+
+        sig = RELATION_SIGNATURES.get(candidate.predicate)
+        if sig is None or sig.cardinality not in {
+            Cardinality.M_TO_ONE,
+            Cardinality.ONE_TO_ONE,
+        }:
+            return None
+
+        subject_type = self.graph.get_entity_type(candidate.subject_id)
+        if subject_type in {None, "Slot", "SlotValue", "StatusValue"}:
+            return None
+
+        trace = ref_to_resolution.get(normalize_name(subject_ref), {})
+        resolution_status = trace.get("resolution_status")
+        if resolution_status == ResolutionStatus.resolved_existing.value:
+            return None
+
+        same_predicate_context_ids: list[str] = []
+        for subject_id, _object_id, _predicate, _data in self.graph.find_edges_by_predicate(
+            candidate.predicate
+        ):
+            if (
+                subject_id != candidate.subject_id
+                and self.graph.get_entity_type(subject_id) == subject_type
+            ):
+                assertion_id = _data.get("assertion_id")
+                if assertion_id:
+                    same_predicate_context_ids.append(str(assertion_id))
+        if not same_predicate_context_ids:
+            return None
+
+        candidate_matches = [str(x) for x in trace.get("candidate_matches", []) or []]
+        return ValidationResult(
+            valid=False,
+            failed_check="C7_LINKAGE_ATTRIBUTION",
+            severity=Severity.high,
+            reason=(
+                "C7_LINKAGE_ATTRIBUTION: fail-closed linkage guard quarantined "
+                "unattributed new "
+                f"{subject_type} subject {candidate.subject_id!r} for "
+                f"single-valued predicate {candidate.predicate!r} was not "
+                "resolved to an existing canonical entity; "
+                f"resolution_status={resolution_status!r}; "
+                f"candidate_matches={candidate_matches}; "
+                f"same_predicate_context={same_predicate_context_ids}"
+            ),
+            conflicting_ids=candidate_matches or same_predicate_context_ids,
+            recommended_action="quarantine",
+        )
 
     def _supersession_only_verdict(
         self, candidate: CandidateAssertion
@@ -731,6 +882,116 @@ class WritePipeline:
             reason=f"MemGPT-style overwrite (LLM update) replaces {current_ids}",
             conflicting_ids=current_ids,
             recommended_action="supersede",
+        )
+
+    # -- Toki operator baselines (arXiv:2606.06240) ------------------------
+    def _toki_operator_verdict(
+        self, candidate: CandidateAssertion, operator: str
+    ) -> ValidationResult:
+        """Dispatch to the configured Toki winner-selector.
+
+        Raises:
+            ValueError: If ``operator`` is not a recognized Toki operator. Failing
+                loudly here means a typo in a baseline's settings override cannot
+                silently behave like an ungoverned arm.
+        """
+        if operator == "evidence":
+            return self._evidence_weighted_verdict(candidate)
+        raise ValueError(
+            f"unknown toki_operator {operator!r}; supported: 'off', 'evidence'"
+        )
+
+    def _single_valued_incumbents(
+        self, candidate: CandidateAssertion
+    ) -> list[tuple[str, float]] | None:
+        """Accepted ``(assertion_id, confidence)`` conflicting with ``candidate``.
+
+        Returns ``None`` when the predicate is not single-valued (so the candidate
+        is admissible as an additional value and no operator applies), and an
+        empty list when it is single-valued but uncontested.
+
+        Scoped to the **subject** side, matching Toki's ``(subj, pred)`` conflict
+        key. Confidence and creation time are read from the accepted graph edge,
+        which mirrors them from the durable row.
+        """
+        sig = RELATION_SIGNATURES.get(candidate.predicate)
+        if sig is None or sig.cardinality not in {
+            Cardinality.M_TO_ONE,
+            Cardinality.ONE_TO_ONE,
+        }:
+            return None
+        incumbents: list[tuple[str, float]] = []
+        for _s, object_id, _k, data in self.graph.out_edges(
+            candidate.subject_id, candidate.predicate
+        ):
+            if object_id == candidate.object_id:
+                continue  # same value re-asserted: not a contradiction
+            assertion_id = data.get("assertion_id")
+            if not assertion_id:
+                continue
+            incumbents.append(
+                (str(assertion_id), float(data.get("confidence", 0.0) or 0.0))
+            )
+        return incumbents
+
+    def _evidence_weighted_verdict(
+        self, candidate: CandidateAssertion
+    ) -> ValidationResult:
+        """Evidence-weighted merge, Toki's ``+p`` operator (the ``Bevi`` baseline).
+
+        The higher-confidence side of a single-valued conflict wins. A tie is
+        broken by system time, and the candidate is always the newer write, so on
+        equal confidence the candidate wins — which means this operator degrades
+        to last-writer-wins whenever confidence is uniform across writes.
+
+        Unlike OCMR's gate this operator **always elects a winner**: it never
+        quarantines, applies no confidence margin, and requires no supporting
+        evidence. When the incumbent wins, the candidate is *rejected* rather than
+        quarantined, so it neither becomes current nor registers as a governed
+        hold — a losing write here is a log line, not a surfaced conflict.
+
+        Two documented deviations from Toki: the loser is not preserved in a
+        recoverable audit row on the reject path (OCMR's rejection is logged, not
+        durable), and validity-window overlap is not consulted when detecting the
+        conflict (matching the other narrow write-policy baselines in this module).
+        """
+        incumbents = self._single_valued_incumbents(candidate)
+        if incumbents is None or not incumbents:
+            return ValidationResult(valid=True, recommended_action="accept")
+
+        conflicting_ids = [assertion_id for assertion_id, _conf in incumbents]
+        incumbent_conf = max(conf for _assertion_id, conf in incumbents)
+        candidate_conf = float(candidate.confidence)
+
+        if candidate_conf >= incumbent_conf:
+            tie = candidate_conf == incumbent_conf
+            return ValidationResult(
+                valid=True,
+                reason=(
+                    "Bevi evidence-weighted merge: candidate confidence "
+                    f"{candidate_conf:.3f} "
+                    + (
+                        "ties incumbent (newer write wins on system time)"
+                        if tie
+                        else f"exceeds incumbent {incumbent_conf:.3f}"
+                    )
+                    + f"; supersedes {conflicting_ids}"
+                ),
+                conflicting_ids=conflicting_ids,
+                recommended_action="supersede",
+            )
+
+        return ValidationResult(
+            valid=False,
+            failed_check="TOKI_EVI",
+            severity=Severity.low,
+            reason=(
+                "Bevi evidence-weighted merge: incumbent confidence "
+                f"{incumbent_conf:.3f} exceeds candidate {candidate_conf:.3f}; "
+                f"candidate loses to {conflicting_ids} and does not become current"
+            ),
+            conflicting_ids=conflicting_ids,
+            recommended_action="reject",
         )
 
     # ====================================================================

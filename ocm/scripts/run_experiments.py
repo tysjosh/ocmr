@@ -22,6 +22,9 @@ Usage::
     python -m ocm.scripts.run_experiments --extractor llm \\
         --llm-base-url http://localhost:8000/v1 --llm-model Qwen/Qwen2.5-32B-Instruct \\
         --embeddings local --out results.json
+    python -m ocm.scripts.run_experiments --extractor llm \\
+        --llm-base-url http://localhost:8000/v1 --llm-model Qwen/Qwen2.5-14B-Instruct \\
+        --embeddings local --baselines B0,B2,Bsup,B3 --out results_with_bsup.json
 """
 
 from __future__ import annotations
@@ -31,6 +34,10 @@ import json
 from typing import Optional, Sequence
 
 from ocm.evaluation import experiment as exp
+
+
+def _parse_baselines(value: str) -> tuple[str, ...]:
+    return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,6 +59,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--per-category", type=int, default=exp.FULL_PER_CATEGORY,
         help=f"Benchmark examples generated per category per seed "
              f"(default: {exp.FULL_PER_CATEGORY}, the full protocol).",
+    )
+    parser.add_argument(
+        "--baselines",
+        default=",".join(exp.DEFAULT_BASELINES),
+        help=(
+            "Comma-separated baseline arms to include in the primary synthetic "
+            "suite. Extended reviewer arms such as Bsup, Brag, and Brtcf are "
+            "opt-in here."
+        ),
     )
     parser.add_argument(
         "--stress-per-class", type=int, default=30,
@@ -127,16 +143,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         seeds = args.seeds
         per_category = args.per_category
         stress_per_class = args.stress_per_class
+    baselines = _parse_baselines(args.baselines)
 
     print(
         f"Configuration: extractor={args.extractor}, embeddings={args.embeddings}, "
-        f"seeds={list(seeds)}, per_category={per_category}"
+        f"seeds={list(seeds)}, per_category={per_category}, "
+        f"baselines={list(baselines)}"
         + (f", llm_model={args.llm_model}" if args.extractor == "llm" else "")
     )
 
     report = exp.run_full_suite(
         seeds=seeds,
         per_category=per_category,
+        baselines=baselines,
         stress_per_class=stress_per_class,
         settings_factory=settings_factory,
         checkpoint_dir=args.checkpoint_dir,

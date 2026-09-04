@@ -45,13 +45,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional
 
 from ocm.core.config import Settings
-from ocm.core.container import CoreContainer
 from ocm.evaluation import stats
-from ocm.evaluation.ablations import DEFAULT_ABLATIONS, build_ablation_strategy
-from ocm.evaluation.baselines import build_baseline, baseline_settings_overrides
+from ocm.evaluation.arms import DEFAULT_ABLATIONS, MemoryStrategy, build_arm
 from ocm.evaluation.benchmark import BenchmarkGenerator
+from ocm.evaluation.run_identity import fingerprint_suffix
 from ocm.evaluation.runner import BaselineRunner
-from ocm.evaluation.strategies import MemoryStrategy
 
 
 # --------------------------------------------------------------------------- #
@@ -302,20 +300,17 @@ def _build_strategy(
     extractor: object | None = None,
     embeddings: object | None = None,
 ) -> MemoryStrategy:
-    """Build a strategy for a method name (a B-baseline or a named ablation).
+    """Build a strategy for a method name (any registered arm).
+
+    Thin wrapper over :func:`ocm.evaluation.arms.build_arm`, kept because several
+    modules already import this name. ``method`` may be a baseline, an ablation,
+    or a stress arm; the arm registry resolves the family explicitly rather than
+    inferring it from a ``"B"`` name prefix as this function previously did.
 
     A shared ``extractor`` / ``embeddings`` (loaded once) is injected into every
     container so a heavy model is not reloaded per arm.
     """
-    if method.startswith("B"):
-        settings = settings_factory().model_copy(
-            update=baseline_settings_overrides(method)
-        )
-        container = CoreContainer(
-            settings, extractor=extractor, embeddings=embeddings
-        )
-        return build_baseline(method, container)
-    return build_ablation_strategy(
+    return build_arm(
         method, settings_factory, extractor=extractor, embeddings=embeddings
     )
 
@@ -720,6 +715,7 @@ def threshold_sweep(
     extractor: object | None = None,
     embeddings: object | None = None,
     checkpoint_dir: Optional[str] = None,
+    key_suffix: str = "",
 ) -> dict[str, Any]:
     """Sweep the contradiction threshold τ and report calibration (Table VI).
 
@@ -737,7 +733,7 @@ def threshold_sweep(
     examples = None
     rows: list[dict[str, float]] = []
     for tau in taus:
-        key = f"tau__{method}__{tau}__seed{seed}__pc{per_category}"
+        key = f"tau__{method}__{tau}__seed{seed}__pc{per_category}{key_suffix}"
         cached = ckpt.load(key)
         if cached is not None:
             rows.append(cached)
@@ -902,6 +898,7 @@ def run_full_suite(
     out_path: Optional[str] = None,
     token_counter: Optional[Any] = None,
     warmup: bool = True,
+    run_fingerprint: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run the **entire** research protocol and return a structured result.
 
@@ -936,6 +933,16 @@ def run_full_suite(
     overrides \u03c4 per row regardless). When ``None`` the configured default
     (0.8) is used and checkpoint keys are unchanged (backward compatible).
 
+    ``run_fingerprint`` is a short digest of the extraction stack (build it with
+    :func:`ocm.evaluation.run_identity.run_fingerprint`). It is appended to every
+    checkpoint key in this suite — the multi-seed arms, the τ-sweep, and the stress
+    block — so changing model / token budget / prompt recomputes instead of
+    resuming onto results produced by the previous stack. The extraction cache
+    already refuses a mismatched fingerprint; these keys are what stops the
+    *downstream* per-arm results from being reused across configurations. Omitting
+    it reproduces the previous key layout exactly, so existing checkpoints stay
+    addressable.
+
     ``warmup`` (default ``True``) runs one throwaway write+query before the first
     *timed* arm so the one-time, process-global lazy-init cost (model first
     forward pass, torch kernel autotuning, first embed) is amortized up front
@@ -961,6 +968,13 @@ def run_full_suite(
     else:
         key_suffix = ""
 
+    # Fold the extraction stack's identity into every checkpoint key. Without it a
+    # changed extractor (model, token budget, prompt) re-extracts but still resumes
+    # onto per-(method, seed) results computed by the previous stack, mixing two
+    # configurations into one reported run. Empty when not supplied, so existing
+    # checkpoints stay addressable.
+    key_suffix += fingerprint_suffix(run_fingerprint)
+
     ms = run_multiseed(
         methods, seeds=seeds, per_category=per_category,
         settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
@@ -972,12 +986,25 @@ def run_full_suite(
     raw = per_seed_raw(ms)
     task_success_by_category = aggregate_task_success_by_category(ms)
     non_ocmr = [b for b in baselines if b != "B3"]
-    significance = significance_vs_best_baseline(ms, "B3", non_ocmr or baselines)
-    sweep = threshold_sweep(
-        taus=taus, seed=seeds[0], per_category=per_category,
-        settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
-        checkpoint_dir=checkpoint_dir,
-    )
+    if "B3" in ms.per_seed and non_ocmr:
+        significance = significance_vs_best_baseline(ms, "B3", non_ocmr)
+    else:
+        significance = {
+            "skipped": True,
+            "reason": "B3 and at least one non-B3 baseline are required.",
+        }
+    if "B3" in baselines:
+        sweep = threshold_sweep(
+            taus=taus, seed=seeds[0], per_category=per_category,
+            settings_factory=settings_factory, extractor=extractor, embeddings=embeddings,
+            checkpoint_dir=checkpoint_dir,
+            key_suffix=fingerprint_suffix(run_fingerprint),
+        )
+    else:
+        sweep = {
+            "skipped": True,
+            "reason": "B3 is required for the contradiction-threshold sweep.",
+        }
     stress = stress_by_intensity(
         methods=baselines, seeds=seeds[:1], per_class=stress_per_class,
         settings_factory=settings_factory, extractor=stress_extractor, embeddings=embeddings,
@@ -1070,12 +1097,16 @@ def print_report(report: dict[str, Any]) -> None:
             print(f"{method:<22}{cells}")
 
     print("\n=== Significance: B3 vs strongest non-OCMR baseline (Holm-Bonferroni) ===")
-    for metric, t in report["significance_vs_best_baseline"]["metric_tests"].items():
-        eff = t["effect_size"]
-        eff_s = f"{eff:.3f}" if isinstance(eff, (int, float)) else str(eff)
-        print(f"  {metric:<22} vs {t['vs_baseline']:<4} {t['test']:<14} "
-              f"corrected_p={t['corrected_p']:.4f} reject={t['reject_null']} "
-              f"{t['effect_name']}={eff_s}")
+    sig = report["significance_vs_best_baseline"]
+    if sig.get("skipped"):
+        print(f"  skipped: {sig.get('reason')}")
+    else:
+        for metric, t in sig["metric_tests"].items():
+            eff = t["effect_size"]
+            eff_s = f"{eff:.3f}" if isinstance(eff, (int, float)) else str(eff)
+            print(f"  {metric:<22} vs {t['vs_baseline']:<4} {t['test']:<14} "
+                  f"corrected_p={t['corrected_p']:.4f} reject={t['reject_null']} "
+                  f"{t['effect_name']}={eff_s}")
 
     write_outcomes = report.get("write_outcomes")
     if write_outcomes:
@@ -1089,11 +1120,15 @@ def print_report(report: dict[str, Any]) -> None:
                   f"{w.get('superseded', 0):<8}{w.get('quarantined', 0):<8}{w.get('rejected', 0):<8}")
 
     print("\n=== Threshold sweep (tau) + calibration ===")
-    print(f"{'tau':<8}{'ContrRate':<12}{'FalseQuar':<12}{'ECE':<10}{'Brier':<10}{'J(tau)':<10}")
-    for row in report["threshold_sweep"]["rows"]:
-        print(f"{row['tau']:<8}{row['contradiction_rate']:<12.2f}{row['false_quarantine']:<12.2f}"
-              f"{row['ece']:<10.3f}{row['brier']:<10.3f}{row['objective_j']:<10.3f}")
-    print(f"  selected tau (min J): {report['threshold_sweep']['selected_tau']}")
+    sweep = report["threshold_sweep"]
+    if sweep.get("skipped"):
+        print(f"  skipped: {sweep.get('reason')}")
+    else:
+        print(f"{'tau':<8}{'ContrRate':<12}{'FalseQuar':<12}{'ECE':<10}{'Brier':<10}{'J(tau)':<10}")
+        for row in sweep["rows"]:
+            print(f"{row['tau']:<8}{row['contradiction_rate']:<12.2f}{row['false_quarantine']:<12.2f}"
+                  f"{row['ece']:<10.3f}{row['brier']:<10.3f}{row['objective_j']:<10.3f}")
+        print(f"  selected tau (min J): {sweep['selected_tau']}")
 
     print("\n=== Stress: task success by perturbation intensity ===")
     ti = report["stress"]["task_success_by_intensity"]

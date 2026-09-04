@@ -40,6 +40,8 @@ before use.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
@@ -85,8 +87,18 @@ class LongMemEvalOracleExtractor:
 
     version: str = "longmemeval-oracle-1"
 
-    def __init__(self, writes_by_ref: dict[str, _SessionWrites]) -> None:
+    def __init__(
+        self,
+        writes_by_ref: dict[str, _SessionWrites],
+        gold_current_values: dict[tuple[str, str], str] | None = None,
+    ) -> None:
         self._writes = writes_by_ref
+        #: Gold current value per durable key, keyed by ``(slot_name, predicate)``.
+        #: Rekey to store ids with
+        #: :func:`ocm.evaluation.durable_state.resolve_gold_keys` after a replay.
+        self.gold_current_values: dict[tuple[str, str], str] = dict(
+            gold_current_values or {}
+        )
 
     def extract(self, text: str, source_ref: str) -> ExtractionResult:
         w = self._writes.get(source_ref)
@@ -166,9 +178,25 @@ def _session_text(session: Any) -> str:
 # --------------------------------------------------------------------------- #
 # Arm A — oracle adapter (governance isolated from extraction)
 # --------------------------------------------------------------------------- #
+#: Confidence levels for the ``confidence="inverted"`` perturbation. **Both** sit
+#: above the default ``contradiction_high_confidence`` (0.8) so the C7 gate still
+#: engages on the conflict; only their *ordering* is inverted. Using a low value
+#: below the threshold instead would make the conflict "soft" and be silently
+#: accepted, which would confound the perturbation with gate disengagement.
+PERTURBED_LOW_CONFIDENCE: float = 0.82
+PERTURBED_HIGH_CONFIDENCE: float = 0.95
+
+#: Accepted values for the ``order`` / ``confidence`` perturbation axes.
+ORDER_MODES: tuple[str, ...] = ("aligned", "permuted")
+CONFIDENCE_MODES: tuple[str, ...] = ("aligned", "inverted")
+
+
 def build_from_kupdate_oracle(
     instances: Iterable[dict[str, Any]],
     annotations: dict[str, dict[str, Any]],
+    *,
+    order: str = "aligned",
+    confidence: str = "aligned",
 ) -> tuple[list[BenchmarkExample], LongMemEvalOracleExtractor]:
     """Build benchmark examples + an oracle extractor for the knowledge-update arm.
 
@@ -191,10 +219,45 @@ def build_from_kupdate_oracle(
     ``HAS_VALUE`` answer-derivation rule resolves the current accepted value.
 
     Returns ``(examples, oracle_extractor)``; pass the extractor into the
-    container/harness as ``extractor=...``.
+    container/harness as ``extractor=...``. The gold current value per durable key
+    is attached to the oracle as ``gold_current_values``
+    (``(slot_id, "HAS_VALUE") -> value``) for
+    :func:`~ocm.evaluation.durable_state.durable_state_outcomes`.
+
+    Two optional perturbation axes support the write-policy comparison. Both hold
+    the gold ``current_value`` fixed and change only how the trajectory is
+    presented, so any arm that gets the answer wrong got it wrong on policy:
+
+    * ``order`` — ``"aligned"`` writes the trajectory oldest-to-newest, so the
+      current value is written last and recency alone identifies it (the natural
+      configuration). ``"permuted"`` reverses the value sequence across the same
+      session slots, so a **stale** value is written last; a last-writer-wins
+      policy then keeps the stale value.
+    * ``confidence`` — ``"aligned"`` uses the uniform dataset confidences (the
+      natural configuration, in which every write carries the same confidence).
+      ``"inverted"`` gives the current value :data:`PERTURBED_LOW_CONFIDENCE` and
+      every stale value :data:`PERTURBED_HIGH_CONFIDENCE`, so a
+      confidence-weighted policy keeps the stale value.
+
+    **Scoring caveat for the perturbed cells.** The oracle supplies the writes, so
+    permuting the value sequence deliberately decouples a session's *text* from the
+    value written at that session. Retrieval-based answer scoring is therefore not
+    meaningful under ``order="permuted"`` — score those cells with the
+    durable-state metric, which reads the store rather than an answer.
+
+    Raises:
+        ValueError: If ``order`` or ``confidence`` is not a recognized mode.
     """
+    if order not in ORDER_MODES:
+        raise ValueError(f"order must be one of {ORDER_MODES}, got {order!r}")
+    if confidence not in CONFIDENCE_MODES:
+        raise ValueError(
+            f"confidence must be one of {CONFIDENCE_MODES}, got {confidence!r}"
+        )
+
     examples: list[BenchmarkExample] = []
     writes_by_ref: dict[str, _SessionWrites] = {}
+    gold_current_values: dict[tuple[str, str], str] = {}
 
     for inst in instances:
         qid = str(inst["question_id"])
@@ -210,16 +273,30 @@ def build_from_kupdate_oracle(
         # (keyed by session id) aligns with the per-session source_ref.
         id_to_idx = {str(sid): i for i, sid in enumerate(session_ids)}
 
-        # Bucket trajectory values by the session index they are stated in,
-        # preserving oldest→newest order for stable new_fact/update assignment.
-        per_session_values: dict[int, list[str]] = {}
         ordered = list(ann.get("trajectory", []))
+        current = str(ann.get("current_value", ordered[-1]["value"] if ordered else ""))
+
+        # Place each trajectory value at the session index it is stated in,
+        # preserving oldest→newest order for stable new_fact/update assignment.
+        placements: list[tuple[int, str]] = []
         for entry in ordered:
             sid = str(entry.get("session_id", ""))
             idx = id_to_idx.get(sid)
             if idx is None:
                 continue  # trajectory references a session not in this haystack
-            per_session_values.setdefault(idx, []).append(str(entry["value"]))
+            placements.append((idx, str(entry["value"])))
+
+        # order="permuted": reverse the value sequence across the same session
+        # slots, so the *stale* value is written last and recency no longer
+        # identifies the current value.
+        if order == "permuted" and len(placements) >= 2:
+            slots = [idx for idx, _value in placements]
+            values = [value for _idx, value in placements]
+            placements = list(zip(slots, reversed(values)))
+
+        per_session_values: dict[int, list[str]] = {}
+        for idx, value in placements:
+            per_session_values.setdefault(idx, []).append(value)
 
         sessions: list[Session] = []
         belief_set = False
@@ -227,7 +304,16 @@ def build_from_kupdate_oracle(
             sw = _SessionWrites()
             for value in per_session_values.get(idx, []):
                 intent = "update" if belief_set else "new_fact"
-                conf = UPDATE_CONFIDENCE if belief_set else NEW_FACT_CONFIDENCE
+                if confidence == "inverted":
+                    # The current value becomes the *less* confident side, so a
+                    # confidence-weighted policy keeps a stale value.
+                    conf = (
+                        PERTURBED_LOW_CONFIDENCE
+                        if value.strip().casefold() == current.strip().casefold()
+                        else PERTURBED_HIGH_CONFIDENCE
+                    )
+                else:
+                    conf = UPDATE_CONFIDENCE if belief_set else NEW_FACT_CONFIDENCE
                 sw.entities.append({"type": "Slot", "name": slot_name})
                 sw.entities.append(
                     {"type": "SlotValue", "name": value, "fields": {"value": value}}
@@ -246,7 +332,11 @@ def build_from_kupdate_oracle(
             writes_by_ref[source_ref] = sw
             sessions.append(Session(session_id=f"s{idx}", input=_session_text(session)))
 
-        current = str(ann.get("current_value", ordered[-1]["value"] if ordered else ""))
+        # Gold durable key for the store-level metric. The Slot node id is minted
+        # from the qualified slot name by the entity resolver, so record the key by
+        # slot *name* and let the metric caller resolve it against the graph.
+        gold_current_values[(slot_name, "HAS_VALUE")] = current
+
         question = Question(
             query=f"{inst.get('question', '')} [[{slot_name}]]",
             expected_answer_contains=[current],
@@ -258,7 +348,7 @@ def build_from_kupdate_oracle(
             )
         )
 
-    return examples, LongMemEvalOracleExtractor(writes_by_ref)
+    return examples, LongMemEvalOracleExtractor(writes_by_ref, gold_current_values)
 
 
 # --------------------------------------------------------------------------- #
@@ -382,7 +472,7 @@ def evaluate_abstention(
     """
     from ocm.core.config import Settings
     from ocm.core.container import CoreContainer
-    from ocm.evaluation.baselines import build_baseline
+    from ocm.evaluation.arms import build_baseline
 
     if settings_factory is None:
         def settings_factory() -> Settings:  # type: ignore[misc]
@@ -424,6 +514,7 @@ def run_longmemeval_suite(
     settings_factory: Any = None,
     embeddings: object | None = None,
     checkpoint_dir: Optional[str] = None,
+    run_fingerprint: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run governed vs ungoverned on LongMemEval knowledge-update (Arm A / oracle).
 
@@ -440,6 +531,7 @@ def run_longmemeval_suite(
     """
     from ocm.core.config import Settings
     from ocm.evaluation.experiment import aggregate_methods, run_multiseed
+    from ocm.evaluation.run_identity import fingerprint_suffix
 
     if settings_factory is None:
         # Knowledge updates are authoritative single-valued state (latest value
@@ -459,7 +551,9 @@ def run_longmemeval_suite(
         extractor=oracle,
         embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
-        key_suffix="__lme_kupdate",
+        # The fingerprint fragment separates checkpoints produced by different
+        # embedding / annotation stacks, mirroring the Arm-B key at line ~1268.
+        key_suffix="__lme_kupdate" + fingerprint_suffix(run_fingerprint),
         provided_examples=examples,
     )
     agg = aggregate_methods(ms)
@@ -1048,6 +1142,21 @@ def _build_e2e_examples_from_extraction(
     return examples, LongMemEvalOracleExtractor(writes_by_ref)
 
 
+def _fingerprint_examples(examples: Iterable[BenchmarkExample]) -> str:
+    """Stable digest for the extracted benchmark state replayed by the oracle."""
+    payload = [
+        ex.model_dump(mode="json", exclude_none=True)
+        for ex in examples
+    ]
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def build_e2e_from_extraction(
     instances: Iterable[dict[str, Any]],
     fact_extract_fn: Any,
@@ -1151,6 +1260,7 @@ def run_longmemeval_e2e(
         intent_mode=intent_mode,
         slot_link_fn=slot_link_fn,
     )
+    examples_fingerprint = _fingerprint_examples(examples)
     methods = list(baselines)
     ms = run_multiseed(
         methods,
@@ -1159,7 +1269,7 @@ def run_longmemeval_e2e(
         extractor=oracle,
         embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
-        key_suffix="__lme_e2e",
+        key_suffix=f"__lme_e2e__xfp{examples_fingerprint[:12]}",
         provided_examples=examples,
     )
     agg = aggregate_methods(ms)
@@ -1173,6 +1283,7 @@ def run_longmemeval_e2e(
         "methods": methods,
         "seeds": list(seeds),
         "n_examples": len(examples),
+        "examples_fingerprint": examples_fingerprint,
         "decisive_metrics": {
             m: {metric: agg[m][metric].__dict__ for metric in agg[m]} for m in agg
         },
@@ -1202,7 +1313,7 @@ def run_longmemeval_memgpt(
     baseline; place its row beside the governed B0/B2/B3 results.
     """
     from ocm.core.config import Settings
-    from ocm.evaluation.baselines import baseline_settings_overrides
+    from ocm.evaluation.arms import baseline_settings_overrides
     from ocm.evaluation.experiment import aggregate_methods, run_multiseed
 
     overrides = baseline_settings_overrides("Bmemgpt")
@@ -1220,6 +1331,7 @@ def run_longmemeval_memgpt(
         slot_link_fn=slot_link_fn,
         decide_fn=memgpt_decide_fn,
     )
+    examples_fingerprint = _fingerprint_examples(examples)
     ms = run_multiseed(
         ["Bmemgpt"],
         seeds=seeds,
@@ -1227,7 +1339,7 @@ def run_longmemeval_memgpt(
         extractor=oracle,
         embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
-        key_suffix="__lme_memgpt",
+        key_suffix=f"__lme_memgpt__xfp{examples_fingerprint[:12]}",
         provided_examples=examples,
     )
     agg = aggregate_methods(ms)
@@ -1240,6 +1352,7 @@ def run_longmemeval_memgpt(
         "methods": ["Bmemgpt"],
         "seeds": list(seeds),
         "n_examples": len(examples),
+        "examples_fingerprint": examples_fingerprint,
         "decisive_metrics": {
             m: {metric: agg[m][metric].__dict__ for metric in agg[m]} for m in agg
         },
@@ -1299,7 +1412,7 @@ def evaluate_abstention_e2e(
     from ocm.core.config import Settings
     from ocm.core.container import CoreContainer
     from ocm.evaluation import stats
-    from ocm.evaluation.baselines import baseline_settings_overrides, build_baseline
+    from ocm.evaluation.arms import baseline_settings_overrides, build_baseline
     from ocm.evaluation.experiment import _Checkpoint, _seed_everything
     from ocm.evaluation.runner import BaselineRunner
 
@@ -1316,6 +1429,7 @@ def evaluate_abstention_e2e(
         intent_mode=intent_mode,
         slot_link_fn=slot_link_fn,
     )
+    examples_fingerprint = _fingerprint_examples(examples)
     methods = list(baselines)
     seed_list = list(seeds)
     ckpt = _Checkpoint(checkpoint_dir)
@@ -1354,6 +1468,7 @@ def evaluate_abstention_e2e(
             key = (
                 f"abs_e2e__{method}__seed{seed}__n{n_examples}"
                 f"__intent_{intent_mode}__lme_abs_e2e_v2"
+                f"__xfp{examples_fingerprint[:12]}"
             )
             cached = ckpt.load(key)
             if cached is None:
@@ -1440,6 +1555,7 @@ def evaluate_abstention_e2e(
         "methods": methods,
         "seeds": seed_list,
         "n_examples": n_examples,
+        "examples_fingerprint": examples_fingerprint,
         "abstention_metrics": {
             m: {
                 "abstention_accuracy": stats.mean_ci(per_seed_accuracy[m]).__dict__,

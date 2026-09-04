@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from ocm.core.config import Settings
 from ocm.evaluation import experiment as exp
-from ocm.evaluation.ablations import ABLATIONS, DEFAULT_ABLATIONS, build_ablation_strategy
+from ocm.evaluation.arms import ABLATIONS, DEFAULT_ABLATIONS, build_ablation_strategy
 from ocm.evaluation.benchmark import BenchmarkGenerator
 from ocm.evaluation.stress import (
     INTENSITY_LEVELS,
@@ -103,7 +103,7 @@ def test_entity_resolution_eval_returns_metrics():
 def test_decisive_metrics_shapes():
     examples = BenchmarkGenerator(seed=1337).generate(per_category=2)
     from ocm.evaluation.runner import BaselineRunner
-    from ocm.evaluation.baselines import build_baseline
+    from ocm.evaluation.arms import build_baseline
     from ocm.core.container import CoreContainer
 
     runner = BaselineRunner(settings_factory=_settings)
@@ -174,6 +174,20 @@ def test_run_full_suite_shape_and_significance_excludes_b3():
         assert t["vs_baseline"] in {"B0", "B1", "B2"}
     assert report["threshold_sweep"]["rows"]
     assert "task_success_by_intensity" in report["stress"]
+
+
+def test_run_full_suite_supports_bsup_only_reviewer_rerun():
+    report = exp.run_full_suite(
+        seeds=[1337],
+        per_category=1,
+        baselines=["Bsup"],
+        stress_per_class=1,
+    )
+
+    assert "Bsup" in report["methods"]
+    assert report["significance_vs_best_baseline"]["skipped"] is True
+    assert report["threshold_sweep"]["skipped"] is True
+    assert "Bsup" in report["stress"]["task_success_by_intensity"]
 
 
 def test_run_full_suite_checkpoint_resume(tmp_path):

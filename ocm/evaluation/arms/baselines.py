@@ -1,7 +1,7 @@
 """Baseline definitions B0–B4 as toggle presets (Req 22.1–22.5).
 
-Each baseline is the same :class:`~ocm.evaluation.strategies.MemoryStrategy`
-differing only by its :class:`~ocm.evaluation.strategies.StrategyToggles`, per
+Each baseline is the same :class:`~ocm.evaluation.arms.strategies.MemoryStrategy`
+differing only by its :class:`~ocm.evaluation.arms.strategies.StrategyToggles`, per
 the design's B0–B4 toggle matrix:
 
 ==== =========== ========= =========== ================= ============== ============== ================
@@ -34,10 +34,10 @@ Requirements: 22.1, 22.2, 22.3, 22.4, 22.5.
 
 from __future__ import annotations
 
-from typing import Callable, Dict
+from typing import Any, Callable, Dict
 
 from ocm.core.container import CoreContainer
-from ocm.evaluation.strategies import MemoryStrategy, StrategyToggles
+from ocm.evaluation.arms.strategies import MemoryStrategy, StrategyToggles
 
 #: A factory that builds a configured strategy over a wired container.
 BaselineFactory = Callable[[CoreContainer], MemoryStrategy]
@@ -148,6 +148,21 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
         use_provenance=False,
         use_answer_policy=False,
     ),
+    # Bevi — Toki's evidence-weighted merge operator (arXiv:2606.06240, +p) as the
+    # sole write policy. Same hybrid retrieval as B2/B3/Bsup so it compares
+    # directly, but a single-valued conflict is resolved purely by confidence: the
+    # higher-confidence side wins, ties going to the newer write. It always elects
+    # a winner and never quarantines, which is what isolates "consult confidence"
+    # from OCMR's "consult confidence, and refuse when the margin is not met".
+    "Bevi": StrategyToggles(
+        use_ontology=True,
+        use_graph=True,
+        use_vectors=True,
+        use_contradiction=False,
+        use_quarantine=False,
+        use_provenance=False,
+        use_answer_policy=False,
+    ),
 }
 
 #: Human-readable description per baseline (used in metrics/reporting).
@@ -161,6 +176,7 @@ BASELINE_DESCRIPTIONS: Dict[str, str] = {
     "Brtcf": "Retrieval-time contradiction filter: no write gate, filter at read",
     "Bsup": "Latest-value supersession only for Slot HAS_VALUE",
     "Bmemgpt": "MemGPT-style LLM-managed memory (LLM decides insert/update; no governance)",
+    "Bevi": "Toki evidence-weighted merge: higher confidence wins, never abstains",
 }
 
 #: Per-baseline **write-time** governance settings overrides (paper §IV-A).
@@ -172,7 +188,7 @@ BASELINE_DESCRIPTIONS: Dict[str, str] = {
 #:
 #: ``enable_schema_validation`` gates W5 structural checks; ``enable_contradiction_gate``
 #: gates W7/C7 (contradiction quarantining). C9 domain/range (W6) always runs.
-BASELINE_SETTINGS: Dict[str, Dict[str, bool]] = {
+BASELINE_SETTINGS: Dict[str, Dict[str, Any]] = {
     # text-only memory: no write-time governance.
     "B0": {"enable_schema_validation": False, "enable_contradiction_gate": False},
     # ontology-only memory: typed schema, but no contradiction gating.
@@ -202,10 +218,18 @@ BASELINE_SETTINGS: Dict[str, Dict[str, bool]] = {
         "enable_contradiction_gate": False,
         "memgpt_intent_supersede": True,
     },
+    # Toki evidence-weighted merge: confidence is the only gate; no OCMR
+    # governance, and no abstention path.
+    "Bevi": {
+        "enable_schema_validation": False,
+        "enable_constraint_validation": False,
+        "enable_contradiction_gate": False,
+        "toki_operator": "evidence",
+    },
 }
 
 
-def baseline_settings_overrides(name: str) -> Dict[str, bool]:
+def baseline_settings_overrides(name: str) -> Dict[str, Any]:
     """Return the write-time ``Settings`` overrides for baseline ``name`` (may be empty)."""
     return dict(BASELINE_SETTINGS.get(name, {}))
 

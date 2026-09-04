@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from ocm.core.config import Settings
 from ocm.core.container import CoreContainer
-from ocm.evaluation.baselines import baseline_settings_overrides
+from ocm.evaluation.arms import baseline_settings_overrides
 from ocm.evaluation.datasets.longmemeval_adapter import (
     build_e2e_from_extraction,
     build_memgpt_decide_fn,

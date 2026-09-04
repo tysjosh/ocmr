@@ -389,6 +389,7 @@ def run_multiwoz_suite(
     settings_factory: Any = None,
     embeddings: object | None = None,
     checkpoint_dir: Optional[str] = None,
+    run_fingerprint: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run the governed vs ungoverned comparison on MultiWOZ and aggregate.
 
@@ -405,6 +406,7 @@ def run_multiwoz_suite(
     """
     from ocm.core.config import Settings
     from ocm.evaluation.experiment import aggregate_methods, run_multiseed
+    from ocm.evaluation.run_identity import fingerprint_suffix
 
     if settings_factory is None:
         # MultiWOZ slots are authoritative single-valued state: a changed slot
@@ -427,7 +429,9 @@ def run_multiwoz_suite(
         extractor=oracle,
         embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
-        key_suffix="__multiwoz_v2",  # belief-tracking fix changes writes for all arms
+        # belief-tracking fix changes writes for all arms; the fingerprint fragment
+        # additionally separates checkpoints produced by different embedding stacks.
+        key_suffix="__multiwoz_v2" + fingerprint_suffix(run_fingerprint),
         provided_examples=examples,
     )
     agg = aggregate_methods(ms)

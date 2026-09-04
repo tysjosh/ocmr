@@ -96,6 +96,31 @@ def test_accept_persists_graphs_embeds_and_provenances(manager, repo, graph):
     assert len(manager.provenance_tracker.for_subject(aid)) == 1
 
 
+def test_accept_same_triple_is_idempotent_and_preserves_new_provenance(
+    manager, repo, graph
+):
+    vr = ValidationResult(valid=True, recommended_action="accept")
+    first = manager.commit(_candidate(), vr, created_at=TS)
+    repeated = _candidate().model_copy(update={"source_ref": "doc://notes#2"})
+
+    second = manager.commit(repeated, vr, created_at=TS)
+
+    assert second.decision == "accepted"
+    assert second.assertion_id == first.assertion_id
+
+    accepted_owns = [
+        a
+        for a in repo.list_assertions(AssertionStatus.accepted.value)
+        if a.predicate == "OWNS"
+    ]
+    assert len(accepted_owns) == 1
+    assert (
+        graph.get_assertion_edge("per_1", "prj_1", "OWNS")["assertion_id"]
+        == first.assertion_id
+    )
+    assert len(manager.provenance_tracker.for_subject(first.assertion_id)) == 2
+
+
 def test_supersede_marks_old_links_and_preserves_both_provenance(manager, repo, graph):
     # First accept an original assertion.
     first = manager.commit(_candidate(), ValidationResult(valid=True), created_at=TS)
