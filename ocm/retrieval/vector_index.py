@@ -179,6 +179,22 @@ class VectorIndex:
         self.graph = graph
         self._using_fallback = False
         self.col = self._open_collection()
+        # Write-side batching (Req 13.5, 16.6): ``add`` is called once per
+        # accepted item on the governed write path (one assertion/claim/
+        # document/event at a time). Embedding and upserting each item
+        # individually means one Python round-trip into SentenceTransformer
+        # and one Chroma upsert call per item, which is fine for a handful of
+        # writes but becomes the dominant cost across a full evaluation run
+        # (thousands of session writes across many method/seed containers).
+        # Buffer pending adds here and flush them as a single batched
+        # ``embed()`` + single ``upsert()`` call, either explicitly via
+        # :meth:`flush` or implicitly before any read that needs the pending
+        # items visible (``query``, ``set_status``, ``delete``, metadata
+        # lookups) so callers observe the same read-after-write behavior as
+        # the unbatched version.
+        self._pending_ids: list[str] = []
+        self._pending_texts: list[str] = []
+        self._pending_metadatas: list[dict] = []
 
     def set_graph(self, graph: Any) -> None:
         """Wire (or replace) the ``Graph_Store`` used to resolve assertion names."""
@@ -221,31 +237,64 @@ class VectorIndex:
         memory_type: str,
         status: str = STATUS_ACCEPTED,
     ) -> None:
-        """Embed ``text`` and upsert it with ``{memory_id, memory_type, status}``.
+        """Queue ``text`` for embedding and upsert under ``memory_id`` (Req 13.5).
 
-        Uses ``upsert`` so re-embedding the same ``memory_id`` (e.g. after a
-        status change) replaces the existing vector rather than duplicating it.
+        The actual embed + upsert is deferred and batched (see :meth:`flush`)
+        so many back-to-back writes (e.g. ingesting a benchmark example's
+        sessions) cost one embedding-model call and one Chroma upsert instead
+        of one of each per item. Uses upsert semantics, so re-adding the same
+        ``memory_id`` (e.g. after a status change) replaces rather than
+        duplicates it — including when the earlier add for that id is still
+        only pending (not yet flushed).
         """
-        embedding = self.provider.embed_one(text)
         metadata = {
             "memory_id": memory_id,
             "memory_type": memory_type,
             "status": status,
         }
+        # Drop any not-yet-flushed pending entry for this id first so a
+        # same-batch re-add (rare, but mirrors upsert-replaces-duplicate
+        # semantics) doesn't leave two rows for one memory_id in the batch.
+        if memory_id in self._pending_ids:
+            idx = self._pending_ids.index(memory_id)
+            del self._pending_ids[idx]
+            del self._pending_texts[idx]
+            del self._pending_metadatas[idx]
+        self._pending_ids.append(memory_id)
+        self._pending_texts.append(text)
+        self._pending_metadatas.append(metadata)
+
+    def flush(self) -> None:
+        """Embed and upsert every pending :meth:`add` in one batched call.
+
+        No-op when nothing is pending. Called automatically before any read
+        (:meth:`query`, :meth:`set_status`, :meth:`delete`, metadata lookups)
+        so pending writes are always visible to subsequent reads, matching the
+        unbatched behaviour's immediate read-after-write consistency.
+        """
+        if not self._pending_ids:
+            return
+        ids = self._pending_ids
+        texts = self._pending_texts
+        metadatas = self._pending_metadatas
+        self._pending_ids = []
+        self._pending_texts = []
+        self._pending_metadatas = []
+        embeddings = self.provider.embed(texts)
         upsert = getattr(self.col, "upsert", None)
         if callable(upsert):
             upsert(
-                ids=[memory_id],
-                embeddings=[embedding],
-                documents=[text],
-                metadatas=[metadata],
+                ids=ids,
+                embeddings=embeddings,
+                documents=texts,
+                metadatas=metadatas,
             )
         else:  # pragma: no cover - older chroma without upsert
             self.col.add(
-                ids=[memory_id],
-                embeddings=[embedding],
-                documents=[text],
-                metadatas=[metadata],
+                ids=ids,
+                embeddings=embeddings,
+                documents=texts,
+                metadatas=metadatas,
             )
 
     def set_status(self, memory_id: str, status: str) -> None:
@@ -260,6 +309,7 @@ class VectorIndex:
         A no-op when ``memory_id`` was never embedded (e.g. embeddings disabled).
         The embedding itself is preserved — only metadata changes.
         """
+        self.flush()
         existing = self._get_metadata(memory_id)
         if existing is None:
             return
@@ -275,12 +325,18 @@ class VectorIndex:
 
     def delete(self, memory_id: str) -> None:
         """Remove an embedded item from the index (no-op when absent)."""
+        if memory_id in self._pending_ids:
+            idx = self._pending_ids.index(memory_id)
+            del self._pending_ids[idx]
+            del self._pending_texts[idx]
+            del self._pending_metadatas[idx]
         deleter = getattr(self.col, "delete", None)
         if callable(deleter):
             deleter(ids=[memory_id])
 
     def _get_metadata(self, memory_id: str) -> dict | None:
         """Return the stored metadata dict for ``memory_id`` or ``None``."""
+        self.flush()
         getter = getattr(self.col, "get", None)
         if not callable(getter):  # pragma: no cover - backend without get
             return None
@@ -290,6 +346,7 @@ class VectorIndex:
 
     def _get_document(self, memory_id: str) -> str | None:
         """Return the stored embedding text for ``memory_id`` or ``None``."""
+        self.flush()
         getter = getattr(self.col, "get", None)
         if not callable(getter):  # pragma: no cover - backend without get
             return None
@@ -313,6 +370,7 @@ class VectorIndex:
         """
         if top_k <= 0:
             return []
+        self.flush()
         embedding = self.provider.embed_one(query_text)
         res = self.col.query(
             query_embeddings=[embedding],
