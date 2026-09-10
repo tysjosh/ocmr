@@ -46,8 +46,49 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
+
+
+def _git(*args: str) -> str | None:
+    """Best-effort git query; ``None`` outside a repo or without git installed."""
+    try:
+        result = subprocess.run(
+            ("git", *args), capture_output=True, text=True, timeout=15, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _provenance(path: Path | None, annotations: Any) -> dict[str, Any]:
+    """Identity of the gold annotations and the code that scored them.
+
+    The annotations are LLM-generated, so the result is only interpretable
+    alongside *which* model produced them and *which* file. The notebook stamps
+    the model into the filename for exactly this reason; digesting the loaded
+    content as well means a silently edited file cannot masquerade as the
+    original. ``code_revision`` is recorded because the durable-state taxonomy
+    itself is code under active change.
+    """
+    meta: dict[str, Any] = {}
+    if path is not None:
+        from ocm.evaluation.run_identity import json_digest
+        meta["annotations_path"] = str(path)
+        meta["annotations_sha256"] = json_digest(annotations, length=0)
+        # ``longmemeval_kupdate_annotations__<model-slug>.json`` -- kept as the raw
+        # slug because un-slugging "/" from "_" is ambiguous for arbitrary model ids.
+        stem = path.stem
+        meta["annotating_model_slug"] = (
+            stem.split("__", 1)[1] if "__" in stem else None)
+    meta["code_revision"] = _git("rev-parse", "HEAD")
+    # Untracked files are excluded deliberately: scratch runners and downloaded
+    # PDFs sit in the tree permanently and say nothing about whether the *scored*
+    # code matches ``code_revision``. This matches the extraction caches, whose
+    # identity uses ``git diff`` and so reads "clean" with untracked files present.
+    dirty = _git("status", "--porcelain", "--untracked-files=no")
+    meta["code_dirty"] = bool(dirty) if dirty is not None else None
+    return meta
 
 
 def main() -> int:
@@ -120,6 +161,7 @@ def main() -> int:
         "n_gold_keys": len(oracle.gold_current_values),
         "embeddings": args.embeddings,
         "fixture": bool(args.fixture),
+        **_provenance(args.annotations, annotations),
     }}
 
     for arm in [a.strip() for a in args.arms.split(",") if a.strip()]:
@@ -142,6 +184,11 @@ def main() -> int:
         out[arm] = {
             **report.as_dict(),
             "durable_violations": violations,
+            # The paper reports violations per 100 responses, not the raw count;
+            # recording it here keeps the table cell traceable to this file.
+            "durable_violations_per_100_responses": (
+                100.0 * violations / len(records) if records else 0.0),
+            "n_responses": len(records),
             "task_success": task,
             "outcomes": {f"{k[0]}|{k[1]}": v for k, v in report.outcomes.items()},
         }
