@@ -76,6 +76,9 @@ BUCKETS: tuple[str, ...] = (CORRECT, STALE, SPLIT, ABSTAINED, MISSING)
 
 _WS = re.compile(r"\s+")
 
+#: Slot marker embedded in a slot-addressed question, e.g. ``[[mwz-0001:hotel-area]]``.
+_MARKER = re.compile(r"\[\[(.+?)\]\]")
+
 
 def normalize_value(value: Any) -> str:
     """Case/whitespace-insensitive form used to compare a stored value with gold."""
@@ -292,6 +295,38 @@ def gold_from_slot_values(
     a single predicate.
     """
     return {(slot_id, predicate): value for slot_id, value in entries}
+
+
+def gold_from_marked_questions(
+    examples: Iterable[Any], predicate: str = "HAS_VALUE"
+) -> Dict[Key, str]:
+    """Build a gold map from questions that name their own slot in a ``[[key]]`` marker.
+
+    The slot-addressed surfaces already carry everything needed: MultiWOZ asks
+    ``"What is the current value of slot [[<dialogue>:<slot>]]?"`` with the gold in
+    ``expected_answer_contains``, and the oracle LongMemEval arm marks its
+    attribute the same way. Extracting ``(slot_name, gold)`` from those questions
+    is the one piece :func:`gold_from_slot_values` cannot do for itself.
+
+    Keys come back under the slot **name**, matching what :func:`resolve_gold_keys`
+    expects; pass the result through it after a replay to rekey to store ids.
+
+    A question with no marker is **skipped**. Inferring a subject from free text
+    would risk scoring a key the question never asked about, which is worse than
+    leaving it out -- and the surfaces this helper serves always emit the marker.
+    Questions with no ``expected_answer_contains`` are skipped for the same reason.
+    """
+    entries: list[tuple[str, str]] = []
+    for example in examples:
+        for question in getattr(example, "questions", []) or []:
+            expected = list(getattr(question, "expected_answer_contains", []) or [])
+            if not expected:
+                continue
+            marker = _MARKER.search(str(getattr(question, "query", "")))
+            if marker is None:
+                continue
+            entries.append((marker.group(1), expected[0]))
+    return gold_from_slot_values(entries, predicate)
 
 
 def resolve_gold_keys(
