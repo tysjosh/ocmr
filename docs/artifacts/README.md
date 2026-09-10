@@ -48,6 +48,17 @@ extraction floor confounds this surface — the gap is governance alone. The
 `106.38` reproduces the published figure and is recorded directly as
 `durable_violations_per_100_responses` rather than left as `50 / 47 * 100`.
 
+Independently reproduced on a second machine against the *other* LongMemEval
+corpus — `longmemeval_oracle.json` (15.4 MB, evidence sessions only) rather than
+the `longmemeval_s.json` (277.4 MB, full haystack) used for the tracked file —
+yielding byte-identical buckets, task success and violation counts, and the same
+`instances=72 annotations=47` denominators. The row is therefore invariant to
+which corpus is loaded, as expected: writes are emitted only at trajectory
+placements, so the store is identical, and the recall question resolves through
+the `[[slot]]` marker and the `HAS_VALUE` rule rather than retrieval ranking.
+The extra distractor sessions are inert here. Reproducing from the oracle file is
+the cheaper path, and `_meta.dataset_sha256` records which was used.
+
 Gold value trajectories: `../longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json`,
 47 annotations validated against the benchmark answers (0 orphans, 0 field
 gaps, 0 answer mismatches, 0 unknown session ids, trajectory length 2–3).
