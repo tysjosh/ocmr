@@ -60,6 +60,57 @@ NEW_FACT_CONFIDENCE: float = 0.85
 #: depend on a confidence margin (latest value wins).
 UPDATE_CONFIDENCE: float = 0.85
 
+# --------------------------------------------------------------------------- #
+# Corroboration-gated supersession (``intent_mode="corroborated"``)
+# --------------------------------------------------------------------------- #
+# Under ``intent_mode="auto"`` a changed value is emitted as ``update``, which
+# ``authoritative_update_supersede`` honours unconditionally -- "the latest value
+# replaces the incumbent (no margin / evidence gate)". For *trusted* state (a
+# MultiWOZ slot the user just changed) that is correct. For raw extraction it is
+# not: the ``update`` label is assigned purely because ``prev is not None``, an
+# artifact of iteration order that carries no evidence the later value is more
+# reliable. Recency becomes authority, so a noisy late extraction retires a
+# correct early one -- and because C7 takes the supersede branch, B3 quarantines
+# *nothing* on this surface, leaving the gate's refusal behaviour untested.
+#
+# This mode routes changed values through ``correction`` instead, which is
+# Algorithm 1 line 7 and already implemented in ``c7_contradiction_gate``:
+# supersede only when the candidate beats the incumbent by ``supersede_margin``
+# and carries ``supersede_evidence_min`` evidence, else quarantine. The evidence
+# term is satisfied by the write's ``source_ref``, so the margin is what binds.
+#
+# Confidence is derived from *corroboration*: how many distinct sessions attest
+# the same (attribute, value). That signal is already in the extraction cache and
+# is currently thrown away by the ``if prev == value: continue`` dedup, so using
+# it costs no additional model calls.
+#
+# The floor is load-bearing. ``c7_contradiction_gate`` treats a conflict as
+# *blocking* only when both the candidate and a conflicting accepted assertion
+# exceed ``contradiction_high_confidence`` (0.8). A value below that would make
+# the conflict "soft" and be silently accepted -- producing violations instead of
+# quarantines and disengaging the very gate this mode exists to exercise. Every
+# value this ladder can emit therefore stays above 0.8.
+CORROBORATION_BASE_CONFIDENCE: float = 0.82
+CORROBORATION_STEP: float = 0.06
+CORROBORATION_MAX_CONFIDENCE: float = 0.98
+
+
+def corroboration_confidence(attestations: int) -> float:
+    """Confidence for a value attested by ``attestations`` distinct sessions.
+
+    ``0.82`` for a single attestation, rising ``0.06`` per additional one, capped
+    at ``0.98``. With the default ``supersede_margin`` of ``0.1`` a candidate must
+    be attested at least **two more times** than the incumbent to supersede it
+    (two steps = 0.12 > 0.1); a one-off re-extraction cannot displace a
+    corroborated value and is quarantined instead. Lower ``supersede_margin`` to
+    let a single extra attestation suffice, or raise it to demand more.
+    """
+    steps = max(0, int(attestations) - 1)
+    return min(
+        CORROBORATION_MAX_CONFIDENCE,
+        CORROBORATION_BASE_CONFIDENCE + CORROBORATION_STEP * steps,
+    )
+
 #: Benchmark category label for LongMemEval knowledge-update examples.
 CATEGORY: str = "knowledge_update"
 
@@ -1098,6 +1149,100 @@ def build_slot_link_fn(
     return _link
 
 
+def _corroborated_instance_writes(
+    inst: dict[str, Any],
+    fact_extract_fn: Any,
+    *,
+    slot_link_fn: Any | None,
+    qid: str,
+    question_text: str,
+) -> tuple[list[Session], dict[str, _SessionWrites]]:
+    """Build one instance's writes with corroboration-derived confidence.
+
+    Runs in two phases because a value's confidence depends on how many sessions
+    attest it, which is not known until every session has been read:
+
+    1. **Resolve.** Walk the sessions in order, extract, and slot-link each fact.
+       ``slot_link_fn`` receives ``existing_slots=dict(belief)``, so the belief
+       must evolve here exactly as it does in the single-pass builder or the link
+       prompts -- and hence the linked attributes -- would differ. Belief is
+       therefore updated on every resolved fact, which is equivalent to the
+       single-pass rule: that path skips ``prev == value`` without updating, but
+       belief already holds ``value`` in precisely that case.
+    2. **Emit.** Count distinct sessions per ``(attribute, value)``, convert to
+       confidence via :func:`corroboration_confidence`, and write a first value as
+       ``new_fact`` and any change as ``correction`` -- routing the conflict to
+       Algorithm 1's margin test rather than to unconditional supersession.
+
+    Counting *distinct sessions* rather than raw occurrences keeps one verbose
+    session from inflating a value's confidence on its own.
+    """
+    resolved_per_session: list[tuple[int, str, list[tuple[str, str]]]] = []
+    belief: dict[str, str] = {}
+
+    for idx, session in enumerate(inst.get("haystack_sessions", []) or []):
+        text = _session_text(session)
+        resolved: list[tuple[str, str]] = []
+        for fact in fact_extract_fn(text):
+            attr = normalize_attribute(fact.get("attribute", ""))
+            value = str(fact.get("value", "")).strip()
+            if not attr or not value:
+                continue
+            if slot_link_fn is not None:
+                linked_attr = slot_link_fn(
+                    raw_attribute=attr,
+                    value=value,
+                    existing_slots=dict(belief),
+                    session_text=text,
+                    question=question_text,
+                    question_id=qid,
+                )
+                attr = normalize_attribute(linked_attr) or attr
+            resolved.append((attr, value))
+            belief[attr] = value
+        resolved_per_session.append((idx, text, resolved))
+
+    attestations: dict[tuple[str, str], int] = {}
+    for _idx, _text, resolved in resolved_per_session:
+        for pair in set(resolved):
+            attestations[pair] = attestations.get(pair, 0) + 1
+
+    sessions: list[Session] = []
+    writes: dict[str, _SessionWrites] = {}
+    emit_belief: dict[str, str] = {}
+
+    for idx, text, resolved in resolved_per_session:
+        sw = _SessionWrites()
+        for attr, value in resolved:
+            prev = emit_belief.get(attr)
+            if prev == value:
+                continue  # re-asserted same value — no write
+            conf = corroboration_confidence(attestations.get((attr, value), 1))
+            # A change is a *correction*, not an authoritative update: C7 then
+            # requires it to dominate the incumbent's corroboration by
+            # ``supersede_margin`` and quarantines it otherwise.
+            intent = "new_fact" if prev is None else "correction"
+            slot_name = _slot_key(qid, attr)
+            sw.entities.append({"type": "Slot", "name": slot_name})
+            sw.entities.append(
+                {"type": "SlotValue", "name": value, "fields": {"value": value}}
+            )
+            sw.relations.append(
+                {
+                    "subject": slot_name,
+                    "predicate": "HAS_VALUE",
+                    "object": value,
+                    "confidence": conf,
+                    "write_intent": intent,
+                }
+            )
+            emit_belief[attr] = value
+        writes[f"{qid}:s{idx}"] = sw
+        sessions.append(Session(session_id=f"s{idx}", input=text))
+
+    return sessions, writes
+
+
 def _build_e2e_examples_from_extraction(
     instances: Iterable[dict[str, Any]],
     fact_extract_fn: Any,
@@ -1115,8 +1260,10 @@ def _build_e2e_examples_from_extraction(
     returns ``"insert"``/``"update"``/``"skip"`` and the emitted ``write_intent``
     follows that choice. When ``None``, the deterministic belief rule is used.
     """
-    if intent_mode not in ("auto", "new_fact", "memgpt"):
-        raise ValueError("intent_mode must be 'auto', 'new_fact', or 'memgpt'")
+    if intent_mode not in ("auto", "new_fact", "memgpt", "corroborated"):
+        raise ValueError(
+            "intent_mode must be 'auto', 'new_fact', 'memgpt', or 'corroborated'"
+        )
     if intent_mode == "memgpt" and decide_fn is None:
         raise ValueError("intent_mode='memgpt' requires a decide_fn")
 
@@ -1126,6 +1273,33 @@ def _build_e2e_examples_from_extraction(
     for inst in instances:
         qid = str(inst["question_id"])
         question_text = str(inst.get("question", ""))
+
+        if intent_mode == "corroborated":
+            # Two-phase: resolve every fact first so attestation counts are known
+            # before any intent is chosen. Kept as a separate path so the
+            # single-pass logic below -- and therefore the examples fingerprint of
+            # every existing auto / new_fact / memgpt checkpoint -- is untouched.
+            sessions, instance_writes = _corroborated_instance_writes(
+                inst,
+                fact_extract_fn,
+                slot_link_fn=slot_link_fn,
+                qid=qid,
+                question_text=question_text,
+            )
+            writes_by_ref.update(instance_writes)
+            question = Question(
+                query=question_text,
+                expected_answer_contains=list(expected_answer_fn(inst)),
+                expected_conflict=False,
+            )
+            examples.append(
+                BenchmarkExample(
+                    id=qid, category=category,
+                    sessions=sessions, questions=[question],
+                )
+            )
+            continue
+
         belief: dict[str, str] = {}
         sessions: list[Session] = []
         for idx, session in enumerate(inst.get("haystack_sessions", []) or []):
@@ -1326,7 +1500,16 @@ def run_longmemeval_e2e(
         extractor=oracle,
         embeddings=embeddings,
         checkpoint_dir=checkpoint_dir,
-        key_suffix=f"__lme_e2e__xfp{examples_fingerprint[:12]}",
+        # ``examples_fingerprint`` digests the BenchmarkExamples, which are
+        # identical across intent modes -- the intent lives on the oracle's
+        # writes, not the examples. So the suffix must carry the mode too, or a
+        # run with an explicit ``--checkpoint-dir`` would load another mode's
+        # checkpoints and mislabel them. ``auto`` is left unsuffixed to keep
+        # every already-computed checkpoint loadable.
+        key_suffix=(
+            f"__lme_e2e__xfp{examples_fingerprint[:12]}"
+            + ("" if intent_mode == "auto" else f"__intent_{intent_mode}")
+        ),
         provided_examples=examples,
     )
     agg = aggregate_methods(ms)
