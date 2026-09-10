@@ -461,7 +461,19 @@ def main() -> int:
             "Knowledge-update only; abstention is skipped."
         ),
     )
-    parser.add_argument("--intent-mode", choices=("auto", "new_fact"), default="auto")
+    parser.add_argument(
+        "--intent-mode",
+        choices=("auto", "new_fact", "corroborated"),
+        default="auto",
+        help=(
+            "Write-intent policy for a changed value. 'auto' emits update, which "
+            "authoritative_update_supersede honours unconditionally (latest wins, "
+            "C7 never quarantines). 'new_fact' emits new_fact, so every conflict "
+            "is quarantined. 'corroborated' emits correction with confidence "
+            "derived from how many sessions attest the value, so Algorithm 1's "
+            "margin test decides supersede-vs-quarantine."
+        ),
+    )
     parser.add_argument(
         "--extract-prompt",
         choices=("durable", "longmemeval", "generic"),
