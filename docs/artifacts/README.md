@@ -75,6 +75,77 @@ Two caveats for anyone reading these numbers:
   near-random; it reports `51.06 / 68.09` on this same store. The durable-state
   buckets are unaffected, since they read the store rather than retrieval.
 
+## Metric saturation and the revised tables
+
+The published Table VIII columns do not separate the arms. Reading `Task` down
+each block gives 0.09 points on MultiWOZ (99.87 → 99.96) and **zero** on LM-O
+(100.0 for every arm, governed and ungoverned). `Contr.` is 0.00 for every arm
+on both datasets. Of the reported metric columns, LM-O separates arms on `Viol`
+alone.
+
+The cause is mechanical rather than a tuning artifact. `task_success` is
+answer-token recall over the rendered answer *plus every retrieved item*, so it
+is monotone in retrieved volume; on MultiWOZ,
+`EvidencePackager._slot_value_answer` deliberately returns the most recent
+accepted `HAS_VALUE` when several are active — which only happens on an arm that
+failed to supersede — so an arm carrying single-valued violations is still handed
+the current gold value and scores ~99.9.
+
+Durable-state correctness (DSC) is measured on the same runs and reads the store
+rather than an answer:
+
+| Data | Arm | Task ↑ | DSC ↑ | split ↓ | Viol ↓ | correct/stale/split |
+|------|-----|--------|-------|---------|--------|---------------------|
+| MW   | B0 Text     | 99.88 | 93.09  | 6.87   | 7.14   | 7544/3/557 |
+| MW   | B2 Hybrid   | 99.88 | 93.09  | 6.87   | 7.14   | 7544/3/557 |
+| MW   | Bsup        | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   |
+| MW   | Bevi        | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   |
+| MW   | B3 Governed | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   |
+| LM-O | B0 Text     | 100.0 | 0.00   | 100.00 | 106.38 | 0/0/47     |
+| LM-O | B2 Hybrid   | 100.0 | 0.00   | 100.00 | 106.38 | 0/0/47     |
+| LM-O | Bsup        | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     |
+| LM-O | Bevi        | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     |
+| LM-O | B3 Governed | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     |
+
+MultiWOZ: 1,000 validation dialogues, 8,104 probed slots. LM-O: 47 annotated
+`knowledge-update` questions. DSC turns 0.09 points into 6.86 on MultiWOZ and
+zero into a complete 0.00-vs-100.00 split on LM-O. The `split` bucket is what
+does the work — two or more accepted values on one durable key, which is the
+cardinality breach `durable_constraint_violations` counts.
+
+### Reading the published A/S/Q columns
+
+The accepted/superseded/quarantined counts are **summed across all five seeds**,
+which is why LM-O reports 485 writes for 47 questions. Divided through they
+reconcile with the single-pass durable-state runs, and the last line is a useful
+internal check — every write B3 supersedes is exactly one violation B0 leaves
+behind:
+
+| | published | ÷ 5 seeds | durable-state run |
+|---|---|---|---|
+| LM-O B0 accepted    | 485 | 97 | 47 keys × 2.06 trajectory values ≈ 97 |
+| LM-O B3 accepted    | 235 | 47 | 47 keys holding one value each |
+| LM-O B3 superseded  | 250 | 50 | 50, equal to B0's violation count |
+
+### Caveats
+
+- `Bsup` and `Bevi` are **identical** on both datasets. This is structural, not
+  a measurement: under uniform annotation confidence the evidence surface has
+  nothing to discriminate on. The published table omits `Bsup`; showing it
+  requires stating this, or a reader will suspect a duplicated column.
+- Two small gaps against the published row remain: `Task` 99.87 vs 99.88 on
+  MultiWOZ, and superseded `3010 / 5 = 602` vs 579 violations. The first is
+  plausibly the write-side embedding batching in `ocm/retrieval/vector_index.py`
+  (batched `embed()` pads to the longest sequence, so it is not bit-identical to
+  per-item `embed_one`). The second is expected: a slot reaching three distinct
+  values contributes two supersessions while the violation metric counts
+  per-key breaches, so the two need not be equal.
+- The MultiWOZ figures above are reproduced but their result file is not yet
+  frozen here; it must be regenerated through `run_multiwoz_durable_state.py`
+  so it carries the same provenance as the LM-O artifact. The earlier output
+  used the pre-refactor bucket names (`exact` / `ambig` / `wrong_value`) and
+  recorded no revision.
+
 ## Reproduction entry points
 
 - `run_entity_linking_evasion.py --paper-suite` regenerates the broad synthetic
@@ -84,6 +155,14 @@ Two caveats for anyone reading these numbers:
   no annotations file or dataset. Note that `_meta.annotations_sha256` digests
   the *parsed* annotations (sorted keys, normalized separators), so it is
   invariant to reformatting and will not match `shasum` on the raw file.
+- `run_multiwoz_durable_state.py --arms B0,B2,Bsup,Bevi,B3` regenerates the
+  MultiWOZ row (full validation split by default; `--limit` for a smoke run,
+  `--fixture` for a 3-dialogue offline check). It fetches dialogues from
+  `raw.githubusercontent.com`, so it needs network access to GitHub specifically.
+- `ocm/evaluation/artifact_meta.py` supplies the provenance stamps. Both
+  durable-state runners are replay scorers over gold facts, so identical code
+  with different inputs yields different numbers; `code_revision`, `code_dirty`
+  and the input digests are what let a reader tell two such runs apart.
 - `ocm/evaluation/durable_state.py` defines the outcome taxonomy. The
   `stale`/`abstained` distinction is load-bearing: a quarantining arm leaves a
   non-gold incumbent accepted by design, and scoring that as silently stale
