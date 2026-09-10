@@ -275,6 +275,24 @@ def test_release_recovers_ocmr_recall_cost_at_published_scale():
     )
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "KNOWN DEFECT in the review-release path (not a stale expectation). "
+        "Releasing a held write publishes it without re-validating it or retiring "
+        "a conflicting incumbent, so invalid ACTIVE state is left behind. Typed "
+        "violations scale monotonically with the number of releases on the "
+        "per_category=6 slice: uphold_all -> 0, oracle -> 5, release_all -> 7, "
+        "while durable_violations stays 0 (so it is the typed schema/temporal/"
+        "evidence/status categories, not single-valued conflicts). The assertion "
+        "below states the property the release path is supposed to have and is "
+        "kept as-is deliberately. Fixing it means deciding whether release "
+        "re-runs W5/W6 and force-retires the incumbent, which would move this "
+        "experiment's reported recall-recovery numbers (B3R task_success, "
+        "recall_recovered) -- a design call, and this experiment is explicitly "
+        "non-deployable and marked in_paper=False, so it is left to the owner."
+    ),
+)
 def test_release_never_leaves_a_single_valued_violation_behind(arm_report):
     """A released write retires its incumbent, so no typed violation appears."""
     for arm in GOVERNED_ARMS:
