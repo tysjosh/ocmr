@@ -1430,6 +1430,85 @@ def _package_is_abstention(package: Any) -> bool:
     return _answer_is_abstention(getattr(package, "answer", None))
 
 
+#: Default relevance floor for calling surfaced accepted support "confident".
+#: Matches the Evidence Packager's own ``LOW_CONFIDENCE_THRESHOLD`` so a support
+#: item counts as confident exactly when the packager would *not* annotate it as
+#: low-confidence in ``missing_information``.
+SUPPORT_RELEVANCE_FLOOR: float = 0.5
+
+
+def _abstention_support_profile(
+    package: Any,
+    *,
+    relevance_floor: float = SUPPORT_RELEVANCE_FLOOR,
+) -> dict[str, Any]:
+    """Describe *what an ungrounded question surfaced*, beyond the rendered answer.
+
+    Scoring an ``_abs`` question only on ``package.answer`` is not
+    discriminative in the Arm-B end-to-end setting: the builder writes solely
+    ``Slot -[HAS_VALUE]-> SlotValue``, and
+    :meth:`EvidencePackager._derive_answer` has no path from a natural-language
+    LongMemEval question to that shape (its slot branch requires a ``"value
+    of"`` / ``"slot"`` marker, its status branch a status word, and its
+    remaining branches ``OWNS`` / ``ASSIGNED_TO`` / ``PRECEDES`` / ``Decision``
+    matches). ``answer`` is therefore ``None`` for *every* arm before governance
+    is consulted, so every arm scores 100% "abstained" with zero variance and
+    the metric cannot see the fabrication it exists to detect.
+
+    This profile adds the graded signals that *do* differ across arms:
+
+    * ``answered`` — a final answer string was rendered (the original signal).
+    * ``n_accepted_support`` — how many accepted, non-contradicted assertions
+      were surfaced as support. An ungoverned arm that never supersedes keeps
+      every stale value live and surfaces more of them; for an ``_abs``
+      question **all** such support is ungrounded, so surfacing less is better.
+    * ``top_support_confidence`` — the best support's confidence/score, recorded
+      raw so a relevance floor can be swept offline without re-running.
+    * ``confident_support`` — that value meets ``relevance_floor``.
+    * ``flagged`` — the package surfaced a conflict or an insufficiency note, so
+      the support was not presented as settled fact.
+    * ``fabricated`` — the headline failure: an answer was rendered, **or**
+      confident support was surfaced with no conflict/insufficiency flag. This
+      is the complement of a faithful abstention.
+    """
+    answer = getattr(package, "answer", None)
+    answered = not _answer_is_abstention(answer)
+
+    # ``supporting_assertions`` is already accepted + non-contradicted (R4).
+    support = list(getattr(package, "supporting_assertions", []) or [])
+    confidences = [float(getattr(sa, "confidence", 0.0) or 0.0) for sa in support]
+    top_conf = max(confidences) if confidences else 0.0
+
+    conflicts = list(getattr(package, "conflicts", []) or [])
+    missing = list(getattr(package, "missing_information", []) or [])
+    flagged = bool(conflicts) or bool(missing)
+
+    confident_support = bool(support) and top_conf >= float(relevance_floor)
+    # NOTE on calibration: ``top_support_confidence`` is the reranker's *weighted*
+    # score (RankedItem.confidence is None for semantic hits, so _item_confidence
+    # falls back to .score), not the assertion's own 0.85 confidence. Measured on
+    # real MiniLM embeddings this tops out around 0.22, so any floor at/above that
+    # makes ``confident_support`` -- and therefore ``fabricated`` -- identically
+    # False. ``flagged`` is entangled with the same quantity: the packager emits a
+    # low-confidence note whenever confidence < 0.5, so ``flagged`` is ~always
+    # True here. Both threshold-derived fields are kept as diagnostics and for
+    # offline sweeps over ``top_support_confidence``, but they are NOT the
+    # headline; ``n_accepted_support`` is the threshold-free signal that actually
+    # separates the arms.
+    fabricated = bool(answered) or (confident_support and not flagged)
+
+    return {
+        "answered": answered,
+        "n_accepted_support": len(support),
+        "top_support_confidence": top_conf,
+        "confident_support": confident_support,
+        "flagged": flagged,
+        "conflict_surfaced": bool(conflicts),
+        "missing_information_surfaced": bool(missing),
+        "fabricated": fabricated,
+    }
+
+
 def evaluate_abstention_e2e(
     instances: Iterable[dict[str, Any]],
     fact_extract_fn: Any,
@@ -1444,6 +1523,7 @@ def evaluate_abstention_e2e(
     embeddings: object | None = None,
     checkpoint_dir: Optional[str] = None,
     top_k: int = 10,
+    support_relevance_floor: float = SUPPORT_RELEVANCE_FLOOR,
 ) -> dict[str, Any]:
     """Score Arm-B LongMemEval abstention over raw full-haystack extraction.
 
@@ -1470,7 +1550,11 @@ def evaluate_abstention_e2e(
     from ocm.core.container import CoreContainer
     from ocm.evaluation import stats
     from ocm.evaluation.arms import baseline_settings_overrides, build_baseline
-    from ocm.evaluation.experiment import _Checkpoint, _seed_everything
+    from ocm.evaluation.experiment import (
+        _Checkpoint,
+        _seed_everything,
+        durable_constraint_violations,
+    )
     from ocm.evaluation.runner import BaselineRunner
 
     if settings_factory is None:
@@ -1494,6 +1578,21 @@ def evaluate_abstention_e2e(
     per_seed_accuracy: dict[str, list[float]] = {m: [] for m in methods}
     per_seed_false_answer: dict[str, list[float]] = {m: [] for m in methods}
     per_seed_supporting: dict[str, list[float]] = {m: [] for m in methods}
+    # Graded (discriminative) abstention signals -- see _abstention_support_profile.
+    per_seed_faithful: dict[str, list[float]] = {m: [] for m in methods}
+    per_seed_fabrication: dict[str, list[float]] = {m: [] for m in methods}
+    per_seed_confident_support: dict[str, list[float]] = {m: [] for m in methods}
+    per_seed_unflagged_confident: dict[str, list[float]] = {m: [] for m in methods}
+    per_seed_mean_support: dict[str, list[float]] = {m: [] for m in methods}
+    # The paper's decisive integrity metric (Section V-B): contradictory durable
+    # state left ACCEPTED in memory -- single-valued relations with two or more
+    # accepted objects -- normalized per 100 evaluated examples. This is the
+    # metric the abstention split was missing; it discriminates arms without
+    # inventing a new measure.
+    per_seed_durable_violations: dict[str, list[float]] = {m: [] for m in methods}
+    # Raw per-example top-support confidences, kept so the relevance floor can be
+    # swept offline without re-running the (expensive) evaluation.
+    support_confidences: dict[str, list[float]] = {m: [] for m in methods}
     counts: dict[str, dict[str, int]] = {
         m: {
             "abstained": 0,
@@ -1503,6 +1602,12 @@ def evaluate_abstention_e2e(
             "retrieved_responses": 0,
             "conflict_responses": 0,
             "missing_information_responses": 0,
+            # graded additions
+            "faithful_abstentions": 0,
+            "fabrications": 0,
+            "confident_support_responses": 0,
+            "unflagged_confident_support_responses": 0,
+            "accepted_support_total": 0,
         }
         for m in methods
     }
@@ -1522,9 +1627,13 @@ def evaluate_abstention_e2e(
     for seed in seed_list:
         _seed_everything(seed)
         for method in methods:
+            # v3 adds the graded support/fabrication signals. The version bump is
+            # required: a v2 checkpoint carries only the answer-only boolean and
+            # would silently load without the new fields.
             key = (
                 f"abs_e2e__{method}__seed{seed}__n{n_examples}"
-                f"__intent_{intent_mode}__lme_abs_e2e_v2"
+                f"__intent_{intent_mode}__lme_abs_e2e_v3"
+                f"__floor{int(round(float(support_relevance_floor) * 100))}"
                 f"__xfp{examples_fingerprint[:12]}"
             )
             cached = ckpt.load(key)
@@ -1538,6 +1647,7 @@ def evaluate_abstention_e2e(
                 strategy = build_baseline(method, container)
                 method_counts = {k: 0 for k in counts[method]}
                 wo = {k: 0 for k in write_outcomes[method]}
+                seed_support_confidences: list[float] = []
 
                 for ex in examples:
                     wc = runner._ingest_sessions(strategy, ex)
@@ -1545,24 +1655,46 @@ def evaluate_abstention_e2e(
                         wo[outcome_key] += int(wc.get(outcome_key, 0))
 
                     package = strategy.query(ex.questions[0].query, top_k=top_k)
-                    answer = getattr(package, "answer", None)
-                    has_answer = not _answer_is_abstention(answer)
-                    has_support = bool(
-                        getattr(package, "supporting_assertions", []) or []
-                    )
                     has_retrieved = bool(getattr(package, "retrieved_items", []) or [])
-                    has_conflict = bool(getattr(package, "conflicts", []) or [])
-                    has_missing = bool(
-                        getattr(package, "missing_information", []) or []
-                    )
                     abstained = _package_is_abstention(package)
+                    profile = _abstention_support_profile(
+                        package, relevance_floor=support_relevance_floor
+                    )
 
                     method_counts["abstained" if abstained else "non_abstained"] += 1
-                    method_counts["answered"] += int(has_answer)
-                    method_counts["supporting_responses"] += int(has_support)
+                    method_counts["answered"] += int(profile["answered"])
+                    method_counts["supporting_responses"] += int(
+                        profile["n_accepted_support"] > 0
+                    )
                     method_counts["retrieved_responses"] += int(has_retrieved)
-                    method_counts["conflict_responses"] += int(has_conflict)
-                    method_counts["missing_information_responses"] += int(has_missing)
+                    method_counts["conflict_responses"] += int(
+                        profile["conflict_surfaced"]
+                    )
+                    method_counts["missing_information_responses"] += int(
+                        profile["missing_information_surfaced"]
+                    )
+                    method_counts["fabrications"] += int(profile["fabricated"])
+                    method_counts["faithful_abstentions"] += int(
+                        not profile["fabricated"]
+                    )
+                    method_counts["confident_support_responses"] += int(
+                        profile["confident_support"]
+                    )
+                    method_counts["unflagged_confident_support_responses"] += int(
+                        profile["confident_support"] and not profile["flagged"]
+                    )
+                    method_counts["accepted_support_total"] += int(
+                        profile["n_accepted_support"]
+                    )
+                    seed_support_confidences.append(
+                        float(profile["top_support_confidence"])
+                    )
+
+                # Paper decisive metric: invalid ACTIVE durable state remaining
+                # after all writes for this (method, seed).
+                dwv, accepted_total = durable_constraint_violations(
+                    strategy.container
+                )
 
                 denom = n_examples or 1
                 acc = 100.0 * method_counts["abstained"] / denom
@@ -1571,13 +1703,41 @@ def evaluate_abstention_e2e(
                     100.0 * method_counts["supporting_responses"] / denom
                 )
                 cached = {
+                    # --- answer-only metric (retained; NOT discriminative here) ---
+                    # Kept for continuity with the v2 runs, but note it is 100.0
+                    # for every arm by construction: _derive_answer cannot render
+                    # a Slot HAS_VALUE for a natural-language question, so
+                    # `answer` is always None. Do not cite it as a governance
+                    # result; use faithful_abstention_rate below.
                     "abstention_accuracy": acc,
                     "false_answer_rate": false_answer_rate,
-                    # Backward-compatible alias for older readers. The metric
-                    # now means false final answer; accepted support is tracked
-                    # separately as a diagnostic.
                     "false_support_or_answer_rate": false_answer_rate,
                     "supporting_response_rate": supporting_rate,
+                    # --- graded, discriminative metrics ---
+                    "faithful_abstention_rate": (
+                        100.0 * method_counts["faithful_abstentions"] / denom
+                    ),
+                    "fabrication_rate": (
+                        100.0 * method_counts["fabrications"] / denom
+                    ),
+                    "confident_support_rate": (
+                        100.0 * method_counts["confident_support_responses"] / denom
+                    ),
+                    "unflagged_confident_support_rate": (
+                        100.0
+                        * method_counts["unflagged_confident_support_responses"]
+                        / denom
+                    ),
+                    "mean_accepted_support": (
+                        float(method_counts["accepted_support_total"]) / denom
+                    ),
+                    # --- paper decisive metric (Section V-B) ---
+                    "durable_write_violations": 100.0 * dwv / denom,
+                    "durable_violation_count": int(dwv),
+                    "accepted_assertions": int(accepted_total),
+                    "support_relevance_floor": float(support_relevance_floor),
+                    # Raw values for offline threshold sweeps.
+                    "top_support_confidences": seed_support_confidences,
                     "counts": method_counts,
                     "write_outcomes": wo,
                 }
@@ -1594,6 +1754,27 @@ def evaluate_abstention_e2e(
             )
             per_seed_supporting[method].append(
                 float(cached.get("supporting_response_rate", 0.0))
+            )
+            per_seed_faithful[method].append(
+                float(cached.get("faithful_abstention_rate", 0.0))
+            )
+            per_seed_fabrication[method].append(
+                float(cached.get("fabrication_rate", 0.0))
+            )
+            per_seed_confident_support[method].append(
+                float(cached.get("confident_support_rate", 0.0))
+            )
+            per_seed_unflagged_confident[method].append(
+                float(cached.get("unflagged_confident_support_rate", 0.0))
+            )
+            per_seed_mean_support[method].append(
+                float(cached.get("mean_accepted_support", 0.0))
+            )
+            per_seed_durable_violations[method].append(
+                float(cached.get("durable_write_violations", 0.0))
+            )
+            support_confidences[method].extend(
+                float(v) for v in (cached.get("top_support_confidences") or [])
             )
             for count_key, value in (cached.get("counts") or {}).items():
                 if count_key in counts[method]:
@@ -1613,6 +1794,26 @@ def evaluate_abstention_e2e(
         "seeds": seed_list,
         "n_examples": n_examples,
         "examples_fingerprint": examples_fingerprint,
+        "support_relevance_floor": float(support_relevance_floor),
+        # The answer-only metric is degenerate in this arm (always 100.0 / 0.0):
+        # EvidencePackager._derive_answer has no path from a natural-language
+        # LongMemEval question to the Slot HAS_VALUE shape this builder writes,
+        # so `answer` is None for every arm before governance is consulted.
+        # Report `faithful_abstention_rate` / `fabrication_rate` instead.
+        "answer_only_metric_is_degenerate": True,
+        # Threshold-free headline: on an ``_abs`` question no grounded answer
+        # exists, so every accepted assertion surfaced as support is ungrounded.
+        # How MUCH ungrounded durable state an arm surfaces is what governance
+        # actually changes here (an arm that never supersedes keeps every stale
+        # value live), and it needs no confidence floor -- unlike
+        # ``fabrication_rate`` / ``confident_support_rate``, which are degenerate
+        # at the observed reranker-score scale (see _abstention_support_profile).
+        # The paper's decisive integrity metric (Section V-B), which the
+        # abstention split previously did not compute. Preferred over the
+        # invented support-burden proxy because it is already the measure the
+        # paper defines and reports for every other surface.
+        "headline_metric": "durable_write_violations",
+        "threshold_metrics_are_degenerate": True,
         "abstention_metrics": {
             m: {
                 "abstention_accuracy": stats.mean_ci(per_seed_accuracy[m]).__dict__,
@@ -1625,9 +1826,31 @@ def evaluate_abstention_e2e(
                 "false_support_or_answer_rate": stats.mean_ci(
                     per_seed_false_answer[m]
                 ).__dict__,
+                # graded, discriminative
+                "faithful_abstention_rate": stats.mean_ci(
+                    per_seed_faithful[m]
+                ).__dict__,
+                "fabrication_rate": stats.mean_ci(
+                    per_seed_fabrication[m]
+                ).__dict__,
+                "confident_support_rate": stats.mean_ci(
+                    per_seed_confident_support[m]
+                ).__dict__,
+                "unflagged_confident_support_rate": stats.mean_ci(
+                    per_seed_unflagged_confident[m]
+                ).__dict__,
+                "mean_accepted_support": stats.mean_ci(
+                    per_seed_mean_support[m]
+                ).__dict__,
+                "durable_write_violations": stats.mean_ci(
+                    per_seed_durable_violations[m]
+                ).__dict__,
             }
             for m in methods
         },
+        # Raw top-support confidences per arm (all seeds pooled) so the
+        # relevance floor can be swept offline without re-running.
+        "top_support_confidences": {m: support_confidences[m] for m in methods},
         "counts": counts,
         "write_outcomes": write_outcomes,
     }

@@ -364,6 +364,45 @@ def _print_abstention_table(report: dict[str, Any], intent_mode: str) -> None:
         f"\n=== LongMemEval abstention END-TO-END "
         f"(intent_mode={intent_mode}; mean [95% CI]) ==="
     )
+    graded = any(
+        "faithful_abstention_rate" in report["abstention_metrics"][m]
+        for m in report["methods"]
+    )
+    if graded:
+        if report.get("answer_only_metric_is_degenerate"):
+            print(
+                "note: the answer-only 'Abstention' metric is DEGENERATE here (100.0 "
+                "for every arm) -- EvidencePackager._derive_answer has no path from a\n"
+                "      natural-language question to the Slot HAS_VALUE shape this arm "
+                "writes, so `answer` is None before governance is consulted."
+            )
+        if report.get("threshold_metrics_are_degenerate"):
+            print(
+                "      Fabrication/ConfSupport are also degenerate at the observed "
+                "reranker-score scale (max ~0.22 vs floor "
+                f"{report.get('support_relevance_floor')}); they are diagnostics only.\n"
+                "      HEADLINE = DurableViol (dn): the paper's decisive integrity "
+                "metric (Sec. V-B), invalid ACTIVE durable state per 100 examples."
+            )
+        print(
+            f"{'Method':<8}{'DurableViol dn':<22}{'MeanSupport dn':<22}"
+            f"{'Fabrication dn':<22}{'ConfSupport dn':<22}"
+        )
+        for method in report["methods"]:
+            row = report["abstention_metrics"][method]
+            dwv = (
+                _ci(row, "durable_write_violations")
+                if "durable_write_violations" in row
+                else "n/a"
+            )
+            print(
+                f"{method:<8}"
+                f"{dwv:<22}"
+                f"{_ci(row, 'mean_accepted_support'):<22}"
+                f"{_ci(row, 'fabrication_rate'):<22}"
+                f"{_ci(row, 'confident_support_rate'):<22}"
+            )
+        print("\n--- answer-only metric (retained, not discriminative) ---")
     print(f"{'Method':<8}{'Abstention up':<22}{'False answer dn':<22}{'Support diag':<22}")
     for method in report["methods"]:
         row = report["abstention_metrics"][method]
