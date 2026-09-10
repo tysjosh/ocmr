@@ -115,13 +115,25 @@ def main() -> int:
     print("\n" + header)
     print("-" * len(header))
 
+    from ocm.evaluation.artifact_meta import code_provenance
+    from ocm.evaluation.run_identity import json_digest
+
     out: dict[str, Any] = {"_meta": {
         "split": args.split,
         "limit": args.limit,
         "fixture": bool(args.fixture),
         "n_dialogues": len(dialogues),
         "n_gold_keys": len(gold_by_name),
+        "n_probes": sum(len(e.questions) for e in examples),
         "embeddings": args.embeddings,
+        # The dialogues are fetched, not read from a tracked file, so there is no
+        # corpus path to digest. Digesting the loaded dialogue ids pins the same
+        # thing that matters: which dialogues were actually scored. A changed
+        # upstream file, or a different --limit, moves this digest.
+        "dialogue_ids_sha256": json_digest(
+            sorted(str(d.get("dialogue_id", i)) for i, d in enumerate(dialogues)),
+            length=0),
+        **code_provenance(),
     }}
 
     for arm in [a.strip() for a in args.arms.split(",") if a.strip()]:

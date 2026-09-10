@@ -46,19 +46,63 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
 
-def _git(*args: str) -> str | None:
-    """Best-effort git query; ``None`` outside a repo or without git installed."""
-    try:
-        result = subprocess.run(
-            ("git", *args), capture_output=True, text=True, timeout=15, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return result.stdout.strip() if result.returncode == 0 else None
+# Mirrors the notebook's download cells. LM-O (7e) reads the *oracle* file --
+# evidence sessions only, ~tens of MB -- and the gold annotations were produced
+# from it by ``annotate_file``. ``longmemeval_s.json`` is the 277 MB full-haystack
+# file used by the end-to-end arm (7f); it carries the same question ids, so it
+# loads here without error, which is precisely why the mismatch is easy to miss.
+_LME_URLS = {
+    "longmemeval_oracle.json":
+        "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/"
+        "resolve/main/longmemeval_oracle.json",
+    "longmemeval_s.json":
+        "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/"
+        "resolve/main/longmemeval_s_cleaned.json",
+}
+
+
+def _ensure_dataset(path: Path) -> None:
+    """Download the LongMemEval file if absent, as the notebook cells do.
+
+    ``data/`` is gitignored, so a freshly cloned machine has the code and the
+    annotations but not the corpus, and the failure is a bare ``FileNotFoundError``
+    from deep inside the adapter.
+    """
+    if path.exists():
+        return
+    url = _LME_URLS.get(path.name)
+    if url is None:
+        raise SystemExit(
+            f"{path} not found and no download URL is known for '{path.name}'.\n"
+            f"Known files: {', '.join(sorted(_LME_URLS))}"
+        )
+    import urllib.request
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".part")
+    print(f"{path} missing; downloading {url}", flush=True)
+    # Download to a sidecar first so an interrupted transfer cannot leave a
+    # truncated file that later loads as valid-but-incomplete JSON.
+    urllib.request.urlretrieve(url, tmp)
+    tmp.replace(path)
+    print(f"downloaded -> {path} ({path.stat().st_size / 1e6:.1f} MB)", flush=True)
+
+
+def _dataset_provenance(path: Path, *, fixture: bool) -> dict[str, Any]:
+    """Which corpus was scored.
+
+    Recorded because ``longmemeval_oracle.json`` and ``longmemeval_s.json`` share
+    question ids: pointing at the wrong one raises no error, it just changes how
+    many distractor sessions are ingested. Without this field a result cannot be
+    told apart from one run against the other file.
+    """
+    from ocm.evaluation.artifact_meta import file_provenance
+    if fixture:
+        return {"dataset": "builtin-fixture"}
+    return file_provenance(path, prefix="dataset")
 
 
 def _provenance(path: Path | None, annotations: Any) -> dict[str, Any]:
@@ -71,23 +115,20 @@ def _provenance(path: Path | None, annotations: Any) -> dict[str, Any]:
     original. ``code_revision`` is recorded because the durable-state taxonomy
     itself is code under active change.
     """
+    from ocm.evaluation.artifact_meta import code_provenance
+    from ocm.evaluation.run_identity import json_digest
     meta: dict[str, Any] = {}
     if path is not None:
-        from ocm.evaluation.run_identity import json_digest
         meta["annotations_path"] = str(path)
+        # Digests the *parsed* annotations (sorted keys, normalized separators),
+        # so it is invariant to reformatting and will not match `shasum` on the file.
         meta["annotations_sha256"] = json_digest(annotations, length=0)
         # ``longmemeval_kupdate_annotations__<model-slug>.json`` -- kept as the raw
         # slug because un-slugging "/" from "_" is ambiguous for arbitrary model ids.
         stem = path.stem
         meta["annotating_model_slug"] = (
             stem.split("__", 1)[1] if "__" in stem else None)
-    meta["code_revision"] = _git("rev-parse", "HEAD")
-    # Untracked files are excluded deliberately: scratch runners and downloaded
-    # PDFs sit in the tree permanently and say nothing about whether the *scored*
-    # code matches ``code_revision``. This matches the extraction caches, whose
-    # identity uses ``git diff`` and so reads "clean" with untracked files present.
-    dirty = _git("status", "--porcelain", "--untracked-files=no")
-    meta["code_dirty"] = bool(dirty) if dirty is not None else None
+    meta.update(code_provenance())
     return meta
 
 
@@ -126,6 +167,7 @@ def main() -> int:
         if args.annotations is None:
             parser.error("--annotations is required unless --fixture is passed")
         from ocm.evaluation.datasets.longmemeval_annotate import load_annotations
+        _ensure_dataset(args.data)
         instances = load_longmemeval(
             str(args.data), question_type="knowledge-update", limit=None)
         annotations = load_annotations(str(args.annotations))
@@ -161,14 +203,25 @@ def main() -> int:
         "n_gold_keys": len(oracle.gold_current_values),
         "embeddings": args.embeddings,
         "fixture": bool(args.fixture),
+        **_dataset_provenance(args.data, fixture=bool(args.fixture)),
         **_provenance(args.annotations, annotations),
     }}
 
     for arm in [a.strip() for a in args.arms.split(",") if a.strip()]:
         strategy = build_arm(arm, settings_factory, extractor=oracle, embeddings=embeddings)
         records = []
+        # Write-side outcomes (the paper's A/S/Q(/R) columns). Reported alongside
+        # the durable-state buckets because the two are not substitutes: A/S/Q is
+        # what the gate *decided*, the buckets are what the store ended up
+        # holding, and identical A/S/Q counts can accompany very different end
+        # states -- a latest-wins policy that supersedes the correct value looks
+        # the same here as one that keeps it.
+        writes = {"candidates": 0, "accepted": 0, "superseded": 0,
+                  "quarantined": 0, "rejected": 0}
         for example in examples:
             counts = runner._ingest_sessions(strategy, example)
+            for key in writes:
+                writes[key] += counts[key]
             for q_index, question in enumerate(example.questions):
                 records.append(runner._run_question(
                     arm, strategy, example, q_index, question,
@@ -190,6 +243,9 @@ def main() -> int:
                 100.0 * violations / len(records) if records else 0.0),
             "n_responses": len(records),
             "task_success": task,
+            # A/S/Q(/R), single-pass. The paper's columns sum these over five
+            # seeds, so multiply by len(seeds) to compare (LM-O: 97 -> 485).
+            "write_outcomes": dict(writes),
             "outcomes": {f"{k[0]}|{k[1]}": v for k, v in report.outcomes.items()},
         }
         print(f"{arm:7}{report.dsc:8.2f}{report.ssr:8.2f}{report.split_rate:8.2f}"
