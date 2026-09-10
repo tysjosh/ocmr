@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -92,16 +91,6 @@ def _ensure_dataset(path: Path) -> None:
     print(f"downloaded -> {path} ({path.stat().st_size / 1e6:.1f} MB)", flush=True)
 
 
-def _git(*args: str) -> str | None:
-    """Best-effort git query; ``None`` outside a repo or without git installed."""
-    try:
-        result = subprocess.run(
-            ("git", *args), capture_output=True, text=True, timeout=15, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return result.stdout.strip() if result.returncode == 0 else None
-
-
 def _dataset_provenance(path: Path, *, fixture: bool) -> dict[str, Any]:
     """Which corpus was scored.
 
@@ -110,19 +99,10 @@ def _dataset_provenance(path: Path, *, fixture: bool) -> dict[str, Any]:
     many distractor sessions are ingested. Without this field a result cannot be
     told apart from one run against the other file.
     """
+    from ocm.evaluation.artifact_meta import file_provenance
     if fixture:
         return {"dataset": "builtin-fixture"}
-    import hashlib
-    digest = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            digest.update(chunk)
-    return {
-        "dataset": path.name,
-        "dataset_path": str(path),
-        "dataset_sha256": digest.hexdigest(),
-        "dataset_bytes": path.stat().st_size,
-    }
+    return file_provenance(path, prefix="dataset")
 
 
 def _provenance(path: Path | None, annotations: Any) -> dict[str, Any]:
@@ -135,23 +115,20 @@ def _provenance(path: Path | None, annotations: Any) -> dict[str, Any]:
     original. ``code_revision`` is recorded because the durable-state taxonomy
     itself is code under active change.
     """
+    from ocm.evaluation.artifact_meta import code_provenance
+    from ocm.evaluation.run_identity import json_digest
     meta: dict[str, Any] = {}
     if path is not None:
-        from ocm.evaluation.run_identity import json_digest
         meta["annotations_path"] = str(path)
+        # Digests the *parsed* annotations (sorted keys, normalized separators),
+        # so it is invariant to reformatting and will not match `shasum` on the file.
         meta["annotations_sha256"] = json_digest(annotations, length=0)
         # ``longmemeval_kupdate_annotations__<model-slug>.json`` -- kept as the raw
         # slug because un-slugging "/" from "_" is ambiguous for arbitrary model ids.
         stem = path.stem
         meta["annotating_model_slug"] = (
             stem.split("__", 1)[1] if "__" in stem else None)
-    meta["code_revision"] = _git("rev-parse", "HEAD")
-    # Untracked files are excluded deliberately: scratch runners and downloaded
-    # PDFs sit in the tree permanently and say nothing about whether the *scored*
-    # code matches ``code_revision``. This matches the extraction caches, whose
-    # identity uses ``git diff`` and so reads "clean" with untracked files present.
-    dirty = _git("status", "--porcelain", "--untracked-files=no")
-    meta["code_dirty"] = bool(dirty) if dirty is not None else None
+    meta.update(code_provenance())
     return meta
 
 
