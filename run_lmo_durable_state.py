@@ -210,8 +210,18 @@ def main() -> int:
     for arm in [a.strip() for a in args.arms.split(",") if a.strip()]:
         strategy = build_arm(arm, settings_factory, extractor=oracle, embeddings=embeddings)
         records = []
+        # Write-side outcomes (the paper's A/S/Q(/R) columns). Reported alongside
+        # the durable-state buckets because the two are not substitutes: A/S/Q is
+        # what the gate *decided*, the buckets are what the store ended up
+        # holding, and identical A/S/Q counts can accompany very different end
+        # states -- a latest-wins policy that supersedes the correct value looks
+        # the same here as one that keeps it.
+        writes = {"candidates": 0, "accepted": 0, "superseded": 0,
+                  "quarantined": 0, "rejected": 0}
         for example in examples:
             counts = runner._ingest_sessions(strategy, example)
+            for key in writes:
+                writes[key] += counts[key]
             for q_index, question in enumerate(example.questions):
                 records.append(runner._run_question(
                     arm, strategy, example, q_index, question,
@@ -233,6 +243,9 @@ def main() -> int:
                 100.0 * violations / len(records) if records else 0.0),
             "n_responses": len(records),
             "task_success": task,
+            # A/S/Q(/R), single-pass. The paper's columns sum these over five
+            # seeds, so multiply by len(seeds) to compare (LM-O: 97 -> 485).
+            "write_outcomes": dict(writes),
             "outcomes": {f"{k[0]}|{k[1]}": v for k, v in report.outcomes.items()},
         }
         print(f"{arm:7}{report.dsc:8.2f}{report.ssr:8.2f}{report.split_rate:8.2f}"

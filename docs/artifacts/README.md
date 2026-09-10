@@ -94,18 +94,36 @@ the current gold value and scores ~99.9.
 Durable-state correctness (DSC) is measured on the same runs and reads the store
 rather than an answer:
 
-| Data | Arm | Task ↑ | DSC ↑ | split ↓ | Viol ↓ | correct/stale/split |
-|------|-----|--------|-------|---------|--------|---------------------|
-| MW   | B0 Text     | 99.88 | 93.09  | 6.87   | 7.14   | 7544/3/557 |
-| MW   | B2 Hybrid   | 99.88 | 93.09  | 6.87   | 7.14   | 7544/3/557 |
-| MW   | Bsup        | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   |
-| MW   | Bevi        | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   |
-| MW   | B3 Governed | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   |
-| LM-O | B0 Text     | 100.0 | 0.00   | 100.00 | 106.38 | 0/0/47     |
-| LM-O | B2 Hybrid   | 100.0 | 0.00   | 100.00 | 106.38 | 0/0/47     |
-| LM-O | Bsup        | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     |
-| LM-O | Bevi        | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     |
-| LM-O | B3 Governed | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     |
+| Data | Arm | Task ↑ | DSC ↑ | split ↓ | Viol ↓ | correct/stale/split | A/S/Q (5 seeds) |
+|------|-----|--------|-------|---------|--------|---------------------|-----------------|
+| MW   | B0 Text     | 99.88 | 93.09  | 6.87   | 7.14   | 7544/3/557 | 43550/0/0 |
+| MW   | B2 Hybrid   | 99.88 | 93.09  | 6.87   | 7.14   | 7544/3/557 | 43550/0/0 |
+| MW   | Bsup        | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   | not recorded |
+| MW   | Bevi        | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   | not recorded |
+| MW   | B3 Governed | 99.96 | 99.95  | 0.00   | 0.00   | 8100/4/0   | 40540/3010/0 |
+| LM-O | B0 Text     | 100.0 | 0.00   | 100.00 | 106.38 | 0/0/47     | 485/0/0 |
+| LM-O | B2 Hybrid   | 100.0 | 0.00   | 100.00 | 106.38 | 0/0/47     | 485/0/0 |
+| LM-O | Bsup        | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     | 235/250/0 |
+| LM-O | Bevi        | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     | 235/250/0 |
+| LM-O | B3 Governed | 100.0 | 100.00 | 0.00   | 0.00   | 47/0/0     | 235/250/0 |
+
+The A/S/Q column is retained deliberately rather than replaced. It and the
+outcome buckets are not substitutes: A/S/Q is what the gate *decided*, the
+buckets are what the store ended up *holding*, and identical write counts can
+accompany very different end states. On raw end-to-end LongMemEval, `B3` and
+`Bmemgpt` hold near-identical accepted counts (11,715 vs 11,479 per seed) yet
+score 34.7 against 48.6 task success — a difference invisible in A/S/Q. Read as
+a pair, A/S/Q is what governance cost and DSC is what it bought; the `Q` and `R`
+columns are also what support the bounded-review-burden claim, since review
+effort is a count rather than a rate.
+
+LM-O A/S/Q are reproduced by `run_lmo_durable_state.py`, which reports
+single-pass counts (`97/0/0` and `47/50/0`); multiplying by the five seeds gives
+the values above. MultiWOZ `Bsup` and `Bevi` write counts were never recorded —
+the published table omits them — and are marked as such rather than assumed
+equal to `B3`. They are not safe to infer: on raw LongMemEval `Bsup` and `Bevi`
+differ in write counts (11,714/2,810 vs 11,715/2,809) even where their outcomes
+match.
 
 MultiWOZ: 1,000 validation dialogues, 8,104 probed slots. LM-O: 47 annotated
 `knowledge-update` questions. DSC turns 0.09 points into 6.86 on MultiWOZ and
@@ -140,11 +158,13 @@ behind:
   per-item `embed_one`). The second is expected: a slot reaching three distinct
   values contributes two supersessions while the violation metric counts
   per-key breaches, so the two need not be equal.
-- The MultiWOZ figures above are reproduced but their result file is not yet
-  frozen here; it must be regenerated through `run_multiwoz_durable_state.py`
-  so it carries the same provenance as the LM-O artifact. The earlier output
-  used the pre-refactor bucket names (`exact` / `ambig` / `wrong_value`) and
-  recorded no revision.
+- The MultiWOZ DSC figures above come from a completed run whose output uses the
+  pre-refactor bucket names (`exact` / `ambig` / `wrong_value` for
+  `correct` / `split` / `stale`) and carries no provenance stamp. The numbers
+  are sound and reproduce the published 7.14 violation rate; regenerating
+  through `run_multiwoz_durable_state.py` would only add the canonical names and
+  the `_meta` provenance block, so it is a presentation improvement rather than
+  a correctness requirement.
 
 ## Reproduction entry points
 
@@ -187,6 +207,34 @@ The LM-O artifact here is oracle-driven by construction: it scores governance
 *given* gold facts, isolating it from extraction error. It is therefore not a
 substitute for the end-to-end run, which is where noisy extraction and entity
 resolution are exercised.
+
+## Checkpoint validity when archiving notebook runs
+
+The notebook's 7d and 7e cells run through `run_multiseed`, which checkpoints
+per `(method, seed)` under keys of the form
+`ms__{method}__seed{seed}__pc{per_category}__fp{run_fingerprint}`. That
+fingerprint digests the *extraction stack* — embeddings, dataset, annotating
+model, annotations digest — and **not the code revision**.
+
+Those checkpoints and their result files remain accurate records of what ran,
+and archiving them is safe. The durable-state runners in this repository cannot
+affect them: they bypass `run_multiseed` entirely, drive `BaselineRunner`
+directly, use an oracle extractor with no LLM calls, and run with
+`chroma_mode="memory"`, so they write nothing but the file named by `--out`.
+
+The hazard is confined to *resuming* a run against an existing checkpoint
+directory after the scoring code has changed. `ocm/retrieval/vector_index.py`
+now batches write-side embedding (one `embed()` per flush instead of
+`embed_one()` per item), which is semantically equivalent but not bit-identical,
+since batching pads to the longest sequence in the batch. A partial re-run would
+therefore blend batched and unbatched cells with nothing in the key to detect
+it. Two ways to avoid that: point at a fresh `--checkpoint-dir` so every cell
+recomputes under one configuration, or fold the code revision into the
+fingerprint so the mismatch forces recomputation instead of passing silently.
+
+A practical consequence for reviewers: reproducing MultiWOZ from the current
+revision may yield 99.88 task success where 99.87 was published. That is the
+batching difference, not a discrepancy in the artifact.
 
 The paper should link to the anonymous artifact bundle rather than the
 author-identifying development repository.
