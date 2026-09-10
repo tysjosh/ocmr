@@ -6,14 +6,26 @@ The harness's headline recall metric, ``task_success``, is answer-token recall
 over :func:`~ocm.evaluation.runner.BaselineRunner._haystack` — the rendered
 answer *plus the text of every retrieved item*. That makes it **monotone
 non-decreasing in the size of the retrieved set**: surfacing more memory can
-only raise it. Arms that leave ``use_quarantine`` off retrieve superseded and
-quarantined assertions as ordinary hits (see
-``MemoryStrategy.query``'s ``want_conflicts = include_conflicts or not
-use_quarantine``), so they enjoy a strictly larger haystack than a governed arm
-that excludes non-accepted items. The consequence is that an arm is *rewarded*
-for retaining exactly the stale state ``constraint_violations`` penalises, and
-raw ``task_success`` cannot be read as a memory-quality comparison across arms
-with different retrieval composition.
+only raise it.
+
+The volume difference between arms is created at **write** time, not read time.
+``status_filter`` widens only to ``{"status": {"$in": ["accepted",
+"quarantined"]}}`` -- ``superseded`` is never retrievable, under any toggle or
+query type. So an arm does not gain recall by *retrieving* retired state; it
+gains recall by *never retiring it*. An arm that skips supersession leaves every
+stale value at ``status='accepted'``, where it stays a first-class retrieval
+candidate, while a governed arm's retired values drop out of the index entirely.
+
+The consequence is that an arm is *rewarded* for retaining exactly the stale
+state ``constraint_violations`` penalises. The two metrics are therefore
+anti-correlated by construction -- one phenomenon measured twice with opposite
+signs -- and raw ``task_success`` cannot be read as a memory-quality comparison
+across arms with different write policies.
+
+(Retrieval *composition* was tested directly and found not to explain the gap: a
+variant carrying B3's write settings with B2's retrieval toggles scored
+identically to B3 on raw LongMemEval, because ``include_conflicts`` only admits
+quarantined items and that arm quarantines none.)
 
 On MultiWOZ the effect is stark enough to saturate the metric:
 ``EvidencePackager._slot_value_answer`` deliberately returns the *most recent*
