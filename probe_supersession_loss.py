@@ -216,31 +216,31 @@ def attestation_profile(oracle: Any, qid_to_gold: dict[str, str]) -> dict[str, A
     The write stream is identical across arms (arms differ in write *policy*,
     not in what the extractor emitted), so this is computed once.
     """
-    writes = getattr(oracle, "_writes", {}) or {}
-
-    # source_ref is "<qid>:s<idx>"; recover the ordering so the last-written
-    # value -- the one latest-wins keeps -- can be identified.
-    per_qid: dict[str, list[tuple[int, str]]] = {}
-    for source_ref, sw in writes.items():
-        qid, _, session_part = str(source_ref).partition(":s")
-        try:
-            idx = int(session_part)
-        except ValueError:
-            continue
-        for rel in getattr(sw, "relations", []) or []:
-            if rel.get("predicate") != "HAS_VALUE":
-                continue
-            per_qid.setdefault(qid, []).append((idx, str(rel.get("object") or "")))
+    per_slot = _writes_by_slot(oracle)
 
     profile: dict[str, Any] = {}
     for qid, gold in qid_to_gold.items():
-        seq = sorted(per_qid.get(qid, []))
+        slots = {k: v for k, v in per_slot.items() if k[0] == qid}
+        # A question has one slot per extracted attribute, so pick the slot that
+        # actually carries the gold; falling back to the busiest slot keeps the
+        # record populated for questions where the gold never appears.
+        gold_slot = None
+        for key, seq in slots.items():
+            if any(_contains(_norm(v), gold) for _i, v in seq):
+                gold_slot = key
+                break
+        if gold_slot is None and slots:
+            gold_slot = max(slots, key=lambda k: len(slots[k]))
+
+        seq = sorted(slots.get(gold_slot, [])) if gold_slot else []
         counts: dict[str, int] = {}
         for _idx, value in seq:
             counts[value] = counts.get(value, 0) + 1
         final_value = seq[-1][1] if seq else None
         gold_values = [v for v in counts if _contains(_norm(v), gold)]
         profile[qid] = {
+            "slot": gold_slot[1] if gold_slot else None,
+            "n_slots": len(slots),
             "n_writes": len(seq),
             "n_distinct_values": len(counts),
             "final_value": final_value,
@@ -250,6 +250,74 @@ def attestation_profile(oracle: Any, qid_to_gold: dict[str, str]) -> dict[str, A
             "attestations": counts,
         }
     return profile
+
+
+def _writes_by_slot(oracle: Any) -> dict[tuple[str, str], list[tuple[int, str]]]:
+    """``(qid, slot_name) -> [(session_index, value), ...]`` from the write stream.
+
+    Keyed by slot rather than by question: slot names are ``"<qid>:<attribute>"``
+    and a question carries one slot per extracted attribute, so pooling values
+    across a question's slots would invent value changes that never happened on
+    any single durable key.
+    """
+    writes = getattr(oracle, "_writes", {}) or {}
+    per_slot: dict[tuple[str, str], list[tuple[int, str]]] = {}
+    for source_ref, sw in writes.items():
+        qid, _, session_part = str(source_ref).partition(":s")
+        try:
+            idx = int(session_part)
+        except ValueError:
+            continue
+        for rel in getattr(sw, "relations", []) or []:
+            if rel.get("predicate") != "HAS_VALUE":
+                continue
+            slot = str(rel.get("subject") or "")
+            per_slot.setdefault((qid, slot), []).append(
+                (idx, str(rel.get("object") or "")))
+    return per_slot
+
+
+def supersession_burden(oracle: Any) -> dict[str, Any]:
+    """How many supersessions a corroboration requirement would quarantine.
+
+    This is the *cost* side of the corroboration proposal. The lost-gold analysis
+    measures its benefit -- 8 of 11 recoverable -- but corroboration quarantines
+    every single-attestation supersession, not only the ones that happen to
+    destroy a gold. Review burden is that total, so benefit alone cannot say
+    whether the policy is defensible.
+
+    Replays latest-wins over each slot's ordered writes: a supersession occurs
+    wherever the incoming value differs from the incumbent. Each such event is
+    classified by how many times the *incoming* value is attested for that slot,
+    since that is what a corroboration gate would test.
+    """
+    per_slot = _writes_by_slot(oracle)
+    histogram: dict[int, int] = {}
+    total = single = multi = 0
+    for seq in per_slot.values():
+        ordered = sorted(seq)
+        counts: dict[str, int] = {}
+        for _idx, value in ordered:
+            counts[value] = counts.get(value, 0) + 1
+        incumbent = None
+        for _idx, value in ordered:
+            if incumbent is not None and value != incumbent:
+                total += 1
+                n = counts.get(value, 0)
+                histogram[n] = histogram.get(n, 0) + 1
+                if n <= 1:
+                    single += 1
+                else:
+                    multi += 1
+            incumbent = value
+    return {
+        "n_slots": len(per_slot),
+        "total_supersessions": total,
+        "would_quarantine_single_attestation": single,
+        "would_supersede_multi_attestation": multi,
+        "quarantine_rate_pct": 100.0 * single / total if total else 0.0,
+        "attestation_histogram": {str(k): histogram[k] for k in sorted(histogram)},
+    }
 
 
 def summarize_lost_attestations(
@@ -365,6 +433,14 @@ def main() -> int:
     # Arm-independent: the extractor emitted the same writes for every arm.
     profile = attestation_profile(oracle, qid_to_gold)
     out["_attestations"] = profile
+    burden = supersession_burden(oracle)
+    out["_supersession_burden"] = burden
+    print(f"\nsupersession burden across {burden['n_slots']} slots: "
+          f"{burden['total_supersessions']} supersessions, of which "
+          f"{burden['would_quarantine_single_attestation']} are single-attestation "
+          f"({burden['quarantine_rate_pct']:.1f}%)")
+    print(f"  corroboration would quarantine those "
+          f"{burden['would_quarantine_single_attestation']} per seed")
 
     header = (f"{'arm':7}{'retained':>10}{'lost':>7}{'never':>7}{'lost%':>8}"
               f"{'win=1':>7}{'win>1':>7}   lenient(ret/lost/never)")
@@ -405,6 +481,16 @@ def main() -> int:
               f"displaced by values corroboration would also have accepted.")
         print("win=1 is the recoverable set; win>1 is the ceiling corroboration "
               "cannot lift.")
+        # The decisive ratio: reviews a human must clear per gold recovered.
+        recovered = a["winner_attested_once"]
+        quarantines = burden["would_quarantine_single_attestation"]
+        if recovered:
+            print(f"\nreview cost: {quarantines} quarantines per seed to recover "
+                  f"{recovered} golds = {quarantines / recovered:.0f} reviews per "
+                  f"gold recovered")
+            print("  (compare intent_mode=new_fact, which quarantines every "
+                  f"conflict: {burden['total_supersessions']} per seed = "
+                  f"{burden['total_supersessions'] / recovered:.0f} per gold)")
     return 0
 
 
