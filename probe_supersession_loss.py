@@ -201,6 +201,97 @@ def probe_arm(container: Any, qid_to_gold: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def attestation_profile(oracle: Any, qid_to_gold: dict[str, str]) -> dict[str, Any]:
+    """Per question, how many sessions asserted each value for its slot.
+
+    Why this matters
+    ----------------
+    ``lost`` tells us latest-wins retired a correct value. It does not tell us
+    whether *corroboration* would have prevented it. Corroboration refuses to
+    supersede on a value that is attested only once, so it can only recover a
+    lost gold if the value that displaced it was a single-attestation outlier.
+    If the displacing values are themselves well attested, corroboration will
+    supersede exactly as B3 did and recover nothing.
+
+    The write stream is identical across arms (arms differ in write *policy*,
+    not in what the extractor emitted), so this is computed once.
+    """
+    writes = getattr(oracle, "_writes", {}) or {}
+
+    # source_ref is "<qid>:s<idx>"; recover the ordering so the last-written
+    # value -- the one latest-wins keeps -- can be identified.
+    per_qid: dict[str, list[tuple[int, str]]] = {}
+    for source_ref, sw in writes.items():
+        qid, _, session_part = str(source_ref).partition(":s")
+        try:
+            idx = int(session_part)
+        except ValueError:
+            continue
+        for rel in getattr(sw, "relations", []) or []:
+            if rel.get("predicate") != "HAS_VALUE":
+                continue
+            per_qid.setdefault(qid, []).append((idx, str(rel.get("object") or "")))
+
+    profile: dict[str, Any] = {}
+    for qid, gold in qid_to_gold.items():
+        seq = sorted(per_qid.get(qid, []))
+        counts: dict[str, int] = {}
+        for _idx, value in seq:
+            counts[value] = counts.get(value, 0) + 1
+        final_value = seq[-1][1] if seq else None
+        gold_values = [v for v in counts if _contains(_norm(v), gold)]
+        profile[qid] = {
+            "n_writes": len(seq),
+            "n_distinct_values": len(counts),
+            "final_value": final_value,
+            "final_attestations": counts.get(final_value, 0) if final_value else 0,
+            "final_is_gold": bool(final_value and _contains(_norm(final_value), gold)),
+            "gold_attestations": max((counts[v] for v in gold_values), default=0),
+            "attestations": counts,
+        }
+    return profile
+
+
+def summarize_lost_attestations(
+    profile: dict[str, Any], records: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Of the golds this arm lost, how many would corroboration have saved?
+
+    ``winner_attested_once`` is the recoverable set: the displacing value was
+    seen exactly once, so a corroboration requirement would have quarantined it
+    instead of letting it supersede. ``winner_attested_multiple`` is the ceiling
+    on what corroboration cannot fix.
+    """
+    lost = [r["question_id"] for r in records if r["outcome"] == "lost"]
+    once = multiple = gold_single = 0
+    detail = []
+    for qid in lost:
+        p = profile.get(qid) or {}
+        n = int(p.get("final_attestations") or 0)
+        if n <= 1:
+            once += 1
+        else:
+            multiple += 1
+        if int(p.get("gold_attestations") or 0) <= 1:
+            gold_single += 1
+        detail.append({
+            "question_id": qid,
+            "final_value": p.get("final_value"),
+            "final_attestations": n,
+            "gold_attestations": p.get("gold_attestations"),
+            "n_distinct_values": p.get("n_distinct_values"),
+        })
+    return {
+        "n_lost": len(lost),
+        "winner_attested_once": once,
+        "winner_attested_multiple": multiple,
+        "gold_attested_once": gold_single,
+        "recoverable_by_corroboration_pct": (
+            100.0 * once / len(lost) if lost else 0.0),
+        "detail": detail,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--extract-cache", type=Path, required=True)
@@ -271,7 +362,12 @@ def main() -> int:
         "link_cache_misses": link_cache.misses,
     }}
 
-    header = f"{'arm':7}{'retained':>10}{'lost':>7}{'never':>7}{'lost%':>8}   lenient(ret/lost/never)"
+    # Arm-independent: the extractor emitted the same writes for every arm.
+    profile = attestation_profile(oracle, qid_to_gold)
+    out["_attestations"] = profile
+
+    header = (f"{'arm':7}{'retained':>10}{'lost':>7}{'never':>7}{'lost%':>8}"
+              f"{'win=1':>7}{'win>1':>7}   lenient(ret/lost/never)")
     print("\n" + header)
     print("-" * len(header))
     for arm in [a.strip() for a in args.arms.split(",") if a.strip()]:
@@ -279,10 +375,15 @@ def main() -> int:
         for example in examples:
             runner._ingest_sessions(strategy, example)
         result = probe_arm(strategy.container, qid_to_gold)
+        result["lost_attestations"] = summarize_lost_attestations(
+            profile, result["records"])
         out[arm] = result
         c, l = result["counts"], result["counts_lenient"]
+        a = result["lost_attestations"]
         print(f"{arm:7}{c['retained']:>10}{c['lost']:>7}{c['never']:>7}"
-              f"{result['lost_rate']:>8.1f}   {l['retained']}/{l['lost']}/{l['never']}")
+              f"{result['lost_rate']:>8.1f}"
+              f"{a['winner_attested_once']:>7}{a['winner_attested_multiple']:>7}"
+              f"   {l['retained']}/{l['lost']}/{l['never']}")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=2))
@@ -294,6 +395,16 @@ def main() -> int:
               f"({b3['lost_rate']:.1f}%)")
         if memgpt:
             print(f"Bmemgpt lost {memgpt['counts']['lost']} ({memgpt['lost_rate']:.1f}%)")
+        a = b3["lost_attestations"]
+        print(f"\nOf those {a['n_lost']} losses, the displacing value was attested "
+              f"once in {a['winner_attested_once']} case(s) and more than once in "
+              f"{a['winner_attested_multiple']}.")
+        print(f"So a corroboration requirement could recover at most "
+              f"{a['winner_attested_once']}/{a['n_lost']} "
+              f"({a['recoverable_by_corroboration_pct']:.0f}%); the rest were "
+              f"displaced by values corroboration would also have accepted.")
+        print("win=1 is the recoverable set; win>1 is the ceiling corroboration "
+              "cannot lift.")
     return 0
 
 
