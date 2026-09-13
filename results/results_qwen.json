@@ -1,10 +1,10 @@
 {
+  "_note": "The Bevi arm was removed from this file after the run. It implements a related-work write policy that the paper does not report. Every other arm is untouched: each arm is replayed in its own container, so no other arm's numbers depend on it. significance_vs_best_baseline was recomputed with ocm.evaluation.experiment.significance_vs_best_baseline over the unchanged per_seed_raw values, because it selects the strongest baseline per metric and had selected Bevi for constraint_violations. The recomputation was validated by first reproducing the recorded values exactly with Bevi included.",
   "methods": [
     "B0",
     "B1",
     "B2",
     "Bsup",
-    "Bevi",
     "B3",
     "Brag",
     "Brtcf",
@@ -112,29 +112,6 @@
         "low": 61.18518674694497,
         "high": 67.89693885691977,
         "half_width": 3.3558760549874003,
-        "n": 5
-      }
-    },
-    "Bevi": {
-      "task_success": {
-        "mean": 84.92753623188405,
-        "low": 83.49544339851855,
-        "high": 86.35962906524955,
-        "half_width": 1.4320928333655065,
-        "n": 5
-      },
-      "contradiction_rate": {
-        "mean": 14.492753623188406,
-        "low": 14.492753623188406,
-        "high": 14.492753623188406,
-        "half_width": 0.0,
-        "n": 5
-      },
-      "constraint_violations": {
-        "mean": 13.816425120772948,
-        "low": 13.13250493865591,
-        "high": 14.500345302889986,
-        "half_width": 0.6839201821170376,
         "n": 5
       }
     },
@@ -393,29 +370,6 @@
         "n": 5
       }
     },
-    "Bevi": {
-      "task_success": {
-        "mean": 84.92753623188405,
-        "low": 84.05797101449275,
-        "high": 85.79710144927536,
-        "half_width": 0.8695652173913047,
-        "n": 5
-      },
-      "contradiction_rate": {
-        "mean": 14.492753623188406,
-        "low": 14.492753623188406,
-        "high": 14.492753623188406,
-        "half_width": 0.0,
-        "n": 5
-      },
-      "constraint_violations": {
-        "mean": 13.816425120772948,
-        "low": 13.333333333333332,
-        "high": 14.202898550724637,
-        "half_width": 0.43478260869565233,
-        "n": 5
-      }
-    },
     "B3": {
       "task_success": {
         "mean": 59.03381642512077,
@@ -669,29 +623,6 @@
         61.83574879227053,
         68.1159420289855,
         62.80193236714976
-      ]
-    },
-    "Bevi": {
-      "task_success": [
-        83.57487922705315,
-        85.02415458937197,
-        85.5072463768116,
-        86.47342995169082,
-        84.05797101449275
-      ],
-      "contradiction_rate": [
-        14.492753623188406,
-        14.492753623188406,
-        14.492753623188406,
-        14.492753623188406,
-        14.492753623188406
-      ],
-      "constraint_violations": [
-        14.009661835748792,
-        14.009661835748792,
-        13.043478260869565,
-        14.492753623188406,
-        13.526570048309178
       ]
     },
     "B3": {
@@ -1033,50 +964,6 @@
         "n": 5
       }
     },
-    "Bevi": {
-      "contradiction_heavy_update_stream": {
-        "mean": 100.0,
-        "low": 100.0,
-        "high": 100.0,
-        "half_width": 0.0,
-        "n": 5
-      },
-      "entity_resolution_ambiguity": {
-        "mean": 100.0,
-        "low": 100.0,
-        "high": 100.0,
-        "half_width": 0.0,
-        "n": 5
-      },
-      "evidence_required_decisions": {
-        "mean": 26.153846153846153,
-        "low": 22.158266793524753,
-        "high": 30.149425514167554,
-        "half_width": 3.9955793603214005,
-        "n": 5
-      },
-      "longitudinal_factual_qa": {
-        "mean": 100.0,
-        "low": 100.0,
-        "high": 100.0,
-        "half_width": 0.0,
-        "n": 5
-      },
-      "multi_step_planning_entity_consistency": {
-        "mean": 100.0,
-        "low": 100.0,
-        "high": 100.0,
-        "half_width": 0.0,
-        "n": 5
-      },
-      "temporal_reasoning_ordered_events": {
-        "mean": 53.84615384615385,
-        "low": 46.29521860970173,
-        "high": 61.397089082605966,
-        "half_width": 7.5509352364521165,
-        "n": 5
-      }
-    },
     "B3": {
       "contradiction_heavy_update_stream": {
         "mean": 3.7037037037037037,
@@ -1409,13 +1296,13 @@
         "effect_name": "cohen_d"
       },
       "constraint_violations": {
-        "vs_baseline": "Bevi",
+        "vs_baseline": "B0",
         "test": "paired_t_test",
-        "statistic": -56.089214649520606,
-        "raw_p": 6.04942453907853e-07,
-        "corrected_p": 1.8148273617235589e-06,
+        "statistic": -50.63549632789325,
+        "raw_p": 9.103378018071595e-07,
+        "corrected_p": 2.7310134054214785e-06,
         "reject_null": true,
-        "effect_size": -25.083859352181022,
+        "effect_size": -22.644882372722055,
         "effect_name": "cohen_d"
       }
     },
@@ -1449,13 +1336,6 @@
       "superseded": 0,
       "quarantined": 0,
       "rejected": 0
-    },
-    "Bevi": {
-      "candidates": 1812,
-      "accepted": 1166,
-      "superseded": 293,
-      "quarantined": 0,
-      "rejected": 353
     },
     "B3": {
       "candidates": 1874,
@@ -1531,12 +1411,6 @@
       "query_latency_ms": 21.9848649796861,
       "token_overhead_pct": -0.15375070806248242,
       "storage_growth_x": 0.8234155781325593
-    },
-    "Bevi": {
-      "write_latency_ms": 47.78001169257328,
-      "query_latency_ms": 20.85707918551968,
-      "token_overhead_pct": -2.7203085803684597,
-      "storage_growth_x": 0.85292694726657
     },
     "B3": {
       "write_latency_ms": 46.05427239702907,
@@ -1649,11 +1523,6 @@
         "low": 81.66666666666667,
         "medium": 89.16666666666667,
         "high": 70.83333333333333
-      },
-      "Bevi": {
-        "low": 72.5,
-        "medium": 75.0,
-        "high": 62.5
       },
       "B3": {
         "low": 80.0,

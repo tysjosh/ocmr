@@ -1,11 +1,11 @@
 {
+  "_note": "The Bevi arm was removed from this file after the run. It implements a related-work write policy that the paper does not report. Every other arm is untouched: each arm is replayed in its own container, so no other arm's numbers depend on it.",
   "knowledge_update": {
     "dataset": "longmemeval",
     "subset": "knowledge-update",
     "methods": [
       "B0",
       "B2",
-      "Bevi",
       "B3"
     ],
     "seeds": [
@@ -63,29 +63,6 @@
           "n": 5
         }
       },
-      "Bevi": {
-        "task_success": {
-          "mean": 100.0,
-          "low": 100.0,
-          "high": 100.0,
-          "half_width": 0.0,
-          "n": 5
-        },
-        "contradiction_rate": {
-          "mean": 0.0,
-          "low": 0.0,
-          "high": 0.0,
-          "half_width": 0.0,
-          "n": 5
-        },
-        "constraint_violations": {
-          "mean": 0.0,
-          "low": 0.0,
-          "high": 0.0,
-          "half_width": 0.0,
-          "n": 5
-        }
-      },
       "B3": {
         "task_success": {
           "mean": 100.0,
@@ -125,13 +102,6 @@
         "quarantined": 0,
         "rejected": 0
       },
-      "Bevi": {
-        "candidates": 485,
-        "accepted": 235,
-        "superseded": 250,
-        "quarantined": 0,
-        "rejected": 0
-      },
       "B3": {
         "candidates": 485,
         "accepted": 235,
@@ -147,10 +117,6 @@
       "n": 30
     },
     "B2": {
-      "abstention_accuracy": 100.0,
-      "n": 30
-    },
-    "Bevi": {
       "abstention_accuracy": 100.0,
       "n": 30
     },
