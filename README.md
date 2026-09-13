@@ -247,11 +247,37 @@ v2). Defaults are offline. The ones that change results:
 | `ocm/scripts/` | synthetic-benchmark CLI entry points |
 | `ocm/tests/` | unit and property-based (Hypothesis) tests |
 
-## Notebook
+## Notebook (the GPU path)
 
-[`OCM_Colab.ipynb`](OCM_Colab.ipynb) mirrors the GPU runs and the annotation pass.
-In Colab, upload it directly (**File → Upload notebook**), or set `OCM_REPO_URL` in
-the clone cell to a checkout of this repository.
+[`OCM_Colab.ipynb`](OCM_Colab.ipynb) is the practical route for anything needing a
+GPU, and it produced most of what is in [`results/`](results/). Open it in Colab
+by uploading it directly (**File → Upload notebook**), or set `OCM_REPO_URL` in the
+clone cell to a checkout of this repository.
+
+Sections 1–5 need no GPU. Section 7 onward loads a local Qwen model through
+`transformers` and runs the real-extraction arms.
+
+| Section | What it does | Output |
+| --- | --- | --- |
+| 1–2 | clone, install, optional Drive mount for persistent output | — |
+| 3 | sanity tests | — |
+| 4 | offline governance demo, no GPU or API key | — |
+| 5a–5b | benchmark, metrics, then the full offline suite (multi-seed CIs, significance, τ-sweep, stress) | `results_offline.json` |
+| 6 | switch to real `sentence-transformers` embeddings | — |
+| 7 | GPU check and Qwen2.5-14B-Instruct load in bf16 (~28 GB) | — |
+| 7-alt | **T4 (16 GB) fallback**: Qwen2.5-7B-Instruct in 4-bit NF4 | — |
+| 7b | full research experiment with the Qwen extractor and real embeddings | `results_qwen.json` |
+| 7c | governed-write replay: qualitative evidence and false-quarantine reconciliation | `governance_examples.json` |
+| 7d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | — |
+| 7e | LongMemEval knowledge-update oracle arm, including the annotation pass | `results_longmemeval.json`, gold trajectories |
+| 7f | LongMemEval end-to-end (LM-R): real extraction from raw text | extraction and slot-link caches |
+
+The 7-alt cell matters if you only have a free-tier T4: it swaps the 14B bf16 load
+for Qwen2.5-7B-Instruct in 4-bit so section 7 onward still runs, at a different
+model scale than the reported numbers.
+
+Section 7f is the expensive one — roughly two days on a single GPU. Its caches are
+written to the output directory so re-runs replay instead of re-generating.
 
 ## License
 
