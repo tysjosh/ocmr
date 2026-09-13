@@ -253,7 +253,6 @@ Sections 1–5 need no GPU. The section-7 cells load a local Qwen model through
 | 4 | full offline suite: multi-seed CIs, significance, τ-sweep, stress | `results_offline.json` |
 | 5 | switch to real `sentence-transformers` embeddings | — |
 | 7 | Qwen2.5-14B-Instruct load in bf16 (~28 GB) | — |
-| 7-alt | **T4 (16 GB) fallback**: Qwen2.5-7B-Instruct in 4-bit NF4 | — |
 | 7b | full research experiment with the Qwen extractor and real embeddings | `results_qwen.json` |
 | 7c | governed-write replay: qualitative evidence and false-quarantine reconciliation | `governance_examples.json` |
 | 7d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | — |
@@ -264,9 +263,9 @@ Numbering runs 1–5 then jumps to the 7-series, which is the GPU block. `7e` an
 `7f` keep their labels because [`run_7e_local.py`](run_7e_local.py) and
 [`run_7f_local.py`](run_7f_local.py) are the local equivalents of those cells.
 
-The 7-alt cell matters if you only have a free-tier T4: it swaps the 14B bf16 load
-for Qwen2.5-7B-Instruct in 4-bit so section 7 onward still runs, at a different
-model scale than the reported numbers.
+Section 7 loads Qwen2.5-14B-Instruct in full bf16 (~28 GB), which needs a single
+A100 40GB. The load cell carries commented alternatives for Qwen2.5-32B in 4-bit
+NF4 (~20 GB, same card) and in bf16 (~64 GB, A100 80GB).
 
 Section 7f is the expensive one — roughly two days on a single GPU. Its caches are
 written to the output directory so re-runs replay instead of re-generating.
