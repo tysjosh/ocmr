@@ -31,21 +31,19 @@ python run_lmo_durable_state.py \
 The corpus is fetched automatically if absent. Expect `DSC 0.00` for `B0`/`B2`
 against `100.00` for the three governed arms, and 50 durable violations against 0.
 
-## Reading these files
+## File structure
 
 `decisive_metrics` holds `task_success`, `contradiction_rate` and
-`constraint_violations`, each as `mean` with a bootstrap interval over the five
-seeds. `write_outcomes` holds accepted / superseded / quarantined / rejected counts
-**summed across seeds**, so divide by `len(seeds)` for a per-seed figure.
+`constraint_violations`, each as a `mean` with a bootstrap interval over the seeds
+listed in `seeds`.
 
-Confidence intervals on the durable-state file are zero-width. That reflects
-deterministic replay, not zero uncertainty.
+`write_outcomes` holds accepted / superseded / quarantined / rejected counts
+**summed across seeds** — divide by `len(seeds)` for a per-seed figure.
 
-Two things in `results_qwen.json` are easy to misread:
+Intervals in `lmo_durable_state.json` are zero-width because that run is a
+deterministic replay over a single pass, not because uncertainty was measured as
+zero.
 
-- `task_success` is recall over the rendered answer *plus every retrieved item*,
-  so it rewards retaining values. An arm that keeps stale values scores higher on
-  it than one that retires them, which is why `B3` sits below `B0` there while
-  holding constraint violations at 0.00 against `B0`'s 50.72.
-- `Bsup` records *more* violations than the ungoverned arms (64.54 vs 50.72).
-  Supersession alone, without the contradiction gate, is not a strict improvement.
+Durable-state buckets in `lmo_durable_state.json` are `correct`, `stale`, `split`,
+`abstained` and `missing`; the definitions are in
+[`ocm/evaluation/durable_state.py`](../ocm/evaluation/durable_state.py).

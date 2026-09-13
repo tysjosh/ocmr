@@ -212,16 +212,10 @@ Selected by name via `--arms` / `--baselines`, defined in
 
 ## Metrics
 
-Governance is scored with durable-state outcomes
-([`ocm/evaluation/durable_state.py`](ocm/evaluation/durable_state.py)) rather than
-answer recall alone: `correct`, `stale` (one accepted value, wrong, nothing
-flagged), `split` (two or more accepted values — the single-valued breach),
-`abstained` (wrong or absent, but flagged), `missing` (never extracted).
-
-`stale` and `abstained` are kept apart deliberately. When the gate quarantines an
-incoming value the incumbent stays accepted, so the store holds a non-gold value
-*by design*; counting that as silently stale would penalise a governed arm for
-behaving correctly.
+The durable-state runners report the buckets `correct`, `stale`, `split`,
+`abstained` and `missing`, alongside `task_success` and durable violation counts.
+Definitions and the rationale for each bucket are in the module docstring of
+[`ocm/evaluation/durable_state.py`](ocm/evaluation/durable_state.py).
 
 ## Configuration
 
