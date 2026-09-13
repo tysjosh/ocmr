@@ -13,7 +13,13 @@ Implementation lives in [`ocm/`](ocm/). Evaluation entry points are the
 [`results/README.md`](results/README.md) for what each file is and which command
 produces it, so the reported numbers can be inspected without re-running anything.
 
-## Setup
+**Contents** — [1 Setup](#1-setup) · [2 Check the install](#2-check-the-install) ·
+[3 Get the data](#3-get-the-data) · [4 Run the evaluations](#4-run-the-evaluations) ·
+[5 Arms](#5-arms) · [6 Metrics](#6-metrics) · [7 Configuration](#7-configuration) ·
+[8 Repository layout](#8-repository-layout) · [9 Notebook](#9-notebook-the-gpu-path) ·
+[10 License](#10-license)
+
+## 1. Setup
 
 Python **3.11+**.
 
@@ -26,7 +32,7 @@ Runtime dependencies come from [`pyproject.toml`](pyproject.toml): `fastapi`,
 `dev` extra adds `pytest`, `hypothesis`, `httpx`.
 
 
-## Check the install
+## 2. Check the install
 
 ```bash
 python -m pytest                                  # full suite, hermetic
@@ -37,7 +43,7 @@ python run_multiwoz_durable_state.py --fixture    # ditto, 3 dialogues
 The `--fixture` runs need no corpus and no downloads. They don't reproduce
 reported numbers; they confirm the pipeline works before you fetch data.
 
-## Get the data
+## 3. Get the data
 
 `data/` is not shipped. LongMemEval comes from the public
 [`xiaowu0162/longmemeval-cleaned`](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned)
@@ -67,7 +73,7 @@ cannot be confused after the fact.
 MultiWOZ dialogues are fetched per split at run time and need access to
 `raw.githubusercontent.com`.
 
-### Gold trajectories for LM-O
+### 3.1 Gold trajectories for LM-O
 
 LM-O is annotation-scoped: it needs a JSON file giving the sequence of values each
 `knowledge-update` question passes through. **The 47 trajectories behind the
@@ -98,13 +104,13 @@ filename slug and a content digest in its output for exactly that reason.
 
 Cell **7e** of [`OCM_Colab.ipynb`](OCM_Colab.ipynb) runs this pass end to end.
 
-## Run the evaluations
+## 4. Run the evaluations
 
 Three of the four surfaces need **no GPU** and finish in minutes — they replay
 governance decisions over oracle-supplied or cached facts, so no language model is
 invoked at scoring time.
 
-### LM-O — LongMemEval durable state
+### 4.1 LM-O — LongMemEval durable state
 
 ```bash
 python run_lmo_durable_state.py \
@@ -122,7 +128,7 @@ which is fine for the durable-state buckets but makes answer-recall numbers
 meaningless.
 
 
-### MultiWOZ — dialogue-state slots
+### 4.2 MultiWOZ — dialogue-state slots
 
 ```bash
 python run_multiwoz_durable_state.py \
@@ -132,7 +138,7 @@ python run_multiwoz_durable_state.py \
 
 Full validation split (1,000 dialogues) by default; `--limit N` for a smoke run.
 
-### Entity-linking evasion — security suite
+### 4.3 Entity-linking evasion — security suite
 
 ```bash
 python run_entity_linking_evasion.py --paper-suite
@@ -142,7 +148,7 @@ Five seeds over seven attack axes, with original and mutated attacks, a
 configuration-off ablation, and a benign false-positive workload. `--help` lists
 the individual axes and intensities.
 
-### LM-R — LongMemEval end-to-end (needs a GPU)
+### 4.4 LM-R — LongMemEval end-to-end (needs a GPU)
 
 Real extraction from raw text with Qwen2.5-14B over the 277 MB haystack. This is
 the expensive one: roughly **two days on one GPU** without cached extractions.
@@ -161,7 +167,7 @@ re-running the model. Cache identity includes the code revision and working-tree
 diff, so an edit anywhere invalidates every key — see the module docstring before
 reusing caches across revisions.
 
-### Synthetic benchmark
+### 4.5 Synthetic benchmark
 
 Seeded and fully offline:
 
@@ -179,7 +185,7 @@ python -m ocm.scripts.report_metrics --results results.jsonl --json metrics.json
 `report_metrics` takes exactly one of `--results` or `--benchmark`.
 `python -m ocm.scripts.run_experiments` runs the whole suite.
 
-## Arms
+## 5. Arms
 
 Selected by name via `--arms` / `--baselines`, defined in
 [`ocm/evaluation/arms/`](ocm/evaluation/arms/):
@@ -195,14 +201,14 @@ Selected by name via `--arms` / `--baselines`, defined in
 | `Bmemgpt` | MemGPT-style self-editing baseline |
 | `Brag`, `Brtcf` | retrieval-augmented / read-time conflict filtering |
 
-## Metrics
+## 6. Metrics
 
 The durable-state runners report the buckets `correct`, `stale`, `split`,
 `abstained` and `missing`, alongside `task_success` and durable violation counts.
 Definitions and the rationale for each bucket are in the module docstring of
 [`ocm/evaluation/durable_state.py`](ocm/evaluation/durable_state.py).
 
-## Configuration
+## 7. Configuration
 
 Centralized in [`ocm/core/config.py`](ocm/core/config.py) (`Settings`, Pydantic
 v2). Defaults are offline. The ones that change results:
@@ -215,7 +221,7 @@ v2). Defaults are offline. The ones that change results:
 | `deterministic_test_mode` | `False` | reproducible IDs, in-memory storage, deterministic embeddings |
 | `authoritative_update_supersede` | `False` | when set, an `update` supersedes unconditionally and **bypasses the contradiction gate's margin test** |
 
-## Repository layout
+## 8. Repository layout
 
 | Path | Contents |
 | --- | --- |
@@ -232,7 +238,7 @@ v2). Defaults are offline. The ones that change results:
 | `ocm/scripts/` | synthetic-benchmark CLI entry points |
 | `ocm/tests/` | unit and property-based (Hypothesis) tests |
 
-## Notebook (the GPU path)
+## 9. Notebook (the GPU path)
 
 Open it in Colab
 by uploading it directly (**File → Upload notebook**).
@@ -265,6 +271,6 @@ model scale than the reported numbers.
 Section 7f is the expensive one — roughly two days on a single GPU. Its caches are
 written to the output directory so re-runs replay instead of re-generating.
 
-## License
+## 10. License
 
 MIT (see [`pyproject.toml`](pyproject.toml)).
