@@ -1,5 +1,4 @@
 {
-  "_note": "The Bevi arm was removed from this file after the run. It implements a related-work write policy that the paper does not report. Every other arm is untouched: each arm is replayed in its own container, so no other arm's numbers depend on it. significance_vs_best_baseline was recomputed with ocm.evaluation.experiment.significance_vs_best_baseline over the unchanged per_seed_raw values, because it selects the strongest baseline per metric and had selected Bevi for constraint_violations. The recomputation was validated by first reproducing the recorded values exactly with Bevi included.",
   "methods": [
     "B0",
     "B1",

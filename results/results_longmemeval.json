@@ -1,5 +1,4 @@
 {
-  "_note": "The Bevi arm was removed from this file after the run. It implements a related-work write policy that the paper does not report. Every other arm is untouched: each arm is replayed in its own container, so no other arm's numbers depend on it.",
   "knowledge_update": {
     "dataset": "longmemeval",
     "subset": "knowledge-update",
