@@ -44,8 +44,6 @@ unless a repository is injected — backs storage with an in-memory SQLite
 database. Combined with ``settings.chroma_mode == "memory"`` (and the vector
 index's pure-Python fallback when ``chromadb`` is absent) this makes the whole
 system run fully offline for tests and the research demo.
-
-Requirements: 11.8, 19.1, 27.2, 27.3.
 """
 
 from __future__ import annotations

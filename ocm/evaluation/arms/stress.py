@@ -25,8 +25,6 @@ live in :mod:`ocm.evaluation.stress_ablation`, which drives these arms. Keeping
 the definitions here (dependency-free w.r.t. the runners) is what lets
 :mod:`ocm.evaluation.arms` register them without importing
 :mod:`ocm.evaluation.experiment`.
-
-Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 12.2.
 """
 
 from __future__ import annotations

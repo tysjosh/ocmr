@@ -27,8 +27,6 @@ The :data:`BASELINE_TOGGLES` map records each preset; :data:`BASELINE_REGISTRY`
 maps a baseline name to a ``factory(container) -> MemoryStrategy``. Use
 :func:`build_baseline` to construct one by name, or :func:`build_all_baselines`
 to construct every baseline over a shared container.
-
-Requirements: 22.1, 22.2, 22.3, 22.4, 22.5.
 """
 
 from __future__ import annotations

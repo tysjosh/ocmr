@@ -45,8 +45,6 @@ provenance) are honoured:
 
 This keeps every baseline a true ablation of one shared implementation while
 remaining fully testable over a deterministic in-memory container.
-
-Requirements: 22.1, 22.2, 22.3, 22.4, 22.5.
 """
 
 from __future__ import annotations

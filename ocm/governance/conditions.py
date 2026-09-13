@@ -17,8 +17,6 @@ C5     ``adaptive_rahgm``    selective   C4 signal plus bounded, canary-gated up
 
 Separating C4 from C5 isolates the value of the feedback-learning loop from the
 value of the tiering policy itself.
-
-Requirements: 10.1, 10.2, 10.3.
 """
 
 from __future__ import annotations

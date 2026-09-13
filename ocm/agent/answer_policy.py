@@ -26,8 +26,6 @@ Policies
 - **P5 — State missing evidence.** When ``pkg.missing_information`` is
   set — or nothing supports the query — the gaps are enumerated rather than
   fabricating an answer.
-
-Requirements: 21.1, 21.2, 21.3, 21.4, 21.5.
 """
 
 from __future__ import annotations
