@@ -25,8 +25,6 @@ Runtime dependencies come from [`pyproject.toml`](pyproject.toml): `fastapi`,
 `uvicorn`, `pydantic` v2, `networkx`, `chromadb`, `sentence-transformers`. The
 `dev` extra adds `pytest`, `hypothesis`, `httpx`.
 
-Everything runs **offline by default** — no API key, no network — using the mock
-extractor and a local embedding model.
 
 ## Check the install
 
@@ -38,10 +36,6 @@ python run_multiwoz_durable_state.py --fixture    # ditto, 3 dialogues
 
 The `--fixture` runs need no corpus and no downloads. They don't reproduce
 reported numbers; they confirm the pipeline works before you fetch data.
-
-Expect **9 skipped** tests on a fresh clone — they need `data/longmemeval_s.json`
-(below). Skips are not failures. One test is `xfail(strict=True)` and records a
-known defect deliberately.
 
 ## Get the data
 
@@ -55,7 +49,7 @@ mkdir -p data
 curl -L -o data/longmemeval_oracle.json \
   https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_oracle.json
 
-# only needed for LM-R and the 9 skipped tests
+# only needed for LM-R
 curl -L -o data/longmemeval_s.json \
   https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/main/longmemeval_s_cleaned.json
 ```
@@ -63,7 +57,7 @@ curl -L -o data/longmemeval_s.json \
 | File | Size | Needed for |
 | --- | --- | --- |
 | `data/longmemeval_oracle.json` | 15 MB | LM-O |
-| `data/longmemeval_s.json` | 277 MB | LM-R, and the 9 skipped tests |
+| `data/longmemeval_s.json` | 277 MB | LM-R |
 
 The two share question ids, so pointing a script at the wrong one raises no error
 — it only changes how many distractor sessions are ingested. Each result file
@@ -127,14 +121,6 @@ Keep `--embeddings local`. The `deterministic` default hashes text into vectors,
 which is fine for the durable-state buckets but makes answer-recall numbers
 meaningless.
 
-Two flags reproduce the write-policy stress cells, which hold the gold value fixed
-and change only how the trajectory is presented:
-
-```bash
---order permuted      # a STALE value is written last: last-writer-wins keeps it
---confidence inverted # the current value gets LOW confidence: confidence-weighting keeps a stale value
---no-authoritative-supersede   # do not bypass the contradiction gate's margin test
-```
 
 ### MultiWOZ — dialogue-state slots
 
@@ -248,28 +234,29 @@ v2). Defaults are offline. The ones that change results:
 
 ## Notebook (the GPU path)
 
-[`OCM_Colab.ipynb`](OCM_Colab.ipynb) is the practical route for anything needing a
-GPU, and it produced most of what is in [`results/`](results/). Open it in Colab
-by uploading it directly (**File → Upload notebook**), or set `OCM_REPO_URL` in the
-clone cell to a checkout of this repository.
+Open it in Colab
+by uploading it directly (**File → Upload notebook**).
 
-Sections 1–5 need no GPU. Section 7 onward loads a local Qwen model through
-`transformers` and runs the real-extraction arms.
+Sections 1–5 need no GPU. The section-7 cells load a local Qwen model through
+`transformers` and run the real-extraction arms.
 
 | Section | What it does | Output |
 | --- | --- | --- |
-| 1–2 | clone, install, optional Drive mount for persistent output | — |
-| 3 | sanity tests | — |
-| 4 | offline governance demo, no GPU or API key | — |
-| 5a–5b | benchmark, metrics, then the full offline suite (multi-seed CIs, significance, τ-sweep, stress) | `results_offline.json` |
-| 6 | switch to real `sentence-transformers` embeddings | — |
-| 7 | GPU check and Qwen2.5-14B-Instruct load in bf16 (~28 GB) | — |
+| 1–2, 2b | clone, install, optional Drive mount for persistent output | — |
+| 3 | offline governance demo, no GPU or API key | — |
+| 4 | full offline suite: multi-seed CIs, significance, τ-sweep, stress | `results_offline.json` |
+| 5 | switch to real `sentence-transformers` embeddings | — |
+| 7 | Qwen2.5-14B-Instruct load in bf16 (~28 GB) | — |
 | 7-alt | **T4 (16 GB) fallback**: Qwen2.5-7B-Instruct in 4-bit NF4 | — |
 | 7b | full research experiment with the Qwen extractor and real embeddings | `results_qwen.json` |
 | 7c | governed-write replay: qualitative evidence and false-quarantine reconciliation | `governance_examples.json` |
 | 7d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | — |
 | 7e | LongMemEval knowledge-update oracle arm, including the annotation pass | `results_longmemeval.json`, gold trajectories |
 | 7f | LongMemEval end-to-end (LM-R): real extraction from raw text | extraction and slot-link caches |
+
+Numbering runs 1–5 then jumps to the 7-series, which is the GPU block. `7e` and
+`7f` keep their labels because [`run_7e_local.py`](run_7e_local.py) and
+[`run_7f_local.py`](run_7f_local.py) are the local equivalents of those cells.
 
 The 7-alt cell matters if you only have a free-tier T4: it swaps the 14B bf16 load
 for Qwen2.5-7B-Instruct in 4-bit so section 7 onward still runs, at a different
