@@ -42,6 +42,18 @@ ocm/scripts/serve.py
 # irrelevant to review, and it names an internal run command.
 ocm/scripts/gpu_doctor.py
 
+# --- Investigation diagnostics, not reported results -------------------------
+# A cache-only pass that compares raw Qwen extractions against the oracle
+# annotations and replays B3 to label failed examples. It informed the LM-R
+# investigation but produces no reported number, and it reads paths from a
+# specific development layout.
+run_longmemeval_diagnostics.py
+# Same category: scores whether a gold answer survives in accepted vs
+# superseded state. Diagnostic tooling behind the LM-R analysis.
+probe_supersession_loss.py
+# Unreferenced anywhere in the tree, including by tests.
+ocm/evaluation/validate_anchor_extractions.py
+
 # --- The anonymisation tooling itself ----------------------------------------
 # The bundle must not contain its own builder. make_submission_bundle.py holds
 # the identity patterns it greps for -- account names and internal hostnames --

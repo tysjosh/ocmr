@@ -10,7 +10,7 @@ when there were 14 and stayed put when ``HAS_VALUE`` made it 15.
 So this generates the diagram instead. Run it after any ontology change and
 commit the result:
 
-    python -m ocm.scripts.render_ontology_graph --out docs/ontology_graph.md
+    python -m ocm.scripts.render_ontology_graph --out ontology_graph.md
 
 Fully expanded, the schema is 68 ``(source_type, predicate, target_type)`` edges,
 which is unreadable as one flat picture. The rendering therefore splits into a

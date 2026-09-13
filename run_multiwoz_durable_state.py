@@ -15,7 +15,6 @@ Measured on the full validation split (1,000 dialogues, 8,104 probed slots):
     arm      task     durable-state
     B0/B2    99.88    93.09   (557 slots left with two or more accepted values)
     Bsup     99.96    99.95
-    Bevi     99.96    99.95
     B3       99.96    99.95
 
 0.08 points of separation on recall versus 6.86 on durable state, from the same
@@ -60,7 +59,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None,
                         help="Cap the dialogue count; omit for the full split "
                              "(validation is 1,000 dialogues).")
-    parser.add_argument("--arms", default="B0,B2,Bsup,Bevi,B3")
+    parser.add_argument("--arms", default="B0,B2,Bsup,B3")
     parser.add_argument("--embeddings", choices=("local", "deterministic"),
                         default="local",
                         help="Durable-state buckets are retrieval-independent, but "

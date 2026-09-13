@@ -90,8 +90,8 @@ def _sig(
 # only ones the durable-violation metric can measure.
 #
 # Rendered as a diagram by ``python -m ocm.scripts.render_ontology_graph``; re-run
-# it after changing this registry (``--check`` fails if docs/ontology_graph.md is
-# stale) so the documentation cannot drift from the declaration again.
+# it after changing this registry (``--check`` fails against a stale rendering) so
+# the documentation cannot drift from the declaration again.
 RELATION_SIGNATURES: dict[str, RelationSignature] = {
     "PARTICIPATES_IN": _sig("PARTICIPATES_IN", {"Person"}, {"Event"}, Cardinality.M_TO_N),
     "MEMBER_OF": _sig("MEMBER_OF", {"Person"}, {"Organization"}, Cardinality.M_TO_N),

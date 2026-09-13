@@ -1,0 +1,672 @@
+{
+  "6a1eabeb": {
+    "attribute": "personal_best_time",
+    "trajectory": [
+      {
+        "session_id": "answer_a25d4a91_1",
+        "value": "27:12"
+      },
+      {
+        "session_id": "answer_a25d4a91_2",
+        "value": "25:50"
+      }
+    ],
+    "current_value": "25:50"
+  },
+  "6aeb4375": {
+    "attribute": "korean_restaurants_tried",
+    "trajectory": [
+      {
+        "session_id": "answer_3f9693b7_1",
+        "value": "three"
+      },
+      {
+        "session_id": "answer_3f9693b7_2",
+        "value": "four"
+      }
+    ],
+    "current_value": "four"
+  },
+  "830ce83f": {
+    "attribute": "location",
+    "trajectory": [
+      {
+        "session_id": "answer_0b1a0942_1",
+        "value": "city"
+      },
+      {
+        "session_id": "answer_0b1a0942_1",
+        "value": "Chicago"
+      },
+      {
+        "session_id": "answer_0b1a0942_2",
+        "value": "suburbs"
+      }
+    ],
+    "current_value": "suburbs"
+  },
+  "852ce960": {
+    "attribute": "pre_approval_amount",
+    "trajectory": [
+      {
+        "session_id": "answer_3a6f1e82_1",
+        "value": "$350,000"
+      },
+      {
+        "session_id": "answer_3a6f1e82_2",
+        "value": "$400,000"
+      }
+    ],
+    "current_value": "$400,000"
+  },
+  "945e3d21": {
+    "attribute": "yoga_classes_frequency",
+    "trajectory": [
+      {
+        "session_id": "answer_6a4f8626_1",
+        "value": "twice a week"
+      },
+      {
+        "session_id": "answer_6a4f8626_2",
+        "value": "three times a week"
+      }
+    ],
+    "current_value": "three times a week"
+  },
+  "71315a70": {
+    "attribute": "hours_spent_on_sculpture",
+    "trajectory": [
+      {
+        "session_id": "answer_c44b9df4_1",
+        "value": "5-6"
+      },
+      {
+        "session_id": "answer_c44b9df4_2",
+        "value": "10-12"
+      }
+    ],
+    "current_value": "10-12"
+  },
+  "89941a93": {
+    "attribute": "number_of_bikes",
+    "trajectory": [
+      {
+        "session_id": "answer_e1403127_1",
+        "value": "3"
+      },
+      {
+        "session_id": "answer_e1403127_1",
+        "value": "4"
+      }
+    ],
+    "current_value": "4"
+  },
+  "ce6d2d27": {
+    "attribute": "cocktail_class_day",
+    "trajectory": [
+      {
+        "session_id": "answer_73540165_1",
+        "value": "Thursday"
+      },
+      {
+        "session_id": "answer_73540165_2",
+        "value": "Friday"
+      }
+    ],
+    "current_value": "Friday"
+  },
+  "9ea5eabc": {
+    "attribute": "recent_family_trip_location",
+    "trajectory": [
+      {
+        "session_id": "answer_02e66dec_1",
+        "value": "Hawaii"
+      },
+      {
+        "session_id": "answer_02e66dec_2",
+        "value": "Paris"
+      }
+    ],
+    "current_value": "Paris"
+  },
+  "184da446": {
+    "attribute": "pages_read",
+    "trajectory": [
+      {
+        "session_id": "answer_e2f4f947_1",
+        "value": "200"
+      },
+      {
+        "session_id": "answer_e2f4f947_2",
+        "value": "220"
+      }
+    ],
+    "current_value": "220"
+  },
+  "031748ae": {
+    "attribute": "number_of_engineers_led",
+    "trajectory": [
+      {
+        "session_id": "answer_8748f791_1",
+        "value": "4"
+      },
+      {
+        "session_id": "answer_8748f791_1",
+        "value": "5"
+      }
+    ],
+    "current_value": "5"
+  },
+  "4d6b87c8": {
+    "attribute": "to_watch_list_length",
+    "trajectory": [
+      {
+        "session_id": "answer_766ab8da_1",
+        "value": "20"
+      },
+      {
+        "session_id": "answer_766ab8da_1",
+        "value": "25"
+      }
+    ],
+    "current_value": "25"
+  },
+  "0f05491a": {
+    "attribute": "stars_needed_for_gold_level",
+    "trajectory": [
+      {
+        "session_id": "answer_d6d2eba8_1",
+        "value": "400"
+      },
+      {
+        "session_id": "answer_d6d2eba8_1",
+        "value": "125"
+      },
+      {
+        "session_id": "answer_d6d2eba8_2",
+        "value": "120"
+      }
+    ],
+    "current_value": "120"
+  },
+  "08e075c7": {
+    "attribute": "fitbit_charge_3_usage_duration",
+    "trajectory": [
+      {
+        "session_id": "answer_cdbe2250_1",
+        "value": "6 months"
+      },
+      {
+        "session_id": "answer_cdbe2250_2",
+        "value": "9 months"
+      }
+    ],
+    "current_value": "9 months"
+  },
+  "f9e8c073": {
+    "attribute": "sessions_attended",
+    "trajectory": [
+      {
+        "session_id": "answer_b191df5b_1",
+        "value": "three"
+      },
+      {
+        "session_id": "answer_b191df5b_2",
+        "value": "five"
+      }
+    ],
+    "current_value": "five"
+  },
+  "41698283": {
+    "attribute": "recent_lens_purchase",
+    "trajectory": [
+      {
+        "session_id": "answer_c7ddc051_1",
+        "value": "50mm prime lens"
+      },
+      {
+        "session_id": "answer_c7ddc051_2",
+        "value": "70-200mm zoom lens"
+      }
+    ],
+    "current_value": "70-200mm zoom lens"
+  },
+  "2698e78f": {
+    "attribute": "therapy_frequency",
+    "trajectory": [
+      {
+        "session_id": "answer_9282283d_1",
+        "value": "every two weeks"
+      },
+      {
+        "session_id": "answer_9282283d_2",
+        "value": "every week"
+      }
+    ],
+    "current_value": "every week"
+  },
+  "b6019101": {
+    "attribute": "mcu_films_watched",
+    "trajectory": [
+      {
+        "session_id": "answer_67074b4b_1",
+        "value": "4"
+      },
+      {
+        "session_id": "answer_67074b4b_1",
+        "value": "5"
+      }
+    ],
+    "current_value": "5"
+  },
+  "45dc21b6": {
+    "attribute": "recipes_tried_from_emma",
+    "trajectory": [
+      {
+        "session_id": "answer_07664d43_1",
+        "value": "2"
+      },
+      {
+        "session_id": "answer_07664d43_1",
+        "value": "3"
+      }
+    ],
+    "current_value": "3"
+  },
+  "6071bd76": {
+    "attribute": "coffee_to_water_ratio",
+    "trajectory": [
+      {
+        "session_id": "answer_4dac77cb_1",
+        "value": "6 ounces"
+      },
+      {
+        "session_id": "answer_4dac77cb_2",
+        "value": "5 ounces"
+      }
+    ],
+    "current_value": "5 ounces"
+  },
+  "72e3ee87": {
+    "attribute": "episodes_completed",
+    "trajectory": [
+      {
+        "session_id": "answer_d7de9a6a_1",
+        "value": "10"
+      },
+      {
+        "session_id": "answer_d7de9a6a_1",
+        "value": "50"
+      }
+    ],
+    "current_value": "50"
+  },
+  "01493427": {
+    "attribute": "postcards_added_since_start",
+    "trajectory": [
+      {
+        "session_id": "answer_a7b44747_1",
+        "value": "17"
+      },
+      {
+        "session_id": "answer_a7b44747_2",
+        "value": "25"
+      }
+    ],
+    "current_value": "25"
+  },
+  "6a27ffc2": {
+    "attribute": "videos_completed",
+    "trajectory": [
+      {
+        "session_id": "answer_77f32504_1",
+        "value": "20"
+      },
+      {
+        "session_id": "answer_77f32504_2",
+        "value": "30"
+      }
+    ],
+    "current_value": "30"
+  },
+  "18bc8abd": {
+    "attribute": "bbq_sauce_brand",
+    "trajectory": [
+      {
+        "session_id": "answer_fff743f5_1",
+        "value": "Sweet Baby Ray's"
+      },
+      {
+        "session_id": "answer_fff743f5_2",
+        "value": "Kansas City Masterpiece"
+      }
+    ],
+    "current_value": "Kansas City Masterpiece"
+  },
+  "db467c8c": {
+    "attribute": "parents_stay_duration",
+    "trajectory": [
+      {
+        "session_id": "answer_611b6e83_1",
+        "value": "six months"
+      },
+      {
+        "session_id": "answer_611b6e83_2",
+        "value": "nine months"
+      }
+    ],
+    "current_value": "nine months"
+  },
+  "7a87bd0c": {
+    "attribute": "daily_tidying_routine_duration",
+    "trajectory": [
+      {
+        "session_id": "answer_d08a934d_1",
+        "value": "3 weeks"
+      },
+      {
+        "session_id": "answer_d08a934d_2",
+        "value": "4 weeks"
+      }
+    ],
+    "current_value": "4 weeks"
+  },
+  "e61a7584": {
+    "attribute": "time_with_cat",
+    "trajectory": [
+      {
+        "session_id": "answer_f25c32f5_1",
+        "value": "about 6 months"
+      },
+      {
+        "session_id": "answer_f25c32f5_2",
+        "value": "about 9 months"
+      }
+    ],
+    "current_value": "about 9 months"
+  },
+  "1cea1afa": {
+    "attribute": "instagram_followers",
+    "trajectory": [
+      {
+        "session_id": "answer_79c395a9_1",
+        "value": "500"
+      },
+      {
+        "session_id": "answer_79c395a9_2",
+        "value": "600"
+      }
+    ],
+    "current_value": "600"
+  },
+  "ed4ddc30": {
+    "attribute": "eggs_stocked",
+    "trajectory": [
+      {
+        "session_id": "answer_babbaccb_1",
+        "value": "30 dozen"
+      },
+      {
+        "session_id": "answer_babbaccb_2",
+        "value": "20 dozen"
+      }
+    ],
+    "current_value": "20 dozen"
+  },
+  "b01defab": {
+    "attribute": "finished_reading_the_nightingale",
+    "trajectory": [
+      {
+        "session_id": "answer_8c0712af_1",
+        "value": "no"
+      },
+      {
+        "session_id": "answer_8c0712af_2",
+        "value": "yes"
+      }
+    ],
+    "current_value": "yes"
+  },
+  "0e4e4c46": {
+    "attribute": "ticket_to_ride_highest_score",
+    "trajectory": [
+      {
+        "session_id": "answer_f2f998c7_1",
+        "value": "124"
+      },
+      {
+        "session_id": "answer_f2f998c7_2",
+        "value": "132"
+      }
+    ],
+    "current_value": "132"
+  },
+  "4b24c848": {
+    "attribute": "tops_bought_from_hm",
+    "trajectory": [
+      {
+        "session_id": "answer_2cec623b_1",
+        "value": "three"
+      },
+      {
+        "session_id": "answer_2cec623b_2",
+        "value": "five"
+      }
+    ],
+    "current_value": "five"
+  },
+  "7e974930": {
+    "attribute": "earnings_downtown_farmers_market",
+    "trajectory": [
+      {
+        "session_id": "answer_c9f5693c_1",
+        "value": "$220"
+      },
+      {
+        "session_id": "answer_c9f5693c_1",
+        "value": "$350"
+      },
+      {
+        "session_id": "answer_c9f5693c_2",
+        "value": "$420"
+      }
+    ],
+    "current_value": "$420"
+  },
+  "603deb26": {
+    "attribute": "negroni_attempts",
+    "trajectory": [
+      {
+        "session_id": "answer_8afdebac_1",
+        "value": "5"
+      },
+      {
+        "session_id": "answer_8afdebac_1",
+        "value": "10"
+      }
+    ],
+    "current_value": "10"
+  },
+  "59524333": {
+    "attribute": "gym_time",
+    "trajectory": [
+      {
+        "session_id": "answer_b28f2c7a_1",
+        "value": "7:00 pm"
+      },
+      {
+        "session_id": "answer_b28f2c7a_1",
+        "value": "6:00 pm"
+      }
+    ],
+    "current_value": "6:00 pm"
+  },
+  "5831f84d": {
+    "attribute": "crash_course_videos_watched",
+    "trajectory": [
+      {
+        "session_id": "answer_8d63a897_1",
+        "value": "10"
+      },
+      {
+        "session_id": "answer_8d63a897_2",
+        "value": "15"
+      }
+    ],
+    "current_value": "15"
+  },
+  "affe2881": {
+    "attribute": "species_count",
+    "trajectory": [
+      {
+        "session_id": "answer_90de9b4d_1",
+        "value": "27"
+      },
+      {
+        "session_id": "answer_90de9b4d_1",
+        "value": "32"
+      }
+    ],
+    "current_value": "32"
+  },
+  "cc5ded98": {
+    "attribute": "time_dedicated_to_coding_exercises",
+    "trajectory": [
+      {
+        "session_id": "answer_a5b68517_1",
+        "value": "about an hour"
+      },
+      {
+        "session_id": "answer_a5b68517_2",
+        "value": "about two hours"
+      }
+    ],
+    "current_value": "about two hours"
+  },
+  "7401057b": {
+    "attribute": "free_nights_stay",
+    "trajectory": [
+      {
+        "session_id": "answer_94650bfa_1",
+        "value": "one"
+      },
+      {
+        "session_id": "answer_94650bfa_1",
+        "value": "two"
+      }
+    ],
+    "current_value": "two"
+  },
+  "cf22b7bf": {
+    "attribute": "weight_loss",
+    "trajectory": [
+      {
+        "session_id": "answer_ae3a122b_1",
+        "value": "5 pounds"
+      },
+      {
+        "session_id": "answer_ae3a122b_2",
+        "value": "10 pounds"
+      }
+    ],
+    "current_value": "10 pounds"
+  },
+  "a2f3aa27": {
+    "attribute": "instagram_followers",
+    "trajectory": [
+      {
+        "session_id": "answer_5126c02d_1",
+        "value": "1250"
+      },
+      {
+        "session_id": "answer_5126c02d_2",
+        "value": "1300"
+      }
+    ],
+    "current_value": "1300"
+  },
+  "c7dc5443": {
+    "attribute": "volleyball_record",
+    "trajectory": [
+      {
+        "session_id": "answer_0cdbca92_1",
+        "value": "3-2"
+      },
+      {
+        "session_id": "answer_0cdbca92_2",
+        "value": "5-2"
+      }
+    ],
+    "current_value": "5-2"
+  },
+  "06db6396": {
+    "attribute": "projects_completed",
+    "trajectory": [
+      {
+        "session_id": "answer_da72b1b4_1",
+        "value": "4"
+      },
+      {
+        "session_id": "answer_da72b1b4_1",
+        "value": "5"
+      }
+    ],
+    "current_value": "5"
+  },
+  "dad224aa": {
+    "attribute": "wake_up_time_saturday",
+    "trajectory": [
+      {
+        "session_id": "answer_4a97ae40_1",
+        "value": "8:30 am"
+      },
+      {
+        "session_id": "answer_4a97ae40_2",
+        "value": "7:30 am"
+      }
+    ],
+    "current_value": "7:30 am"
+  },
+  "ba61f0b9": {
+    "attribute": "women_on_team",
+    "trajectory": [
+      {
+        "session_id": "answer_f377cda7_1",
+        "value": "5"
+      },
+      {
+        "session_id": "answer_f377cda7_1",
+        "value": "6"
+      }
+    ],
+    "current_value": "6"
+  },
+  "c6853660": {
+    "attribute": "morning_coffee_limit",
+    "trajectory": [
+      {
+        "session_id": "answer_626e93c4_1",
+        "value": "one cup"
+      },
+      {
+        "session_id": "answer_626e93c4_2",
+        "value": "two cups"
+      }
+    ],
+    "current_value": "two cups"
+  },
+  "26bdc477": {
+    "attribute": "trips_with_camera",
+    "trajectory": [
+      {
+        "session_id": "answer_f762ad8d_1",
+        "value": "three"
+      },
+      {
+        "session_id": "answer_f762ad8d_2",
+        "value": "five"
+      }
+    ],
+    "current_value": "five"
+  }
+}
