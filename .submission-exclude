@@ -41,3 +41,12 @@ ocm/scripts/serve.py
 # Checks CUDA/driver state on a specific machine. Useful during development,
 # irrelevant to review, and it names an internal run command.
 ocm/scripts/gpu_doctor.py
+
+# --- The anonymisation tooling itself ----------------------------------------
+# The bundle must not contain its own builder. make_submission_bundle.py holds
+# the identity patterns it greps for -- account names and internal hostnames --
+# as string literals, so shipping it would disclose exactly what it exists to
+# remove. This file is excluded with it: a reviewer needs the artifact, not the
+# process that produced it.
+tools/
+.submission-exclude

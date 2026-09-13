@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import os
 import re
 import shutil
 import subprocess
@@ -74,6 +75,23 @@ def is_excluded(rel: str, patterns: list[str]) -> str | None:
         elif fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(Path(rel).name, pat):
             return pat
     return None
+
+
+def clean_build_residue(root: Path) -> int:
+    """Delete caches created by verification (bytecode, pytest, hypothesis).
+
+    Compiled bytecode records the absolute path of the source it was built from,
+    so shipping it would disclose the build machine's directory layout.
+    ``.hypothesis`` is a property-test example database: build residue that says
+    nothing about the paper.
+    """
+    removed = 0
+    for name in ("__pycache__", ".pytest_cache", ".hypothesis"):
+        for path in sorted(root.rglob(name), key=lambda p: -len(p.parts)):
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+                removed += 1
+    return removed
 
 
 def scan_identity(root: Path) -> list[tuple[str, int, str]]:
@@ -134,25 +152,41 @@ def main() -> int:
     for pat in sorted(dropped):
         print(f"  -{len(dropped[pat]):3} {pat}")
 
-    hits = scan_identity(args.out)
-    print(f"\nidentity scan: {len(hits)} hit(s)")
-    for f, n, line in hits[:25]:
-        print(f"  {f}:{n}: {line}")
-    if hits and not args.allow_identity_hits:
-        print("\nFAILED: identity strings present in the bundle.", file=sys.stderr)
-        return 1
-
+    # Verification runs before the scan, so the scan sees the final tree. Bytecode
+    # is suppressed because a .pyc embeds the absolute path it was compiled from:
+    # building under a home directory would otherwise bake /Users/<name>/... into
+    # the bundle, which is precisely the leak this tool exists to prevent.
     if args.verify_tests:
         print("\nrunning the bundle's test suite...")
+        env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
         proc = subprocess.run(
-            [sys.executable, "-m", "pytest", "ocm/tests", "-q"],
-            cwd=args.out, capture_output=True, text=True)
+            [sys.executable, "-m", "pytest", "ocm/tests", "-q", "-p", "no:cacheprovider"],
+            cwd=args.out, capture_output=True, text=True, env=env)
         tail = [l for l in proc.stdout.splitlines() if l.strip()][-6:]
         print("\n".join(f"  {l}" for l in tail))
         if proc.returncode != 0:
             print("\nFAILED: the bundle's own tests do not pass, so an exclusion "
                   "removed something load-bearing.", file=sys.stderr)
             return 1
+
+    removed = clean_build_residue(args.out)
+    if removed:
+        print(f"\nremoved {removed} build-residue path(s) (__pycache__, .pytest_cache)")
+
+    stray = sorted(str(p.relative_to(args.out)) for p in args.out.rglob("*")
+                   if p.is_file() and str(p.relative_to(args.out)) not in set(kept))
+    if stray:
+        print(f"WARNING: {len(stray)} untracked file(s) present in the bundle:")
+        for s in stray[:10]:
+            print(f"    {s}")
+
+    hits = scan_identity(args.out)
+    print(f"\nidentity scan: {len(hits)} hit(s) over {len(kept)} file(s)")
+    for f, n, line in hits[:25]:
+        print(f"  {f}:{n}: {line}")
+    if hits and not args.allow_identity_hits:
+        print("\nFAILED: identity strings present in the bundle.", file=sys.stderr)
+        return 1
 
     print(f"\nbundle -> {args.out}")
     return 0
