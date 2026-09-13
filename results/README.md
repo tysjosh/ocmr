@@ -23,7 +23,7 @@ The only file here that runs in about two minutes on a laptop:
 python run_lmo_durable_state.py \
   --annotations results/longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json \
   --data data/longmemeval_oracle.json \
-  --arms B0,B2,Bsup,Bevi,B3 \
+  --arms B0,B2,Bsup,B3 \
   --embeddings local \
   --out results/lmo_durable_state.json
 ```

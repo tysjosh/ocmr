@@ -116,7 +116,7 @@ invoked at scoring time.
 python run_lmo_durable_state.py \
   --annotations results/longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json \
   --data data/longmemeval_oracle.json \
-  --arms B0,B2,Bsup,Bevi,B3 \
+  --arms B0,B2,Bsup,B3 \
   --embeddings local \
   --out local_results/lmo_durable_state.json
 ```
@@ -140,7 +140,7 @@ and change only how the trajectory is presented:
 
 ```bash
 python run_multiwoz_durable_state.py \
-  --arms B0,B2,Bsup,Bevi,B3 \
+  --arms B0,B2,Bsup,B3 \
   --out local_results/multiwoz_durable_state.json
 ```
 
@@ -206,7 +206,6 @@ Selected by name via `--arms` / `--baselines`, defined in
 | `B3` | full: contradiction gate, quarantine, provenance |
 | `B4` | `B3` plus the answer policy |
 | `Bsup` | latest-value supersession only |
-| `Bevi` | evidence-weighted supersession |
 | `Bmemgpt` | MemGPT-style self-editing baseline |
 | `Brag`, `Brtcf` | retrieval-augmented / read-time conflict filtering |
 
