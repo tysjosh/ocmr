@@ -7,12 +7,12 @@ haystack file and emits noisy memory facts; an optional Qwen slot-linking pass
 can canonicalize paraphrased attributes before governance is evaluated.
 
 Examples:
-    python run_7f_local.py --e2e-limit 5 --abst-limit 5 --embeddings deterministic
-    python run_7f_local.py
-    python run_7f_local.py --full
-    python run_7f_local.py --full --baselines B0,B2,Bsup,B3 --slot-linker qwen
-    python run_7f_local.py --full --legacy-cache-keys  # deliberate old artifacts
-    python run_7f_local.py --full --manager memgpt   # MemGPT-style Bmemgpt row
+    python run_6f_local.py --e2e-limit 5 --abst-limit 5 --embeddings deterministic
+    python run_6f_local.py
+    python run_6f_local.py --full
+    python run_6f_local.py --full --baselines B0,B2,Bsup,B3 --slot-linker qwen
+    python run_6f_local.py --full --legacy-cache-keys  # deliberate old artifacts
+    python run_6f_local.py --full --manager memgpt   # MemGPT-style Bmemgpt row
 """
 
 from __future__ import annotations

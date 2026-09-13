@@ -9,10 +9,10 @@ Expected annotation cache:
     local_results/longmemeval_kupdate_annotations.json
 
 Example:
-    python run_7e_local.py
-    python run_7e_local.py --embeddings deterministic --limit 5
-    python run_7e_local.py --annotate --limit 5
-    python run_7e_local.py --annotate --annotate-backend openai --llm-base-url http://localhost:8000/v1 --limit 5
+    python run_6e_local.py
+    python run_6e_local.py --embeddings deterministic --limit 5
+    python run_6e_local.py --annotate --limit 5
+    python run_6e_local.py --annotate --annotate-backend openai --llm-base-url http://localhost:8000/v1 --limit 5
 """
 
 from __future__ import annotations

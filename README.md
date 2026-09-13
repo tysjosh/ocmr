@@ -102,7 +102,7 @@ trajectories are model-generated, so mixing files produced by different models
 silently blends two configurations, and `run_lmo_durable_state.py` records the
 filename slug and a content digest in its output for exactly that reason.
 
-Cell **7e** of [`OCM_Colab.ipynb`](OCM_Colab.ipynb) runs this pass end to end.
+Cell **6e** of [`OCM_Colab.ipynb`](OCM_Colab.ipynb) runs this pass end to end.
 
 ## 4. Run the evaluations
 
@@ -154,7 +154,7 @@ Real extraction from raw text with Qwen2.5-14B over the 277 MB haystack. This is
 the expensive one: roughly **two days on one GPU** without cached extractions.
 
 ```bash
-python run_7f_local.py --full \
+python run_6f_local.py --full \
   --extract-prompt longmemeval \
   --llm-model Qwen/Qwen2.5-14B-Instruct \
   --slot-linker qwen \
@@ -243,7 +243,7 @@ v2). Defaults are offline. The ones that change results:
 Open it in Colab
 by uploading it directly (**File → Upload notebook**).
 
-Sections 1–5 need no GPU. The section-7 cells load a local Qwen model through
+Sections 1–5 need no GPU. The section-6 cells load a local Qwen model through
 `transformers` and run the real-extraction arms.
 
 | Section | What it does | Output |
@@ -252,22 +252,22 @@ Sections 1–5 need no GPU. The section-7 cells load a local Qwen model through
 | 3 | offline governance demo, no GPU or API key | — |
 | 4 | full offline suite: multi-seed CIs, significance, τ-sweep, stress | `results_offline.json` |
 | 5 | switch to real `sentence-transformers` embeddings | — |
-| 7 | Qwen2.5-14B-Instruct load in bf16 (~28 GB) | — |
-| 7b | full research experiment with the Qwen extractor and real embeddings | `results_qwen.json` |
-| 7c | governed-write replay: qualitative evidence and false-quarantine reconciliation | `governance_examples.json` |
-| 7d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | — |
-| 7e | LongMemEval knowledge-update oracle arm, including the annotation pass | `results_longmemeval.json`, gold trajectories |
-| 7f | LongMemEval end-to-end (LM-R): real extraction from raw text | extraction and slot-link caches |
+| 6 | Qwen2.5-14B-Instruct load in bf16 (~28 GB) | — |
+| 6b | full research experiment with the Qwen extractor and real embeddings | `results_qwen.json` |
+| 6c | governed-write replay: qualitative evidence and false-quarantine reconciliation | `governance_examples.json` |
+| 6d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | — |
+| 6e | LongMemEval knowledge-update oracle arm, including the annotation pass | `results_longmemeval.json`, gold trajectories |
+| 6f | LongMemEval end-to-end (LM-R): real extraction from raw text | extraction and slot-link caches |
 
 Numbering runs 1–5 then jumps to the 7-series, which is the GPU block. `7e` and
-`7f` keep their labels because [`run_7e_local.py`](run_7e_local.py) and
-[`run_7f_local.py`](run_7f_local.py) are the local equivalents of those cells.
+`7f` keep their labels because [`run_6e_local.py`](run_6e_local.py) and
+[`run_6f_local.py`](run_6f_local.py) are the local equivalents of those cells.
 
-Section 7 loads Qwen2.5-14B-Instruct in full bf16 (~28 GB), which needs a single
+Section 6 loads Qwen2.5-14B-Instruct in full bf16 (~28 GB), which needs a single
 A100 40GB. The load cell carries commented alternatives for Qwen2.5-32B in 4-bit
 NF4 (~20 GB, same card) and in bf16 (~64 GB, A100 80GB).
 
-Section 7f is the expensive one — roughly two days on a single GPU. Its caches are
+Section 6f is the expensive one — roughly two days on a single GPU. Its caches are
 written to the output directory so re-runs replay instead of re-generating.
 
 ## 10. License

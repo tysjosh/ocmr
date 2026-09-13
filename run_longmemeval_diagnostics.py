@@ -47,7 +47,7 @@ def _f1(tp: int, fp: int, fn: int) -> dict[str, float | int]:
 
 
 class StrictCachedChat:
-    """Prompt-md5 cache reader compatible with run_7f_local.CachedChat."""
+    """Prompt-md5 cache reader compatible with run_6f_local.CachedChat."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -442,7 +442,7 @@ def main() -> int:
         default="longmemeval",
         help=(
             "Fact-extraction prompt whose cache to read. MUST match the prompt "
-            "used by the 7f run that populated the cache (run_7f_local.py "
+            "used by the 7f run that populated the cache (run_6f_local.py "
             "defaults to 'longmemeval'; 'generic' is the non-benchmark-primed "
             "ablation)."
         ),
@@ -468,7 +468,7 @@ def main() -> int:
     output_dir = (args.output_dir or repo_dir / "local_results").resolve()
     out_path = (args.out or output_dir / "results_longmemeval_diagnostics.json").resolve()
     ann_path = output_dir / "longmemeval_kupdate_annotations.json"
-    # Cache filename must match run_7f_local.py's prompt-specific naming so the
+    # Cache filename must match run_6f_local.py's prompt-specific naming so the
     # diagnostic reads the SAME cached extractions the 7f run produced.
     cache_name = (
         "lme_e2e_extract_cache.json"
