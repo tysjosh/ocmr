@@ -447,7 +447,7 @@ def main() -> int:
     parser.add_argument("--abst-limit", default="30", help="Abstention cap; use full/none/all for full split.")
     parser.add_argument("--full", action="store_true", help="Set both limits to full.")
     parser.add_argument("--seeds", default="1337,7,42,99,2024")
-    parser.add_argument("--baselines", default="B0,B2,Bsup,Bevi,B3")
+    parser.add_argument("--baselines", default="B0,B2,Bsup,B3")
     parser.add_argument(
         "--manager",
         choices=("governed", "memgpt"),

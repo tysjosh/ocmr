@@ -137,7 +137,7 @@ def main() -> int:
     parser.add_argument("--annotations", type=Path, default=None,
                         help="Gold trajectory JSON from longmemeval_annotate.")
     parser.add_argument("--data", type=Path, default=Path("data/longmemeval_s.json"))
-    parser.add_argument("--arms", default="B0,B2,Bsup,Bevi,B3")
+    parser.add_argument("--arms", default="B0,B2,Bsup,B3")
     parser.add_argument("--embeddings", choices=("local", "deterministic"),
                         default="deterministic",
                         help="Durable-state scoring reads the store, not retrieval, so "
