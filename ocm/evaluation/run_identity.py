@@ -18,8 +18,7 @@ writes. So after changing model, token budget, or prompt, the extraction cache
 correctly refuses to load (or is pointed at a fresh path) and re-extracts, while
 the per-``(method, seed)`` results from the previous stack are silently reused.
 The run then reports a mixture of two configurations, which is the failure mode
-behind the inconsistent LongMemEval Arm-B artifacts (see
-``docs/evaluation_methodology.md``).
+behind the inconsistent LongMemEval Arm-B artifacts.
 
 This module builds a short digest of the extraction stack and formats it as a
 ``key_suffix`` fragment, so a changed stack recomputes instead of resuming onto
