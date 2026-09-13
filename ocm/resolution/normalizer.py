@@ -4,21 +4,21 @@ The Normalizer canonicalizes the raw, typed dicts emitted by an extractor (W1)
 into consistent representations before entity resolution (W3) sees them. It
 performs **value-level** normalization only and is deliberately *conservative*:
 it never collapses two distinct entities just because their normalized forms are
-close — merging is exclusively the Entity Resolver's job (Req 4.7).
+close — merging is exclusively the Entity Resolver's job.
 
-Responsibilities (Req 4.1-4.7):
+Responsibilities:
 
 - Names / aliases -> canonical form: trim, collapse internal whitespace, and
-  apply consistent casing, **without** merging distinct entities (Req 4.1, 4.7).
-- Timestamps -> ISO-8601 UTC strings (Req 4.2).
+  apply consistent casing, **without** merging distinct entities.
+- Timestamps -> ISO-8601 UTC strings.
 - Status synonyms -> canonical enum value, including ``"completed" -> "done"``
-  for tasks (Req 4.3).
+  for tasks.
 - Priority synonyms -> canonical enum value, including ``"high priority" ->
-  "high"`` (Req 4.4).
+  "high"``.
 - Relation names -> canonical predicate identifiers, e.g. ``"assigned to" ->
-  "ASSIGNED_TO"`` (Req 4.5).
+  "ASSIGNED_TO"``.
 - Confidence -> float in ``[0, 1]``, parsing textual/percentage confidences and
-  clamping out-of-range numerics (Req 4.6).
+  clamping out-of-range numerics.
 
 The Normalizer returns a brand-new :class:`ExtractionResult`; it does not mutate
 its input.
@@ -40,7 +40,7 @@ from ocm.ontology.relations import RELATION_SIGNATURES
 # synonyms; values are the canonical enum *values* declared in
 # ``ocm.ontology.enums``. Type-aware mapping is required because "completed"
 # canonicalizes to "done" for a Task but stays "completed" for a Project
-# (Req 4.3).
+#.
 _STATUS_SYNONYMS: dict[str, dict[str, str]] = {
     "Task": {
         "todo": "todo",
@@ -130,11 +130,11 @@ _STATUS_SYNONYMS: dict[str, dict[str, str]] = {
 }
 
 # Fallback status synonyms used when the entity type is unknown. Uses the
-# Task-oriented mapping so the headline "completed" -> "done" rule (Req 4.3)
+# Task-oriented mapping so the headline "completed" -> "done" rule
 # still applies.
 _STATUS_SYNONYMS_DEFAULT: dict[str, str] = _STATUS_SYNONYMS["Task"]
 
-# Priority synonyms -> canonical Priority enum value (Req 4.4).
+# Priority synonyms -> canonical Priority enum value.
 _PRIORITY_SYNONYMS: dict[str, str] = {
     "low": "low",
     "low priority": "low",
@@ -162,7 +162,7 @@ _PRIORITY_SYNONYMS: dict[str, str] = {
     "unknown": "unknown",
 }
 
-# Relation-name synonyms -> canonical predicate identifier (Req 4.5). Keys are
+# Relation-name synonyms -> canonical predicate identifier. Keys are
 # lowercased/whitespace-collapsed. Canonical predicates themselves (already
 # uppercase) are recognized directly in :func:`_normalize_predicate`.
 _PREDICATE_SYNONYMS: dict[str, str] = {
@@ -213,7 +213,7 @@ _PREDICATE_SYNONYMS: dict[str, str] = {
     "overrides": "SUPERSEDES",
 }
 
-# Textual confidence terms -> numeric value in [0, 1] (Req 4.6).
+# Textual confidence terms -> numeric value in [0, 1].
 _CONFIDENCE_TERMS: dict[str, float] = {
     "certain": 1.0,
     "definite": 1.0,
@@ -258,7 +258,7 @@ def _canonical_name(value: str) -> str:
     """Canonicalize a name/alias: trim, collapse whitespace, consistent casing.
 
     This is a pure string transform applied independently to each value; it
-    never compares or merges entities (Req 4.1, 4.7).
+    never compares or merges entities.
     """
     collapsed = " ".join(str(value).split())
     if not collapsed:
@@ -267,7 +267,7 @@ def _canonical_name(value: str) -> str:
 
 
 def _normalize_timestamp(value) -> str | None:
-    """Normalize a timestamp to an ISO-8601 UTC string (Req 4.2).
+    """Normalize a timestamp to an ISO-8601 UTC string.
 
     Accepts ``datetime`` objects or strings. Naive datetimes/strings are assumed
     to already be UTC. Unparseable values are returned unchanged so downstream
@@ -302,7 +302,7 @@ def _normalize_timestamp(value) -> str | None:
 
 
 def _normalize_status(value, entity_type: str | None) -> str:
-    """Map a status synonym to its canonical enum value (Req 4.3)."""
+    """Map a status synonym to its canonical enum value."""
     if value is None:
         return value
     key = _normalize_key(value)
@@ -315,7 +315,7 @@ def _normalize_status(value, entity_type: str | None) -> str:
 
 
 def _normalize_priority(value) -> str:
-    """Map a priority synonym to its canonical enum value (Req 4.4)."""
+    """Map a priority synonym to its canonical enum value."""
     if value is None:
         return value
     key = _normalize_key(value)
@@ -331,7 +331,7 @@ def _normalize_priority(value) -> str:
 
 
 def _normalize_predicate(value) -> str:
-    """Normalize a relation name to its canonical predicate identifier (Req 4.5)."""
+    """Normalize a relation name to its canonical predicate identifier."""
     if value is None:
         return value
     raw = str(value).strip()
@@ -350,7 +350,7 @@ def _normalize_predicate(value) -> str:
 
 
 def _normalize_confidence(value) -> float | None:
-    """Normalize a confidence value to a float in [0, 1] (Req 4.6).
+    """Normalize a confidence value to a float in [0, 1].
 
     Parses numerics, numeric strings, percentage strings ("80%"), and textual
     terms ("high"), then clamps the result into ``[0, 1]``.
@@ -381,7 +381,7 @@ def _normalize_confidence(value) -> float | None:
 
 
 def _clamp_confidence(value: float) -> float:
-    """Clamp a numeric confidence into [0, 1] (Req 4.6).
+    """Clamp a numeric confidence into [0, 1].
 
     Values above 1.0 clamp to 1.0 and negatives to 0.0. Percentage handling is
     intentionally limited to explicit ``"%"`` strings (see
@@ -407,7 +407,7 @@ class Normalizer:
     """
 
     def normalize(self, extraction: ExtractionResult) -> ExtractionResult:
-        """Return a normalized copy of ``extraction`` (Req 4.1-4.7)."""
+        """Return a normalized copy of ``extraction``."""
         entities = [self._normalize_entity(e) for e in extraction.entities]
         events = [self._normalize_event(e) for e in extraction.events]
         claims = [self._normalize_claim(c) for c in extraction.claims]
@@ -428,11 +428,11 @@ class Normalizer:
     # -- per-item normalizers --------------------------------------------- #
 
     def _normalize_entity(self, entity: dict) -> dict:
-        """Normalize a single entity dict, preserving its distinct identity (Req 4.7)."""
+        """Normalize a single entity dict, preserving its distinct identity."""
         out = copy.deepcopy(entity)
         entity_type = out.get("type")
 
-        # Names / titles and aliases (Req 4.1).
+        # Names / titles and aliases.
         for name_key in ("name", "title"):
             if isinstance(out.get(name_key), str):
                 out[name_key] = _canonical_name(out[name_key])

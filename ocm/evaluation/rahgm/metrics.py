@@ -424,7 +424,7 @@ def expected_calibration_error(
 
 
 # --------------------------------------------------------------------------- #
-# Preregistered success criteria (Req 12.5)
+# Preregistered success criteria
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class SuccessCriteria:

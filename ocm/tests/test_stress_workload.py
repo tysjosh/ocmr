@@ -6,7 +6,7 @@ data layer (:mod:`ocm.evaluation.datasets.stress_workload`) and drive the real
 :class:`~ocm.core.container.CoreContainer` write pipeline with the deterministic
 ``StressOracleExtractor`` injected exactly as the LongMemEval oracle is.
 
-Task 1.2 — **guard default-preserving regression** (Req 13.6, 15.2, 12.6): with
+Task 1.2 — **guard default-preserving regression**: with
 ``enable_constraint_validation=True`` (the default, all-governance-on
 configuration) each C4/C8/C10-governed write must be routed to the quarantine
 bucket and must not appear in the accepted store, proving the additive
@@ -120,7 +120,7 @@ def _is_c10_case(case: StressCase) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# Task 1.2 — guard default-preserving regression (Req 13.6, 15.2, 12.6)
+# Task 1.2 — guard default-preserving regression
 # --------------------------------------------------------------------------- #
 def test_default_config_quarantines_unsupported_final_decision_c8():
     """C8: a ``final`` Decision with no evidence is quarantined, not accepted."""
@@ -196,14 +196,14 @@ def test_default_config_governed_arm_has_no_typed_violations():
 
 
 # --------------------------------------------------------------------------- #
-# Task 1.3 — gate-off leaves C4/C8/C10 poison as accepted (Req 13.7, 15.1)
+# Task 1.3 — gate-off leaves C4/C8/C10 poison as accepted
 # --------------------------------------------------------------------------- #
 def _gate_off_container(oracle) -> CoreContainer:
     """A CoreContainer with ``enable_constraint_validation=False``.
 
     With constraint validation off the Reconcile_Path_Guard suppresses C4/C8/C10
     enforcement, so their poison writes must be left as accepted
-    Invalid_Active_State rather than quarantined (Req 15.1). Schema validation and
+    Invalid_Active_State rather than quarantined. Schema validation and
     the contradiction gate are set to mirror the Gate_Only arm (schema off, gate
     on); neither touches the reconcile path, so the guard's toggle is what decides
     the C4/C8/C10 outcome here.
@@ -274,7 +274,7 @@ def test_gate_off_arm_leaves_typed_violations_active():
     Replaying every example under ``enable_constraint_validation=False`` must
     leave the unsupported-final-decision and illegal-status-state typed-violation
     counts greater than zero, i.e. the guard suppresses C4/C8/C10 and the poison
-    reaches the accepted store (Req 13.7, 15.1).
+    reaches the accepted store.
     """
     from ocm.evaluation.typed_violations import typed_violations
 
@@ -291,7 +291,6 @@ def test_gate_off_arm_leaves_typed_violations_active():
 
 # --------------------------------------------------------------------------- #
 # Task 7.1 — per-class routing + valid-write precision
-# (Req 13.1, 13.3, 2.3, 2.4, 4.4, 4.5, 4.6, 15.5)
 # --------------------------------------------------------------------------- #
 # These tests build one CoreContainer per governance arm (the STRESS_ARMS toggle
 # triples) with the deterministic StressOracleExtractor injected, replay each
@@ -300,13 +299,13 @@ def test_gate_off_arm_leaves_typed_violations_active():
 #   * SCHEMA (C9 + W5) and TEMPORAL (C2) are *relation-path* classes: their poison
 #     relation is REJECTED (a non-accepted outcome) under the Schema_Provenance and
 #     Full arms (constraint validation on) and left ACCEPTED under the Gate_Only arm
-#     (constraint validation off ⇒ W6/C9/C2 never run) (Req 13.1, 1.5/1.6, 3.4/3.5).
+# (constraint validation off ⇒ W6/C9/C2 never run) (1.5/1.6, 3.4/3.5).
 #   * EVIDENCE (C8) and STATUS (C4/C10) are *reconcile-path* classes: their poison
 #     HAS_STATUS assertion is QUARANTINED under the Schema_Provenance and Full arms
 #     and left ACCEPTED under the Gate_Only arm, because the Reconcile_Path_Guard
 #     suppresses C8/C4/C10 while enable_constraint_validation is false
-#     (Req 13.1, 2.3, 2.4, 4.4, 4.5, 4.6, 15.5).
-#   * Valid-write precision (Req 13.3): every Valid_Write is admitted as an accepted
+#.
+# * Valid-write precision: every Valid_Write is admitted as an accepted
 #     outcome under the Full arm.
 GOVERNED_ARMS = ("Schema_Provenance_Arm", "Full_Arm")
 
@@ -396,9 +395,9 @@ def test_evidence_cases_quarantined_under_governed_accepted_under_gate_only():
     """EVIDENCE (C8): unsupported ``final`` Decision quarantined when governed.
 
     Under the Schema_Provenance and Full arms the reconcile path enforces C8 and
-    quarantines the unsupported ``final`` HAS_STATUS (Req 2.3, 15.5); under the
+    quarantines the unsupported ``final`` HAS_STATUS; under the
     Gate_Only arm the Reconcile_Path_Guard suppresses C8, so the ``final`` status is
-    left as an accepted Invalid_Active_State (Req 2.4).
+    left as an accepted Invalid_Active_State.
     """
     examples, oracle, cases = generate_stress_workload(seed=1337)
     evidence_cases = _cases_of(cases, WriteClass.EVIDENCE)
@@ -430,9 +429,9 @@ def test_status_cases_quarantined_under_governed_accepted_under_gate_only():
     The poison status value is ``done`` for the C4 case (a ``done`` Task with no
     completion Event) and ``todo`` for the C10 case (the illegal ``done`` -> ``todo``
     transition). Under the Schema_Provenance and Full arms the reconcile path
-    enforces C4/C10 and quarantines the offending HAS_STATUS (Req 4.4, 4.5, 15.5);
+    enforces C4/C10 and quarantines the offending HAS_STATUS;
     under the Gate_Only arm the Reconcile_Path_Guard suppresses C4/C10, so the
-    illegal status is left as an accepted Invalid_Active_State (Req 4.6).
+    illegal status is left as an accepted Invalid_Active_State.
     """
     examples, oracle, cases = generate_stress_workload(seed=1337)
     status_cases = _cases_of(cases, WriteClass.STATUS)
@@ -462,7 +461,7 @@ def test_status_cases_quarantined_under_governed_accepted_under_gate_only():
 
 
 def test_valid_writes_are_never_rejected_and_leave_no_invalid_state():
-    """Precision (Req 13.3, 5.3): a Valid_Write is never *rejected* under Full_Arm,
+    """Precision: a Valid_Write is never *rejected* under Full_Arm,
     and is either accepted or held for review -- never silently dropped.
 
     Each Valid_Write violates none of C2/C4/C8/C9/C10/W5, so the Full arm must not
@@ -526,7 +525,6 @@ def test_valid_writes_are_never_rejected_and_leave_no_invalid_state():
 # --------------------------------------------------------------------------- #
 # Task 7.2 — arm definitions, Diagnostic_Scope_Note, decisive designation,
 # and offline / harness-reuse smoke
-# (Req 9.1-9.5, 10.4, 14.1-14.4, 6.1, 6.3, 11.1, 12.1-12.4)
 # --------------------------------------------------------------------------- #
 from ocm.evaluation.stress_ablation import (  # noqa: E402
     DECISIVE_ARM,
@@ -536,9 +534,9 @@ from ocm.evaluation.stress_ablation import (  # noqa: E402
 )
 
 
-# --- Arm definitions (Req 9.1-9.5) ----------------------------------------- #
+# --- Arm definitions ----------------------------------------- #
 #: The only three governance toggle names any arm may use — introducing a new
-#: toggle name here would violate Req 9.5 / 12.2 (configure arms *exclusively*
+#: toggle name here would violate / 12.2 (configure arms *exclusively*
 #: through existing Settings toggles, no new governance toggle).
 _ALLOWED_ARM_TOGGLES = frozenset(
     {
@@ -553,7 +551,7 @@ def test_stress_arms_toggle_triples_match_spec_exactly():
     """STRESS_ARMS defines the four arms with the exact spec toggle triples.
 
     W5 = enable_schema_validation, W6 = enable_constraint_validation,
-    C7 = enable_contradiction_gate (Req 9.1-9.4):
+    C7 = enable_contradiction_gate:
 
       * Ungoverned_Arm       W5 off / W6 off / C7 off
       * Gate_Only_Arm        W5 off / W6 off / C7 on
@@ -585,7 +583,7 @@ def test_stress_arms_toggle_triples_match_spec_exactly():
 
 
 def test_stress_arms_introduce_no_new_toggle_names():
-    """Every arm is built exclusively from the three existing toggles (Req 9.5, 12.2).
+    """Every arm is built exclusively from the three existing toggles.
 
     No arm may name a governance toggle outside the allowed set, and those toggle
     names must be real ``Settings`` fields (so arms are applied via
@@ -603,9 +601,9 @@ def test_stress_arms_introduce_no_new_toggle_names():
             assert isinstance(triple[toggle], bool)
 
 
-# --- Decisive designation (Req 10.4) --------------------------------------- #
+# --- Decisive designation --------------------------------------- #
 def test_gate_only_arm_is_the_decisive_designation():
-    """The Gate_Only_Arm is the decisive comparison row (Req 10.4)."""
+    """The Gate_Only_Arm is the decisive comparison row."""
     assert DECISIVE_ARM == "Gate_Only_Arm"
 
     result = run_stress_ablation(seed=1337)
@@ -617,9 +615,9 @@ def test_gate_only_arm_is_the_decisive_designation():
     assert result.decisive_report is result.arms["Gate_Only_Arm"]
 
 
-# --- Diagnostic_Scope_Note content (Req 14.1, 14.2, 14.3, 14.4) ------------ #
+# --- Diagnostic_Scope_Note content ------------ #
 def test_diagnostic_scope_note_states_all_required_framing():
-    """The Diagnostic_Scope_Note carries every mandated honesty statement (Req 14).
+    """The Diagnostic_Scope_Note carries every mandated honesty statement.
 
     It must declare (14.1) the workload a targeted diagnostic and not a
     real-benchmark result; (14.2) that the poison writes exercise checks other than
@@ -655,13 +653,13 @@ def test_diagnostic_scope_note_states_all_required_framing():
 
 
 def test_runner_result_carries_the_diagnostic_scope_note():
-    """The runner result carries the Diagnostic_Scope_Note verbatim (Req 14.1)."""
+    """The runner result carries the Diagnostic_Scope_Note verbatim."""
     result = run_stress_ablation(seed=1337)
     assert result.diagnostic_scope_note == DIAGNOSTIC_SCOPE_NOTE
 
 
 def test_script_output_carries_note_first_and_last(tmp_path):
-    """The script output carries the note as its first and last lines (Req 14.1, 14.3).
+    """The script output carries the note as its first and last lines.
 
     The rendered report emits the (wrapped) Diagnostic_Scope_Note as both the first
     and last block of output so no reader mistakes the table for a real-data finding.
@@ -676,12 +674,12 @@ def test_script_output_carries_note_first_and_last(tmp_path):
     stripped = output.strip()
     assert stripped.startswith(note_block), "note must be the first output block"
     assert stripped.endswith(note_block), "note must be the last output block"
-    # The documented artifact carries the diagnostic framing (Req 14.3).
+    # The documented artifact carries the diagnostic framing.
     assert "targeted diagnostic".upper() in output.upper()
 
 
 def test_main_writes_results_file_carrying_the_note(tmp_path):
-    """Running the script end-to-end writes a results file carrying the note (Req 14.3)."""
+    """Running the script end-to-end writes a results file carrying the note."""
     from ocm.scripts.run_stress_ablation import main
 
     out_path = tmp_path / "stress_ablation_results.txt"
@@ -694,9 +692,9 @@ def test_main_writes_results_file_carrying_the_note(tmp_path):
     assert "Gate_Only_Arm" in contents
 
 
-# --- Offline / harness-reuse smoke (Req 6.1, 6.3, 11.1, 12.1-12.4) --------- #
+# --- Offline / harness-reuse smoke --------- #
 def test_run_stress_ablation_completes_offline_with_all_four_arms():
-    """The runner completes fully offline and reports all four arms (Req 6.1, 6.3).
+    """The runner completes fully offline and reports all four arms.
 
     Extraction is the injected deterministic StressOracleExtractor and settings use
     the offline base (deterministic_test_mode / memory Chroma / mock extractor), so
@@ -718,7 +716,7 @@ def test_run_stress_ablation_completes_offline_with_all_four_arms():
 
 
 def test_run_stress_ablation_reuses_run_multiseed_and_durable_measure(monkeypatch):
-    """The runner reuses the existing harness functions (Req 11.1, 12.4).
+    """The runner reuses the existing harness functions.
 
     Spies wrap the *existing* ``run_multiseed`` (bound in the runner module) and the
     *existing* ``durable_constraint_violations`` (imported by the typed-violation
@@ -748,13 +746,13 @@ def test_run_stress_ablation_reuses_run_multiseed_and_durable_measure(monkeypatc
 
     result = run_stress_ablation(seed=1337)
 
-    # run_multiseed is reused (Req 11.1): once per arm, driven by the same examples.
+    # run_multiseed is reused: once per arm, driven by the same examples.
     assert len(multiseed_calls) == len(STRESS_ARMS)
     for _args, kwargs in multiseed_calls:
-        assert kwargs.get("seeds") == [1337], "single-seed harness execution (Req 11.3)"
+        assert kwargs.get("seeds") == [1337], "single-seed harness execution"
         assert kwargs.get("provided_examples"), "same workload fed to the harness"
-        assert kwargs.get("extractor") is not None, "offline oracle injected (Req 6.3)"
+        assert kwargs.get("extractor") is not None, "offline oracle injected"
 
-    # durable_constraint_violations is reused (Req 12.4, 7.4): once per arm's metric.
+    # durable_constraint_violations is reused: once per arm's metric.
     assert len(dcv_calls) >= len(STRESS_ARMS)
     assert isinstance(result, StressAblationResult)

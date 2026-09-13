@@ -1,4 +1,4 @@
-"""Entry-point script: start the OCM API_Service (Req 28.1).
+"""Entry-point script: start the OCM API_Service.
 
 Thin ``argparse`` wrapper around ``uvicorn`` that serves the FastAPI app
 exposed at ``ocm.app.main:app``. ``uvicorn`` is imported **lazily** inside

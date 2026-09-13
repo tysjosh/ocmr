@@ -37,7 +37,7 @@ def examples():
 # Case collection and labelling
 # --------------------------------------------------------------------------- #
 def test_escalation_label_is_separate_from_the_tier(examples):
-    """A tier cannot express whether a human was needed (Req 4.1 semantics).
+    """A tier cannot express whether a human was needed (semantics).
 
     "Hold without review" and "hold for review" are the same durable transition, so
     folding the escalation label into ``gold_tier`` would make every quarantine look
@@ -311,7 +311,7 @@ def test_contrast_reports_the_recall_gap_and_recovery(arm_report):
 
 
 def test_arm_report_declares_it_is_not_in_the_paper(arm_report):
-    """Work beyond either paper's design must say so (Req 14.1)."""
+    """Work beyond either paper's design must say so."""
     assert arm_report["in_paper"] is False
     assert arm_report["claim"].strip()
 

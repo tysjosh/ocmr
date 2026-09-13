@@ -1,15 +1,15 @@
 """Relation signature registry and task status transition map.
 
 This module is the single source of truth for the directed relation
-signatures (Req 2.1-2.14) and the task status transition map (Req 8.11)
+signatures and the task status transition map
 that the OCM ontology layer exposes.
 
 - ``RELATION_SIGNATURES`` declares every one of the 13 relations with its
   allowed source types, target types, and cardinality.
-- ``get_relation_signature`` is the registry lookup API (Req 2.14); it raises
+- ``get_relation_signature`` is the registry lookup API; it raises
   ``UnknownPredicateError`` for unregistered predicates.
 - ``TASK_STATUS_TRANSITIONS`` declares the permitted task status transitions
-  that drive constraint C10 (Req 8.11).
+  that drive constraint C10.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ try:  # Prefer the canonical enum once the ontology enums module exists.
     from ocm.ontology.enums import TaskStatus
 except ImportError:  # pragma: no cover - fallback until enums.py lands.
     class TaskStatus(str, Enum):
-        """Fallback TaskStatus mirroring the ontology enum (Req 1.4).
+        """Fallback TaskStatus mirroring the ontology enum.
 
         Replaced automatically by ``ocm.ontology.enums.TaskStatus`` once that
         module is available. Members must stay in sync with the design.
@@ -80,8 +80,8 @@ def _sig(
     )
 
 
-# Frozen registry of all 15 relations: the 13 specified in Req 2.1-2.13 (incl.
-# SUPERSEDES 2.13), plus two derived ones — HAS_STATUS (Req 8.11, promotes an
+# Frozen registry of all 15 relations: the 13 specified in (incl.
+# SUPERSEDES 2.13), plus two derived ones — HAS_STATUS (promotes an
 # entity's status to a first-class assertion) and HAS_VALUE (added with the
 # MultiWOZ adapter, maps an external single-valued field onto governed memory).
 #
@@ -133,7 +133,7 @@ RELATION_SIGNATURES: dict[str, RelationSignature] = {
     "SUPERSEDES": _sig("SUPERSEDES", {"Assertion"}, {"Assertion"}, Cardinality.M_TO_N),
     # HAS_STATUS promotes a status-bearing entity's status to a first-class
     # assertion so a status flip becomes an assertion-to-assertion contradiction
-    # (Req 8.11). m:1 — a subject has at most one accepted status at a time.
+    #. m:1 — a subject has at most one accepted status at a time.
     # Sources cover every status-bearing entity; the write pipeline currently
     # reconciles Task / Project / Person (Decision keeps its C8-governed
     # draft->final lifecycle).
@@ -156,7 +156,7 @@ RELATION_SIGNATURES: dict[str, RelationSignature] = {
 
 
 def get_relation_signature(predicate: str) -> RelationSignature:
-    """Return the declared signature for ``predicate`` (Req 2.14).
+    """Return the declared signature for ``predicate``.
 
     Raises ``UnknownPredicateError`` if the predicate is not registered.
     """
@@ -166,7 +166,7 @@ def get_relation_signature(predicate: str) -> RelationSignature:
         raise UnknownPredicateError(predicate) from None
 
 
-# Permitted task status transitions driving constraint C10 (Req 8.11).
+# Permitted task status transitions driving constraint C10.
 # A ``correction`` write_intent bypasses this map (handled in C10).
 TASK_STATUS_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.todo: {TaskStatus.in_progress, TaskStatus.blocked, TaskStatus.cancelled},

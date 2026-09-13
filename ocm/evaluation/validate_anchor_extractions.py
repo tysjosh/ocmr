@@ -1,4 +1,4 @@
-"""Read-only validation scan for the six hand-authored anchors (Req 23.4).
+"""Read-only validation scan for the six hand-authored anchors.
 
 This is a **diagnostic, not a fix**. It inspects a persisted ``CachingExtractor``
 cache (the JSON produced during a governed run) and reports, per anchor, whether

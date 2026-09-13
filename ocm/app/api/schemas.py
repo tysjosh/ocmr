@@ -1,4 +1,4 @@
-"""Request/response models for the OCM API service (Req 19.1).
+"""Request/response models for the OCM API service.
 
 The ``API_Service`` is a FastAPI app whose routers are thin: they validate the
 request model, call into the :class:`~ocm.core.container.CoreContainer`, and
@@ -46,7 +46,7 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# 1. POST /memory/write (Req 19.2)
+# 1. POST /memory/write
 # --------------------------------------------------------------------------- #
 class WriteRequest(BaseModel):
     """Body for ``POST /memory/write``.
@@ -62,12 +62,12 @@ class WriteRequest(BaseModel):
 
 
 class WriteResponse(BaseModel):
-    """Result of a write run — the four outcome lists plus the summary (Req 19.2).
+    """Result of a write run — the four outcome lists plus the summary.
 
     Mirrors :class:`~ocm.memory.write_pipeline.WriteResult` /
     :class:`~ocm.memory.contracts.WriteSummary`. The summary carries exactly
     ``num_candidates``, ``num_accepted``, ``num_quarantined``, ``num_rejected``,
-    and ``num_superseded`` (Req 19.2).
+    and ``num_superseded``.
     """
 
     accepted: list[WriteOutcome] = Field(default_factory=list)
@@ -78,7 +78,7 @@ class WriteResponse(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
-# 2. POST /memory/query (Req 19.3)
+# 2. POST /memory/query
 # --------------------------------------------------------------------------- #
 class QueryRequest(BaseModel):
     """Body for ``POST /memory/query``.
@@ -94,12 +94,12 @@ class QueryRequest(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    """The evidence-package fields returned by retrieval (Req 19.3, 18.1).
+    """The evidence-package fields returned by retrieval.
 
     Mirrors :class:`~ocm.retrieval.evidence_packager.EvidencePackage`, adding the
     R0 ``query_type``. ``retrieved_items`` holds the symbolic + semantic results
-    merged and reranked into a single ordered set (Req 28.7); ``answer`` is
-    optional (Req 18.5).
+    merged and reranked into a single ordered set; ``answer`` is
+    optional.
     """
 
     query_type: str
@@ -113,20 +113,20 @@ class QueryResponse(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
-# 3. POST /memory/validate (Req 19.4)
+# 3. POST /memory/validate
 # --------------------------------------------------------------------------- #
 class ValidateRequest(BaseModel):
     """Body for ``POST /memory/validate``.
 
     Carries a fully-formed :class:`~ocm.memory.contracts.CandidateAssertion` to
-    run W5→W6→W7 against, **without committing** anything (Req 19.4).
+    run W5→W6→W7 against, **without committing** anything.
     """
 
     candidate: CandidateAssertion
 
 
 class ValidateResponse(BaseModel):
-    """Validation verdict for a candidate, with no side effects (Req 19.4).
+    """Validation verdict for a candidate, with no side effects.
 
     Reports whether the candidate is structurally/constraint ``valid``, the
     routing ``decision`` the commit manager would take, and the ``reason`` /
@@ -142,10 +142,10 @@ class ValidateResponse(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
-# 4. GET /memory/entity/{id} (Req 19.5)
+# 4. GET /memory/entity/{id}
 # --------------------------------------------------------------------------- #
 class EntityResponse(BaseModel):
-    """An entity plus the assertions it participates in (Req 19.5).
+    """An entity plus the assertions it participates in.
 
     ``entity`` is the typed entity payload, ``entity_type`` its ontology type,
     and ``assertions`` every accepted assertion where the entity is the subject
@@ -158,10 +158,10 @@ class EntityResponse(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
-# 5. GET /memory/conflicts (Req 19.6)
+# 5. GET /memory/conflicts
 # --------------------------------------------------------------------------- #
 class ConflictsResponse(BaseModel):
-    """Unresolved conflicts and quarantined candidates (Req 19.6).
+    """Unresolved conflicts and quarantined candidates.
 
     ``unresolved_conflicts`` is the curated conflict view; ``quarantined_candidates``
     are the raw persisted :class:`~ocm.ontology.models.QuarantineRecord` rows from

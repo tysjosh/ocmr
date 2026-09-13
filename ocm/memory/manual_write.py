@@ -7,11 +7,11 @@ in isolation. Given a set of pre-resolved entities and a single
 
 1. persists each entity through the :class:`~ocm.memory.repository.StorageRepository`
    and mirrors it as a node in the :class:`~ocm.memory.graph_store.GraphStore`
-   (Req 11.6 — write-through), and
+   (— write-through), and
 2. promotes the candidate to an **accepted** :class:`~ocm.ontology.models.Assertion`
-   (operation ``upsert_assertion``, Req 6.1), persists it, and reflects it as an
-   edge in the graph (Req 11.6) — keeping the standing invariant that graph
-   edges equal the ``accepted`` assertion rows (Req 11.5).
+   (operation ``upsert_assertion``), persists it, and reflects it as an
+   edge in the graph — keeping the standing invariant that graph
+   edges equal the ``accepted`` assertion rows.
 
 It deliberately performs **no validation, contradiction checking, or
 supersession** — those land with the real Commit Manager. It mirrors only the
@@ -119,7 +119,7 @@ def manual_write(
             and mirrored as a graph node.
         candidate: The proposed assertion to accept and persist.
         repo: Durable storage backend (source of truth).
-        graph: In-memory accepted-only projection kept in lock-step (Req 11.6).
+        graph: In-memory accepted-only projection kept in lock-step.
         ids: Generator used to mint the assertion id.
         created_at: Optional fixed creation timestamp (defaults to ``now(UTC)``).
 

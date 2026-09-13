@@ -30,7 +30,7 @@ import pytest
 #: Canonical feature name shared by every property tag.
 FEATURE_NAME = "ontology-constrained-memory"
 
-#: Minimum Hypothesis iterations every property test must run (Req 27, design
+#: Minimum Hypothesis iterations every property test must run (design
 #: "Correctness Properties"). The ``ocm`` Hypothesis profile registered in
 #: ``conftest.py`` enforces this as ``max_examples``.
 MIN_PROPERTY_ITERATIONS = 100

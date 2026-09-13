@@ -1,4 +1,4 @@
-"""Entry-point script: compute and report evaluation metrics (Req 28.10).
+"""Entry-point script: compute and report evaluation metrics.
 
 Feeds result records into the :class:`~ocm.evaluation.metrics.MetricsReporter`
 and prints the human-readable metric table (retrieval, answer, write-time, and

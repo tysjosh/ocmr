@@ -4,14 +4,14 @@ Turns a normalized relation plus its resolved subject/object entities into a
 :class:`CandidateAssertion`, the typed write unit consumed by the rest of the
 write pipeline (W5 onward).
 
-Behavior (Req 6):
+Behavior:
 
-- The operation is always ``upsert_assertion`` (Req 6.1) — enforced by the
+- The operation is always ``upsert_assertion`` — enforced by the
   ``CandidateAssertion`` default, set here explicitly for clarity.
 - Populates ``subject_id``, ``predicate``, ``object_id``, ``confidence``,
-  ``source_ref``, and ``write_intent`` (Req 6.2).
+  ``source_ref``, and ``write_intent``.
 - Defaults ``write_intent`` to ``new_fact`` when the relation does not specify
-  one (Req 6.3).
+  one.
 
 The expected inputs follow the W3 -> W4 contract: a ``relation`` dict shaped like
 ``{subject, predicate, object, confidence, write_intent?, source_ref?}`` and a
@@ -50,7 +50,7 @@ class AssertionBuilder:
 
         Returns:
             A :class:`CandidateAssertion` with ``operation="upsert_assertion"``
-            and all Req 6.2 fields populated.
+            and all fields populated.
 
         Raises:
             KeyError: If ``relation`` is missing ``subject``, ``predicate``, or
@@ -68,7 +68,7 @@ class AssertionBuilder:
         effective_source_ref = source_ref if source_ref is not None else relation.get("source_ref")
         if effective_source_ref is None:
             raise ValueError(
-                "source_ref is required to build a CandidateAssertion (Req 6.2); "
+                "source_ref is required to build a CandidateAssertion; "
                 "provide it via the source_ref argument or in the relation dict."
             )
 
@@ -104,7 +104,7 @@ class AssertionBuilder:
     def _coerce_write_intent(value: object) -> WriteIntent:
         """Coerce a relation's ``write_intent`` to a :class:`WriteIntent`.
 
-        Defaults to ``new_fact`` when unspecified (Req 6.3). A provided string or
+        Defaults to ``new_fact`` when unspecified. A provided string or
         enum is validated against :class:`WriteIntent`.
         """
         if value is None:

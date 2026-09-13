@@ -1,11 +1,10 @@
 """Unit tests for the semantic ``Vector_Index`` in in-memory mode (task 12.3).
 
-Validates: Requirements 13.4, 13.6
 
 These example-based tests exercise :class:`ocm.retrieval.vector_index.VectorIndex`
 hermetically using the offline :class:`DeterministicEmbeddingProvider` and
-``chroma_mode="memory"`` (Req 13.6 — an in-memory mode is supported for tests;
-Req 13.4 — the same cosine-space add/query surface backs the on-disk Chroma
+``chroma_mode="memory"`` (— an in-memory mode is supported for tests;
+ — the same cosine-space add/query surface backs the on-disk Chroma
 collection). The deterministic provider yields a stable 384-dim unit vector per
 text, so identical text round-trips to a near-1.0 cosine similarity while
 distinct text scores lower. The same metadata-filtering semantics
@@ -42,7 +41,7 @@ from ocm.retrieval.vector_index import (
 
 @pytest.fixture
 def index() -> VectorIndex:
-    """A hermetic, offline in-memory vector index (Req 13.6)."""
+    """A hermetic, offline in-memory vector index."""
     return VectorIndex(
         provider=DeterministicEmbeddingProvider(),
         chroma_mode="memory",
@@ -57,7 +56,7 @@ def _ids(hits: list[VectorHit]) -> list[str]:
 # Construction / configuration
 # ---------------------------------------------------------------------------
 def test_invalid_chroma_mode_rejected() -> None:
-    """An unsupported chroma_mode is rejected with a clear error (Req 13.4, 13.6)."""
+    """An unsupported chroma_mode is rejected with a clear error."""
     with pytest.raises(ValueError):
         VectorIndex(provider=DeterministicEmbeddingProvider(), chroma_mode="bogus")
 
@@ -137,7 +136,7 @@ def _seed_mixed_status(index: VectorIndex) -> None:
 
 
 def test_status_filter_accepted_only(index: VectorIndex) -> None:
-    """where={"status": "accepted"} returns only accepted items (Req 16.2)."""
+    """where={"status": "accepted"} returns only accepted items."""
     _seed_mixed_status(index)
 
     hits = index.query("Alice owns Project Orion", top_k=10, where={"status": STATUS_ACCEPTED})
@@ -147,7 +146,7 @@ def test_status_filter_accepted_only(index: VectorIndex) -> None:
 
 
 def test_status_filter_quarantined_only(index: VectorIndex) -> None:
-    """where={"status": "quarantined"} returns only quarantined items (Req 16.3)."""
+    """where={"status": "quarantined"} returns only quarantined items."""
     _seed_mixed_status(index)
 
     hits = index.query(

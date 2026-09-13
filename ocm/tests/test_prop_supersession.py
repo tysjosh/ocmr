@@ -25,7 +25,6 @@ Person ids and confidences (> 0.8) are varied with Hypothesis across >= 100
 iterations to show the invariant holds for the whole high-confidence input
 space, not just one example.
 
-Validates: Requirements 10.2, 12.3, 2.13.
 """
 
 from __future__ import annotations
@@ -53,7 +52,7 @@ TS = datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 
 # Confidences strictly above the default contradiction_high_confidence (0.8) so
 # both the seeded assignment and the correction are "high confidence" and the
-# single-valued ASSIGNED_TO conflict is treated as hard (Req 9.5). The
+# single-valued ASSIGNED_TO conflict is treated as hard. The
 # correction must also *dominate* the incumbent by a margin (Algorithm 1's
 # delta) to be routed to supersede, so the seed is drawn from a lower band than
 # the correction.
@@ -107,7 +106,6 @@ def test_supersession_integrity(
     """A correction that dominates the incumbent supersedes it, preserving both
     provenances.
 
-    Validates: Requirements 10.2, 12.3, 2.13
     """
     # Ensure the two people are distinct so the correction reassigns the task.
     person_a = f"per_{suffix_a}"
@@ -150,7 +148,7 @@ def test_supersession_integrity(
             extractor_version="mock-1",
         )
 
-        # Governance should detect the conflict and recommend supersede (Req 10.2).
+        # Governance should detect the conflict and recommend supersede.
         vr = validator.validate(correction, graph, settings=settings)
         assert vr.recommended_action == "supersede"
         assert old_id in vr.conflicting_ids
@@ -158,14 +156,14 @@ def test_supersession_integrity(
         outcome = manager.commit(correction, vr, created_at=TS)
 
         # --- Property 7 assertions -----------------------------------------
-        # New assertion A accepted, old assertion B superseded (Req 10.2).
+        # New assertion A accepted, old assertion B superseded.
         assert outcome.decision == "superseded"
         assert outcome.superseded_assertion_id == old_id
         new_id = outcome.assertion_id
         assert repo.get_assertion(new_id).status is AssertionStatus.accepted
         assert repo.get_assertion(old_id).status is AssertionStatus.superseded
 
-        # SUPERSEDES(A -> B) edge exists (Req 2.13).
+        # SUPERSEDES(A -> B) edge exists.
         assert graph.has_assertion(new_id, old_id, SUPERSEDES)
 
         # Exactly one accepted ASSIGNED_TO edge remains, pointing at B (per_b).
@@ -175,7 +173,7 @@ def test_supersession_integrity(
         assert not graph.has_assertion("t1", person_a, "ASSIGNED_TO")
         assert graph.has_assertion("t1", person_b, "ASSIGNED_TO")
 
-        # Provenance preserved for BOTH the old and the new assertion (Req 12.3).
+        # Provenance preserved for BOTH the old and the new assertion.
         assert len(manager.provenance_tracker.for_subject(old_id)) >= 1
         assert len(manager.provenance_tracker.for_subject(new_id)) >= 1
     finally:

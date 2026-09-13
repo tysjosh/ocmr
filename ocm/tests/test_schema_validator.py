@@ -5,19 +5,19 @@ a :class:`CandidateAssertion` before constraint checks (W6) run:
 
 * A well-formed candidate — registered predicate (``OWNS``), subject ``Person``
   and object ``Project`` both present in the Graph_Store, confidence in range —
-  passes validation (Req 7.2, 7.5, 7.6).
+  passes validation.
 * An unregistered predicate fails with ``failed_check`` naming the registered
-  predicate check (Req 7.2).
+  predicate check.
 * A candidate whose subject/object are absent from the graph fails the entity
-  reference check (Req 7.5).
+  reference check.
 * W5 is **structural only**: it does NOT reject a domain/range type mismatch
   against resolved entity types — that graph-level check is deferred to
   constraint C9 at W6. An ``OWNS`` candidate whose subject is actually a ``Task``
   still passes W5 structurally, documenting the structural-vs-graph-level
-  boundary (Req 7.6).
+  boundary.
 
 Out-of-enum rejection is covered for the ontology models in
-``test_schema_validation.py`` (Req 26.1); here we anchor the structural schema
+``test_schema_validation.py``; here we anchor the structural schema
 boundary the validator enforces at write time.
 
 Requirements: 7.2, 7.6, 26.1.
@@ -66,7 +66,7 @@ def _owns_candidate(**overrides) -> CandidateAssertion:
 
 
 # ---------------------------------------------------------------------------
-# Accept a valid candidate (Req 7.2, 7.5, 7.6)
+# Accept a valid candidate
 # ---------------------------------------------------------------------------
 def test_valid_candidate_passes(validator: SchemaValidator):
     graph = _graph_with_person_and_project()
@@ -80,7 +80,7 @@ def test_valid_candidate_passes(validator: SchemaValidator):
 
 
 # ---------------------------------------------------------------------------
-# Reject an unregistered predicate (Req 7.2)
+# Reject an unregistered predicate
 # ---------------------------------------------------------------------------
 def test_unregistered_predicate_is_rejected(validator: SchemaValidator):
     graph = _graph_with_person_and_project()
@@ -95,7 +95,7 @@ def test_unregistered_predicate_is_rejected(validator: SchemaValidator):
 
 
 # ---------------------------------------------------------------------------
-# Reject when subject/object entities are absent from the graph (Req 7.5)
+# Reject when subject/object entities are absent from the graph
 # ---------------------------------------------------------------------------
 def test_missing_entity_references_are_rejected(validator: SchemaValidator):
     graph = GraphStore()  # empty graph: neither endpoint exists
@@ -127,7 +127,6 @@ def test_missing_object_reference_is_rejected(validator: SchemaValidator):
 # ---------------------------------------------------------------------------
 # W5 is structural only: domain/range type mismatch is NOT rejected here.
 # The resolved-type domain/range check is deferred to constraint C9 at W6.
-# (Req 7.6)
 # ---------------------------------------------------------------------------
 def test_domain_range_type_mismatch_passes_structural_validation(
     validator: SchemaValidator,

@@ -1,4 +1,4 @@
-"""Single-command runner for the whole RAHGM evaluation suite (Req 13.6).
+"""Single-command runner for the whole RAHGM evaluation suite.
 
 Usage::
 

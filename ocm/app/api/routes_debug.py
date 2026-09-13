@@ -1,4 +1,4 @@
-"""Read-only debug/inspection router (``routes_debug``) (Req 19.1).
+"""Read-only debug/inspection router (``routes_debug``).
 
 A **non-production** router that exposes read-only inspection endpoints used by
 tests and the research demo. The main app (``ocm/app/main.py``, task 15.2)
@@ -47,7 +47,7 @@ __all__ = [
 # Dependency: resolve the wired container from app.state
 # --------------------------------------------------------------------------- #
 def get_container(request: Request) -> CoreContainer:
-    """Return the :class:`CoreContainer` stored on ``app.state`` (Req 19.1).
+    """Return the :class:`CoreContainer` stored on ``app.state``.
 
     The main app builds a single container per process and stores it on
     ``app.state.container``; routers resolve it via this dependency so they stay
@@ -88,7 +88,7 @@ class GraphEdgeView(BaseModel):
 
 
 class GraphView(BaseModel):
-    """A read-only dump of the in-memory accepted-only graph (Req 19.1)."""
+    """A read-only dump of the in-memory accepted-only graph."""
 
     num_nodes: int
     num_edges: int
@@ -153,7 +153,7 @@ def debug_quarantine(
     """Return the full quarantine table, optionally filtered by ``?status=``.
 
     Delegates to ``container.quarantine_store.list(status=...)`` which reads
-    durable storage, so the view reflects what is persisted (Req 11.7). When
+    durable storage, so the view reflects what is persisted. When
     ``status`` is omitted all records are returned.
     """
     return container.quarantine_store.list(status=status)

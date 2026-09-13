@@ -1,4 +1,4 @@
-"""Unit tests for the Metrics_Reporter (Req 24.1–24.5).
+"""Unit tests for the Metrics_Reporter (–24.5).
 
 Drives :class:`MetricsReporter` over a small fabricated fixture of per-question
 result records (the shape the Baseline_Runner emits) to confirm every metric

@@ -1,6 +1,5 @@
 """Property 2: Confidence always in [0,1] (Feature: ontology-constrained-memory).
 
-Validates Requirements 1.6, 1.9, 8.7.
 
 The :class:`~ocm.ontology.models.Claim` and
 :class:`~ocm.ontology.models.Assertion` models declare their ``confidence``

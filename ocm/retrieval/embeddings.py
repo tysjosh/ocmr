@@ -1,14 +1,14 @@
-"""Embedding providers for semantic retrieval (Req 13.1, 13.2, 13.3).
+"""Embedding providers for semantic retrieval.
 
 Semantic retrieval rests on a **swappable** embedding interface, the
 :class:`EmbeddingProvider` protocol, so any model — local or hosted — can be
-dropped in via configuration without touching retrieval code (Req 13.1).
+dropped in via configuration without touching retrieval code.
 
 Two concrete providers are supplied:
 
 - :class:`LocalEmbeddingProvider` — the default. Wraps
   ``sentence-transformers/all-MiniLM-L6-v2``, a 384-dimensional model that runs
-  offline from the local model cache (Req 13.2, 13.3). The heavy
+  offline from the local model cache. The heavy
   ``sentence_transformers`` dependency is imported lazily on first embed so that
   importing this module and constructing the provider never require the package
   or a model download.
@@ -35,16 +35,16 @@ import struct
 from typing import Protocol, runtime_checkable
 
 # Dimensionality of sentence-transformers/all-MiniLM-L6-v2 and of every provider
-# defined here, so providers are interchangeable in the vector index (Req 13.1).
+# defined here, so providers are interchangeable in the vector index.
 EMBEDDING_DIM = 384
 
-# The default local model (Req 13.2).
+# The default local model.
 DEFAULT_LOCAL_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 @runtime_checkable
 class EmbeddingProvider(Protocol):
-    """Swappable embedding interface (Req 13.1).
+    """Swappable embedding interface.
 
     Any implementation exposes the embedding dimensionality via ``dim`` and can
     embed a batch of texts (:meth:`embed`) or a single text (:meth:`embed_one`).
@@ -63,7 +63,7 @@ class EmbeddingProvider(Protocol):
 
 
 class LocalEmbeddingProvider:
-    """Default provider wrapping ``all-MiniLM-L6-v2`` (Req 13.2, 13.3).
+    """Default provider wrapping ``all-MiniLM-L6-v2``.
 
     The model is 384-dimensional and runs offline from the local model cache.
     ``sentence_transformers`` is imported lazily on first embed so that importing

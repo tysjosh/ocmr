@@ -7,9 +7,9 @@ Reranker, Evidence Packager) over a seeded ``GraphStore`` + an in-memory
 provenance and quarantine stored in an in-memory SQLite repository. Confirms:
 
 * an owner query surfaces the owner (``answer``), a supporting assertion with
-  its confidence, and provenance sources (Req 18.1, 18.2, 18.3);
-* a contradiction_check query surfaces conflicts (Req 18.4);
-* every query records a per-query research log (Req 25.2).
+  its confidence, and provenance sources;
+* a contradiction_check query surfaces conflicts;
+* every query records a per-query research log.
 """
 
 from __future__ import annotations
@@ -111,7 +111,7 @@ def pipeline_env():
     # A quarantined conflicting assertion: Dave OWNS Project Atlas.
     vectors.embed_assertion(_quarantined("q_atlas", "p_dave", OWNS, "proj_atlas"))
 
-    # Provenance for the accepted assertions (Req 18.3).
+    # Provenance for the accepted assertions.
     provenance = ProvenanceTracker(repo, ids)
     provenance.record(
         subject_id="a_owns_orion",
@@ -127,7 +127,7 @@ def pipeline_env():
         extractor_version="test-1",
     )
 
-    # An unresolved conflict over Project Atlas ownership (Req 18.4).
+    # An unresolved conflict over Project Atlas ownership.
     quarantine = QuarantineStore(repo, ids)
     quarantine.add(
         candidate_payload={"id": "q_atlas", "subject_id": "p_dave", "predicate": OWNS,
@@ -161,21 +161,21 @@ def test_owner_query_surfaces_owner_with_support_and_sources(pipeline_env) -> No
     pkg = pipeline.query("Who owns Project Orion?", top_k=5)
 
     assert isinstance(pkg, EvidencePackage)
-    # R4 derived the owner from the exact symbolic OWNS hit (Req 18.5).
+    # R4 derived the owner from the exact symbolic OWNS hit.
     assert pkg.answer == "Alice"
-    # Supporting assertion carries id + confidence (Req 18.2).
+    # Supporting assertion carries id + confidence.
     supporting_ids = {sa.id for sa in pkg.supporting_assertions}
     assert "a_owns_orion" in supporting_ids
     owner_sa = next(sa for sa in pkg.supporting_assertions if sa.id == "a_owns_orion")
     assert 0.0 <= owner_sa.confidence <= 1.0
     # Confidence is derived from the top supporting assertion.
     assert pkg.confidence == pytest.approx(owner_sa.confidence)
-    # Provenance for the supporting assertion is attached (Req 18.3).
+    # Provenance for the supporting assertion is attached.
     assert any(p.subject_id == "a_owns_orion" for p in pkg.supporting_sources)
-    # The full ranked candidate set is carried for the caller (Req 18.1).
+    # The full ranked candidate set is carried for the caller.
     assert any(item.memory_id == "a_owns_orion" for item in pkg.retrieved_items)
 
-    # Per-query research log recorded (Req 25.2).
+    # Per-query research log recorded.
     query_records = [r for r in logger.records if r["kind"] == "query"]
     assert len(query_records) == 1
     rec = query_records[0]
@@ -186,7 +186,7 @@ def test_owner_query_surfaces_owner_with_support_and_sources(pipeline_env) -> No
 
 
 def test_contradiction_query_surfaces_conflicts(pipeline_env) -> None:
-    """A contradiction_check query surfaces unresolved conflicts (Req 18.4)."""
+    """A contradiction_check query surfaces unresolved conflicts."""
     pipeline, logger = pipeline_env
     pkg = pipeline.query(
         "Is there a conflict about who owns Project Atlas?", top_k=5
@@ -204,7 +204,7 @@ def test_contradiction_query_surfaces_conflicts(pipeline_env) -> None:
 
 
 def test_unknown_query_reports_missing_information(pipeline_env) -> None:
-    """A query with no matching memory reports missing_information (Req 18.5)."""
+    """A query with no matching memory reports missing_information."""
     pipeline, _logger = pipeline_env
     pkg = pipeline.query("Who owns Project Nonexistent Zephyr?", top_k=5)
 

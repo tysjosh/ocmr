@@ -317,7 +317,7 @@ Each `Question` (`benchmark.Question`) carries:
 - **`expected_conflict`** — boolean gold flag for whether a known contradiction
   should be surfaced for this question.
 - **`expected_supporting_ids`** *(optional)* — expected supporting memory ids for
-  retrieval scoring (Req 23.6), populated on the anchors.
+  retrieval scoring, populated on the anchors.
 
 For the entity-resolution stress scenarios, `BenchmarkExample.gold_entity_groups`
 gives `{canonical_id: [mention surface form, ...]}`, the gold clustering used to

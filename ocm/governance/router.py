@@ -8,7 +8,6 @@ funnels through, on both the relation path (W4–W8) and the status-reconcile pa
 :class:`GovernedCommitManager` implements that exact signature, so it can be
 substituted for the inner :class:`~ocm.memory.commit_manager.CommitManager`
 without editing ``write_pipeline.py``, ``commit_manager.py``, or ``contracts.py``
-(Req 4.6, 15.2).
 
 Tier translation:
 
@@ -55,7 +54,7 @@ REVIEW_CHECK = "RAHGM.review"
 
 @dataclass(frozen=True)
 class RoutingDecision:
-    """The full, inspectable record of one routing decision (Req 4.5).
+    """The full, inspectable record of one routing decision.
 
     Carries everything a review item or an audit needs: the tier, the score and
     risk, the features and guards behind them, the eq. (6) clause that fired, and
@@ -197,7 +196,7 @@ class GovernedCommitManager:
         inner: The real OCMR Commit_Manager that performs every durable action.
         router: The routing component. ``None`` disables RAHGM entirely, in which
             case this class is a transparent pass-through and the write path is
-            behaviorally identical to plain OCMR (Req 15.2).
+            behaviorally identical to plain OCMR.
         graph: The accepted-only Graph_Store representing ``M_t``.
         review_hook: Invoked after a ``review`` route so a
             :class:`~ocm.governance.review_queue.ReviewQueue` can enqueue an item.

@@ -14,7 +14,7 @@ alongside these types once implemented):
 
 * :class:`WriteClass` — the five write-class labels (four poison classes plus a
   benign valid class) stored on each example so classes are distinguishable in
-  the workload output (Req 5.5).
+  the workload output.
 * :class:`SessionWrites` — the oracle's gold writes for one session, reusing the
   LongMemEval oracle's shape extended with events/documents/decisions. This is
   the value keyed by ``source_ref`` in the oracle's ``writes_by_ref`` map.
@@ -26,7 +26,7 @@ alongside these types once implemented):
   ``version="stress-oracle-1"``, ``extract(text, source_ref)`` keyed on
   ``writes_by_ref``, returning an empty :class:`ExtractionResult` for an
   unknown/empty ``source_ref``. It is stateless, offline, and deterministic — it
-  carries no clock, RNG, or network access (Req 6.1, 6.3).
+  carries no clock, RNG, or network access.
 
 The extractor is wired into the harness exactly as the LongMemEval oracle is::
 
@@ -47,7 +47,7 @@ from ocm.memory.contracts import ExtractionResult
 
 
 # --------------------------------------------------------------------------- #
-# Write-class labels (Req 5.5)
+# Write-class labels
 # --------------------------------------------------------------------------- #
 class WriteClass(str, Enum):
     """The write class of a synthetic stress case.
@@ -103,7 +103,7 @@ class StressCase:
     ``source_ref`` is the sole key linking this case's injected
     entities/events/relations/decisions to the oracle's ``writes_by_ref`` map,
     exactly as the LongMemEval oracle keys per-session writes. ``write_class``
-    labels the case (Req 5.5) and ``expects_active_when_ungoverned`` records the
+    labels the case and ``expects_active_when_ungoverned`` records the
     ground-truth expectation used by the metric tests (it is not consumed by the
     runner): ``True`` for poison writes (which are left as Invalid_Active_State
     under the ungoverned/gate-only arms) and ``True`` for valid writes (which are
@@ -131,7 +131,7 @@ class StressOracleExtractor:
     map), **offline**, and **deterministic** — it holds no clock, RNG, or network
     access. A ``source_ref`` it does not know (including an empty/unknown ref)
     returns an empty :class:`ExtractionResult` carrying only the extractor
-    version (Req 6.1, 6.3).
+    version.
     """
 
     version: str = "stress-oracle-1"
@@ -160,7 +160,7 @@ class StressOracleExtractor:
 
 
 # --------------------------------------------------------------------------- #
-# Generator (Req 1-6): the four poison classes + benign valid writes
+# Generator: the four poison classes + benign valid writes
 # --------------------------------------------------------------------------- #
 #: Confidence assigned to every synthetic relation. Above the contradiction
 #: high-confidence threshold (mirrors the MockExtractor's ``DEFAULT_CONFIDENCE``)
@@ -172,7 +172,7 @@ _CONFIDENCE: float = 0.85
 _BASE_TS = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
 #: Deterministic flavor pools driven by the seeded RNG so generation is a pure
-#: function of the seed (Req 6.2) while still exercising ``random.Random(seed)``.
+#: function of the seed while still exercising ``random.Random(seed)``.
 _TASK_WORDS = ["Migrate", "Refactor", "Deploy", "Audit", "Design", "Ship", "Patch", "Draft"]
 _PROJECT_WORDS = ["Orion", "Helios", "Atlas", "Vega", "Nimbus", "Titan", "Lyra", "Nova"]
 _PERSON_WORDS = ["Ada", "Bran", "Cleo", "Dev", "Esme", "Finn", "Gita", "Hugo"]
@@ -193,7 +193,7 @@ def generate_stress_workload(
     n_status: int = 2,
     n_valid: int = 6,
 ) -> tuple[list[BenchmarkExample], StressOracleExtractor, list[StressCase]]:
-    """Build the Schema/Provenance Stress Workload (Req 1-6).
+    """Build the Schema/Provenance Stress Workload.
 
     Drives every choice from a single ``random.Random(seed)`` and returns
     ``(examples, oracle, cases)``:
@@ -202,7 +202,7 @@ def generate_stress_workload(
       ``category = write_class.value`` and ``id = f"stress-{write_class.value}-{i:03d}"``.
       Every session's ``source_ref`` (``f"{example.id}:{session_id}"``) keys the
       oracle, and ``input`` is empty because the oracle is keyed solely on
-      ``source_ref`` (the offline/deterministic contract, Req 6.1).
+      ``source_ref`` (the offline/deterministic contract).
     * ``oracle`` — a :class:`StressOracleExtractor` replaying each case's exact
       entities/events/relations/documents/decisions by ``source_ref``.
     * ``cases`` — the :class:`StressCase` list (labels + payloads) used by the
@@ -219,23 +219,22 @@ def generate_stress_workload(
       out-of-vocabulary *status string* is not independently catchable by W5/C9 —
       a ``StatusValue`` node accepts any string and cannot be minted as a relation
       endpoint through extraction — so the Schema class is represented by the
-      robust, verified HAS_STATUS **range** violation instead; Req 1.1-1.4.)
+      robust, verified HAS_STATUS **range** violation instead;.)
     * **TEMPORAL (C2)** — an ``Event`` whose ``timestamp_end`` precedes its
       ``timestamp_start`` referenced by a ``PRECEDES`` relation, plus an
       expired-interval variant using the same end-before-start condition (the
-      only sanity C2 checks); Req 3.1-3.3.
+      only sanity C2 checks);.
     * **EVIDENCE (C8)** — a ``final`` Decision with no ``EVIDENCE_FOR`` edge and no
-      supporting evidence; Req 2.1, 2.2.
+      supporting evidence;.
     * **STATUS (C10 + C4)** — a ``done`` Task with no completion Event / ``RESULTS_IN``
       (C4), and a two-session illegal ``done`` -> ``todo`` transition (C10);
-      Req 4.1-4.3.
 
     Benign **VALID** writes (``Person -[OWNS]-> Project``, ``Task -[ASSIGNED_TO]->
     Person``, a well-formed ``Event -[PRECEDES]-> Event``, and a ``final`` Decision
     *with* a ``Document -[EVIDENCE_FOR]-> Decision`` edge) violate nothing and are
-    admitted under the Full arm (Req 5.1-5.3). The workload always contains
+    admitted under the Full arm. The workload always contains
     ``> 0`` valid and ``> 0`` poison writes and at least one case of each poison
-    class, and every example carries its :class:`WriteClass` (Req 5.2, 5.5).
+    class, and every example carries its :class:`WriteClass`.
     """
     rng = random.Random(seed)
     examples: list[BenchmarkExample] = []
@@ -449,7 +448,7 @@ def generate_stress_workload(
             # draft Decision plus its Document -[EVIDENCE_FOR]-> Decision edge (both
             # accepted, because a draft Decision does not trip the C8 floor), and s2
             # promotes the Decision to final — now backed by one accepted EVIDENCE_FOR
-            # edge, so C8 passes and the final status is accepted (Req 5.1, 5.3).
+            # edge, so C8 passes and the final status is accepted.
             topic = f"{_rng_word(rng, _TOPIC_WORDS)}-valid-{i}"
             doc = f"Rationale{_rng_word(rng, _PROJECT_WORDS)}Valid{i}"
             setup = SessionWrites(

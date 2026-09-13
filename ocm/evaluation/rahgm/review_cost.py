@@ -1,4 +1,4 @@
-"""Reviewer-minutes model for the controlled replay (Req 11.4).
+"""Reviewer-minutes model for the controlled replay.
 
 Experiment 1 is a replay study with no human reviewers, but ``R100`` — reviewer
 minutes per 100 writes — is a primary outcome. This module supplies an **explicit,

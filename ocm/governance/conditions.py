@@ -3,7 +3,7 @@
 All five implement the same transition interface
 ``M_{t+1} = T(M_t, u_t, d_t)``, ``d ∈ {accept, supersede, review, reject}``, and
 receive identical proposed writes, evidence, incumbent memory states, and model
-outputs (Req 10.1, 10.2). They differ only in the routing signal:
+outputs. They differ only in the routing signal:
 
 =====  ====================  ==========  =================================================
 Id     Name                  Review      Routing signal
@@ -98,7 +98,7 @@ class BaselineRouter(RiskAdaptiveRouter):
     """Shared plumbing for the non-RAHGM conditions.
 
     Reuses RAHGM's feature extraction so every condition is measured on the same
-    features (Req 10.2), but replaces ``π(u)`` with the condition's own rule.
+    features, but replaces ``π(u)`` with the condition's own rule.
     """
 
     def __init__(
@@ -337,7 +337,7 @@ def build_governance(
         params: Fitted policy parameters (required in practice for C4/C5; the
             registered prior is used when omitted).
         feature_extractor: Shared extractor, so every condition sees identical
-            features (Req 10.2).
+            features.
         canary_gate: The fixed canary gate (C5 only).
         updater: The bounded updater (C5 only).
         context_provider: Supplies the per-write :class:`WriteContext`.

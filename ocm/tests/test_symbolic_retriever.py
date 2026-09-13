@@ -3,7 +3,7 @@
 Seeds a small graph (Alice OWNS Orion, T1 ASSIGNED_TO Bob, e1 PRECEDES e2)
 and confirms owner / assignee / preceding-event queries return the correct
 hits, each flagged ``exact_match=True`` so the Reranker forces
-``semantic_similarity = 1.0`` (Req 15.1-15.4).
+``semantic_similarity = 1.0``.
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ def test_resolve_entity_ids_unknown_name_yields_nothing() -> None:
 
 
 # --------------------------------------------------------------------------
-# Req 15.1 — project owner via incoming OWNS edges
+# — project owner via incoming OWNS edges
 # --------------------------------------------------------------------------
 def test_owner_query_returns_owner_via_owns() -> None:
     g = _seed_graph()
@@ -104,7 +104,7 @@ def test_owner_query_returns_owner_via_owns() -> None:
 
 
 # --------------------------------------------------------------------------
-# Req 15.2 — task assignee via outgoing ASSIGNED_TO edge
+# — task assignee via outgoing ASSIGNED_TO edge
 # --------------------------------------------------------------------------
 def test_assignee_query_returns_assignee_via_assigned_to() -> None:
     g = _seed_graph()
@@ -119,7 +119,7 @@ def test_assignee_query_returns_assignee_via_assigned_to() -> None:
 
 
 # --------------------------------------------------------------------------
-# Req 15.3 — preceding events via incoming PRECEDES edges
+# — preceding events via incoming PRECEDES edges
 # --------------------------------------------------------------------------
 def test_preceding_query_returns_predecessors_via_precedes() -> None:
     g = _seed_graph()
@@ -160,8 +160,7 @@ def test_memory_id_aliases_assertion_id() -> None:
 
 # --------------------------------------------------------------------------
 # Property: every symbolic hit is an exact match with a backing assertion
-# and a confidence in [0, 1] (Req 15.4).
-# Validates: Requirements 15.4
+# and a confidence in [0, 1].
 # --------------------------------------------------------------------------
 @given(
     name=st.sampled_from(["Orion", "T1", "e2"]),

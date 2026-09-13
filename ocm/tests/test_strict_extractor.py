@@ -3,7 +3,7 @@
 The property under test is the one that protects result validity: an environment
 fault must escape :class:`~ocm.memory.write_pipeline.WritePipeline`'s
 ``except ExtractionError`` clause and abort the run, while a model fault must
-still be absorbed as a recorded validation failure (Req 3.3).
+still be absorbed as a recorded validation failure.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def test_environment_fault_propagates_through_the_write_pipeline() -> None:
 
 
 def test_model_fault_is_still_absorbed_by_the_write_pipeline() -> None:
-    """Req 3.3 behaviour is preserved for genuine model failures."""
+    """ behaviour is preserved for genuine model failures."""
     container = CoreContainer(
         Settings(deterministic_test_mode=True, chroma_mode="memory"),
         extractor=StrictExtractor(_Boom("transformers extractor returned empty output")),

@@ -1,4 +1,4 @@
-"""Stress_Ablation_Runner (Req 9, 10, 11, 14).
+"""Stress_Ablation_Runner.
 
 The runner executes the **Schema/Provenance Stress Workload** across four
 governance **arms** and reports, per arm, the :class:`TypedViolationReport`
@@ -7,9 +7,9 @@ count, and the :class:`WriteOutcomeTally`). Every arm is a triple of the three
 **existing** ``Settings`` governance toggles applied via
 ``Settings.model_copy(update=...)`` — the same mechanism ``AblationSpec`` /
 ``build_ablation_strategy`` already use — so **no new toggle** and **no new
-pipeline governance code** is introduced (Req 9.5, 12.2, 12.3).
+pipeline governance code** is introduced.
 
-The four arms (Req 9.1-9.4):
+The four arms:
 
 ======================  ======  ======  =====
 Arm                     W5      W6      C7
@@ -31,16 +31,16 @@ same ``enable_constraint_validation`` toggle that gates the relation-path C9/C2
 checks also gates the reconcile-path C4/C8/C10 checks, so **all four poison classes**
 track the toggle identically: left accepted (Invalid_Active_State) when it is false
 (Ungoverned, Gate_Only) and removed when it is true (Schema_Provenance, Full). The
-Gate_Only_Arm is the **decisive** comparison (Req 10.4): it receives the *same*
+Gate_Only_Arm is the **decisive** comparison: it receives the *same*
 inputs as every other arm yet still leaves the invalid durable state that the
 Schema_Provenance_Arm removes.
 
-Execution reuses the existing harness (Req 11.1, 12.4): the workload is built once
-and the **same** examples + oracle feed **every** arm (Req 10.1); ``run_multiseed``
+Execution reuses the existing harness: the workload is built once
+and the **same** examples + oracle feed **every** arm; ``run_multiseed``
 is additionally invoked (single seed) to obtain write-outcome tallies and prove
 run-to-run identity, and ``aggregate_methods`` is kept available for single-seed
 reporting parity. A single seed is sufficient because the offline oracle/mock
-pipeline is deterministic — recorded in the :data:`DIAGNOSTIC_SCOPE_NOTE` (Req 11.3).
+pipeline is deterministic — recorded in the :data:`DIAGNOSTIC_SCOPE_NOTE`.
 
 Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.4, 11.1, 11.3, 12.4, 14.1, 14.2, 14.4.
 """
@@ -80,15 +80,15 @@ __all__ = [
 
 
 # --------------------------------------------------------------------------- #
-# Arm definitions (Req 9.1-9.5)
+# Arm definitions
 # --------------------------------------------------------------------------- #
 # :data:`STRESS_ARMS` and :data:`DECISIVE_ARM` are defined in
 # :mod:`ocm.evaluation.arms.stress` alongside the baseline and ablation arm
 # definitions, and re-exported here (via ``__all__``) so existing importers of
 # this module are unaffected. They remain toggle triples of the EXISTING
-# ``Settings`` governance switches; no new toggle is introduced (Req 9.5, 12.2).
+# ``Settings`` governance switches; no new toggle is introduced.
 
-#: The mandatory honesty statement (Req 14.1, 14.2, 14.4) emitted with every
+#: The mandatory honesty statement emitted with every
 #: artifact. Declares the workload a targeted diagnostic, identifies the
 #: Gate_Only_Arm shared-input comparison as its defense, records single-seed
 #: sufficiency, and documents the single additive Reconcile_Path_Guard.
@@ -118,13 +118,13 @@ DIAGNOSTIC_SCOPE_NOTE: str = (
 # --------------------------------------------------------------------------- #
 @dataclass
 class StressAblationResult:
-    """Per-arm Typed_Violation_Reports plus the honesty framing (Req 9, 10, 14).
+    """Per-arm Typed_Violation_Reports plus the honesty framing.
 
     * ``arms`` — ordered ``arm name -> TypedViolationReport`` (insertion order
       matches :data:`STRESS_ARMS`: Ungoverned, Gate_Only, Schema_Provenance, Full).
-    * ``decisive_arm`` — the :data:`DECISIVE_ARM` row flagged decisive (Req 10.4).
-    * ``seed`` — the single seed the workload was generated with (Req 11.3).
-    * ``diagnostic_scope_note`` — the :data:`DIAGNOSTIC_SCOPE_NOTE` (Req 14).
+    * ``decisive_arm`` — the :data:`DECISIVE_ARM` row flagged decisive.
+    * ``seed`` — the single seed the workload was generated with.
+    * ``diagnostic_scope_note`` — the :data:`DIAGNOSTIC_SCOPE_NOTE`.
     """
 
     arms: dict[str, TypedViolationReport] = field(default_factory=dict)
@@ -138,7 +138,7 @@ class StressAblationResult:
         return self.arms[self.decisive_arm]
 
     def is_decisive(self, arm: str) -> bool:
-        """True iff ``arm`` is the decisive comparison row (Req 10.4)."""
+        """True iff ``arm`` is the decisive comparison row."""
         return arm == self.decisive_arm
 
 
@@ -146,7 +146,7 @@ class StressAblationResult:
 # Defaults
 # --------------------------------------------------------------------------- #
 def _default_settings() -> Settings:
-    """Deterministic, offline base settings (Req 6.3, 11.3).
+    """Deterministic, offline base settings.
 
     The oracle extractor is injected into every ``CoreContainer`` and overrides
     the ``"mock"`` selection, so no GPU / API key / network access is required.
@@ -169,11 +169,11 @@ def _replay_arm(
 ) -> tuple[CoreContainer, WriteOutcomeTally]:
     """Build the arm's container, replay every session, and tally write outcomes.
 
-    Feeds the **same** ``examples`` + ``oracle`` given to every arm (Req 10.1);
+    Feeds the **same** ``examples`` + ``oracle`` given to every arm;
     per arm builds ``CoreContainer(settings, extractor=oracle)`` and replays each
     session through ``container.write_pipeline.run(...)`` (the exact ingestion the
     baseline runner performs), accumulating the ``WriteResult.summary`` buckets
-    into a :class:`WriteOutcomeTally` (Req 8.1, 8.2 — no new outcome categories).
+    into a :class:`WriteOutcomeTally` (8.2 — no new outcome categories).
     """
     settings = base_factory().model_copy(update=STRESS_ARMS[arm])
     container = CoreContainer(settings, extractor=oracle)
@@ -198,24 +198,24 @@ def run_stress_ablation(
     seed: int = 1337,
     settings_factory: Callable[[], Settings] | None = None,
 ) -> StressAblationResult:
-    """Run the Stress_Workload across the four arms (Req 9, 10, 11, 14).
+    """Run the Stress_Workload across the four arms.
 
-    Builds the workload **once** and feeds the same examples + oracle to every arm
-    (Req 10.1). Per arm it builds a ``CoreContainer`` from the arm's toggle triple,
+    Builds the workload **once** and feeds the same examples + oracle to every arm.
+    Per arm it builds a ``CoreContainer`` from the arm's toggle triple,
     replays every session, accumulates a :class:`WriteOutcomeTally`, then attaches
     :func:`typed_violations` over that arm's durable ACTIVE store. The result flags
-    the :data:`DECISIVE_ARM` row decisive (Req 10.4) and carries the
-    :data:`DIAGNOSTIC_SCOPE_NOTE` (Req 14).
+    the :data:`DECISIVE_ARM` row decisive and carries the
+    :data:`DIAGNOSTIC_SCOPE_NOTE`.
 
-    The existing harness is reused (Req 11.1, 12.4): ``run_multiseed`` is invoked
+    The existing harness is reused: ``run_multiseed`` is invoked
     with ``provided_examples``, ``extractor=oracle``, a per-arm settings factory,
     and a single seed to obtain write-outcome tallies and prove run-to-run identity;
     ``aggregate_methods`` is kept available for single-seed reporting parity. A
-    single seed is sufficient because the offline pipeline is deterministic (Req 11.3).
+    single seed is sufficient because the offline pipeline is deterministic.
     """
     base_factory = settings_factory or _default_settings
 
-    # Build the workload ONCE; the same examples + oracle feed every arm (Req 10.1).
+    # Build the workload ONCE; the same examples + oracle feed every arm.
     examples, oracle, _cases = generate_stress_workload(seed)
 
     arms: dict[str, TypedViolationReport] = {}
@@ -225,14 +225,14 @@ def run_stress_ablation(
         report.write_outcomes = tally
         arms[arm] = report
 
-    # --- Harness reuse (Req 11.1, 11.2, 12.4) ---------------------------- #
+    # --- Harness reuse ---------------------------- #
     # Additionally drive each arm through the existing multi-seed harness with the
-    # same examples + oracle and a single seed (Req 11.1). This obtains the arm's
+    # same examples + oracle and a single seed. This obtains the arm's
     # write-outcome tally via the shared harness; that harness tally is required to
     # equal the direct-replay tally assembled above — an independent-path identity
     # check that proves the deterministic offline pipeline yields the same
-    # write-outcome counts run-to-run (Req 11.2). ``aggregate_methods`` is exercised
-    # for single-seed reporting parity with the other deterministic tables (Req 12.4).
+    # write-outcome counts run-to-run. ``aggregate_methods`` is exercised
+    # for single-seed reporting parity with the other deterministic tables.
     # The typed four-type breakdown is computed from the per-arm container above
     # (run_multiseed does not expose containers); the two agree by determinism.
     for arm in STRESS_ARMS:
@@ -254,7 +254,7 @@ def run_stress_ablation(
             and harness["quarantined"] == direct.quarantined
             and harness["rejected"] == direct.rejected
         ), f"harness and direct-replay write-outcome tallies diverged for arm {arm!r}"
-        # Single-seed reporting parity (keep aggregate_methods available, Req 12.4).
+        # Single-seed reporting parity (keep aggregate_methods available).
         aggregate_methods(ms)
 
     return StressAblationResult(

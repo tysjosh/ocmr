@@ -1,4 +1,4 @@
-"""Baseline definitions B0–B4 as toggle presets (Req 22.1–22.5).
+"""Baseline definitions B0–B4 as toggle presets (–22.5).
 
 Each baseline is the same :class:`~ocm.evaluation.arms.strategies.MemoryStrategy`
 differing only by its :class:`~ocm.evaluation.arms.strategies.StrategyToggles`, per
@@ -14,12 +14,11 @@ B3   ✓            ✓         ✓           ✓                 ✓           
 B4   ✓            ✓         ✓           ✓                 ✓              ✓              ✓
 ==== =========== ========= =========== ================= ============== ============== ================
 
-* **B0** — vector retrieval only (Req 22.1).
-* **B1** — graph assertions + symbolic retrieval only, no vectors (Req 22.2).
+* **B0** — vector retrieval only.
+* **B1** — graph assertions + symbolic retrieval only, no vectors.
 * **B2** — graph + semantic, no contradiction/quarantine/provenance governance
-  (Req 22.3).
-* **B3** — full hybrid + contradiction + quarantine + provenance (Req 22.4).
-* **B4** — B3 + the P1–P5 Answer_Policy (Req 22.5).
+* **B3** — full hybrid + contradiction + quarantine + provenance.
+* **B4** — B3 + the P1–P5 Answer_Policy.
 * **Bsup** — latest-value supersession for ``Slot -[HAS_VALUE]-> SlotValue``
   only; no broader schema/constraint/quarantine/provenance governance. This is
   an opt-in reviewer ablation, not part of the canonical B-suite.
@@ -42,9 +41,9 @@ from ocm.evaluation.arms.strategies import MemoryStrategy, StrategyToggles
 #: A factory that builds a configured strategy over a wired container.
 BaselineFactory = Callable[[CoreContainer], MemoryStrategy]
 
-#: The canonical B0–B4 toggle presets (the design's toggle matrix, Req 22).
+#: The canonical B0–B4 toggle presets (the design's toggle matrix).
 BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
-    # B0 — vectors only (Req 22.1).
+    # B0 — vectors only.
     "B0": StrategyToggles(
         use_ontology=False,
         use_graph=False,
@@ -54,7 +53,7 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
         use_provenance=False,
         use_answer_policy=False,
     ),
-    # B1 — graph / symbolic only, no vectors (Req 22.2).
+    # B1 — graph / symbolic only, no vectors.
     "B1": StrategyToggles(
         use_ontology=True,
         use_graph=True,
@@ -64,7 +63,7 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
         use_provenance=False,
         use_answer_policy=False,
     ),
-    # B2 — graph + semantic, no governance (Req 22.3).
+    # B2 — graph + semantic, no governance.
     "B2": StrategyToggles(
         use_ontology=True,
         use_graph=True,
@@ -74,7 +73,7 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
         use_provenance=False,
         use_answer_policy=False,
     ),
-    # B3 — full hybrid + contradiction + quarantine + provenance (Req 22.4).
+    # B3 — full hybrid + contradiction + quarantine + provenance.
     "B3": StrategyToggles(
         use_ontology=True,
         use_graph=True,
@@ -84,7 +83,7 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
         use_provenance=True,
         use_answer_policy=False,
     ),
-    # B4 — B3 + Answer_Policy (Req 22.5).
+    # B4 — B3 + Answer_Policy.
     "B4": StrategyToggles(
         use_ontology=True,
         use_graph=True,
@@ -167,11 +166,11 @@ BASELINE_TOGGLES: Dict[str, StrategyToggles] = {
 
 #: Human-readable description per baseline (used in metrics/reporting).
 BASELINE_DESCRIPTIONS: Dict[str, str] = {
-    "B0": "Vector retrieval only (Req 22.1)",
-    "B1": "Graph assertions + symbolic only, no vectors (Req 22.2)",
-    "B2": "Graph + semantic, no contradiction/quarantine/provenance (Req 22.3)",
-    "B3": "Full hybrid + contradiction + quarantine + provenance (Req 22.4)",
-    "B4": "B3 + Answer_Policy (Req 22.5)",
+    "B0": "Vector retrieval only",
+    "B1": "Graph assertions + symbolic only, no vectors",
+    "B2": "Graph + semantic, no contradiction/quarantine/provenance",
+    "B3": "Full hybrid + contradiction + quarantine + provenance",
+    "B4": "B3 + Answer_Policy",
     "Brag": "RAG-only: vectors-only retrieval, answer from text, no governance",
     "Brtcf": "Retrieval-time contradiction filter: no write gate, filter at read",
     "Bsup": "Latest-value supersession only for Slot HAS_VALUE",

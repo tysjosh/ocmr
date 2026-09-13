@@ -1,4 +1,4 @@
-"""Seeded, reproducible evaluation Benchmark_Generator (Req 23).
+"""Seeded, reproducible evaluation Benchmark_Generator.
 
 `Benchmark_Generator` produces a JSONL dataset spanning the six reasoning
 categories required by the spec. Each example is a multi-session memory
@@ -10,14 +10,13 @@ Design contract (see design.md "Benchmark_Generator"):
 
 * Each example has ``id``, ``category``, ``sessions`` (each ``{session_id,
   input}``), and ``questions`` (each ``{query, expected_answer_contains,
-  expected_conflict, expected_supporting_ids?}``) (Req 23.1, 23.6).
+  expected_conflict, expected_supporting_ids?}``).
 * Six categories, at least 25 examples each and at least 150 total
-  (Req 23.2, 23.3).
 * Six hand-authored anchor examples covering the Task T1 conflict, the
   Joseph/Pharaoh case, project owner conflict, inactive assignee, final
-  decision without evidence, and a temporal cycle (Req 23.4).
+  decision without evidence, and a temporal cycle.
 * A single seeded ``random.Random(seed)`` drives all sampling so the dataset is
-  byte-identical across runs for a fixed seed (Req 23.5).
+  byte-identical across runs for a fixed seed.
 
 Session ``input`` strings are written so the deterministic ``Mock_Extractor``
 recognizes them: ``"X owns Project Y"`` (OWNS), ``"X is assigned to Task Y"``
@@ -40,16 +39,16 @@ from pydantic import BaseModel, Field
 
 # --- Configuration ----------------------------------------------------------
 
-#: Fixed default seed used by the configured benchmark build (Req 23.5).
+#: Fixed default seed used by the configured benchmark build.
 DEFAULT_SEED: int = 1337
 
 #: Number of programmatically generated examples per category. Six categories
 #: at 25 each yields 150 generated examples; the six anchors push the total to
 #: 156, satisfying "at least 25 per category and at least 150 total"
-#: (Req 23.3).
+#:.
 PER_CATEGORY: int = 25
 
-#: The six reasoning categories (Req 23.2), in a fixed order so generation is
+#: The six reasoning categories, in a fixed order so generation is
 #: deterministic.
 CATEGORIES: tuple[str, ...] = (
     "longitudinal_factual_qa",
@@ -109,7 +108,7 @@ _STATUS_PHRASES: tuple[tuple[str, str], ...] = (
 _DECISION_VERBS: tuple[str, ...] = ("launch", "pause", "rename", "expand")
 
 
-# --- Data models (Req 23.1, 23.6) -------------------------------------------
+# --- Data models -------------------------------------------
 
 
 class Session(BaseModel):
@@ -131,7 +130,7 @@ class Question(BaseModel):
     expected_answer_contains: list[str]
     expected_conflict: bool
     #: Optional expected supporting memory facts for retrieval scoring
-    #: (Req 23.6). Omitted from JSONL when absent.
+    #:. Omitted from JSONL when absent.
     expected_supporting_ids: Optional[list[str]] = None
 
 
@@ -154,7 +153,7 @@ class BenchmarkExample(BaseModel):
 
 
 class BenchmarkGenerator:
-    """Produces the seeded, reproducible benchmark dataset (Req 23.5).
+    """Produces the seeded, reproducible benchmark dataset.
 
     A single ``random.Random(seed)`` drives every sample, and categories and
     indices are iterated in a fixed order, so :meth:`generate` returns an
@@ -169,7 +168,7 @@ class BenchmarkGenerator:
         """Return all benchmark examples (generated + anchors), deterministic.
 
         Generated examples come first, grouped by category in ``CATEGORIES``
-        order, followed by the six hand-authored anchors (Req 23.4).
+        order, followed by the six hand-authored anchors.
         ``per_category`` controls how many examples are generated per category
         (defaults to :data:`PER_CATEGORY`); experiments use a smaller value for
         faster multi-seed sweeps.
@@ -342,9 +341,9 @@ class BenchmarkGenerator:
             ],
         )
 
-    # -- hand-authored anchors (Req 23.4) ----------------------------------
+    # -- hand-authored anchors ----------------------------------
     def _anchors(self) -> list[BenchmarkExample]:
-        """The six curated anchor examples, injected verbatim (Req 23.4)."""
+        """The six curated anchor examples, injected verbatim."""
         return [
             # 1. Task T1 conflict (done vs. not-started).
             BenchmarkExample(
@@ -465,7 +464,7 @@ def write_jsonl(examples: list[BenchmarkExample], path: str | Path) -> None:
 
     ``None`` ``expected_supporting_ids`` fields are omitted so the output
     matches the design's schema (the field appears only where present). Output
-    is byte-identical for identical input (Req 23.5).
+    is byte-identical for identical input.
     """
     out_path = Path(path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

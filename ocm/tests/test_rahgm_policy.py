@@ -1,6 +1,6 @@
 """RAHGM feature encoding, escalation score, fit, thresholds, and routing.
 
-Covers Req 1.x (feature encoding and rubrics), 2.x (score and monotonic fit),
+Covers (feature encoding and rubrics), 2.x (score and monotonic fit),
 3.x (threshold selection), and 4.x (the deterministic routing rule).
 """
 
@@ -39,7 +39,7 @@ from ocm.ontology.enums import Severity, WriteIntent
 
 
 # --------------------------------------------------------------------------- #
-# Feature encoding (Req 1.1-1.7)
+# Feature encoding
 # --------------------------------------------------------------------------- #
 def _candidate(**overrides) -> CandidateAssertion:
     payload = {
@@ -78,7 +78,7 @@ class _EmptyGraph:
 
 
 def test_components_use_only_the_three_admissible_encodings():
-    """Every component is exactly 0.0, 0.5, or 1.0 (Req 1.2)."""
+    """Every component is exactly 0.0, 0.5, or 1.0."""
     extractor = FeatureExtractor()
     graph = _EmptyGraph()
     verdicts = [
@@ -102,7 +102,7 @@ def test_components_use_only_the_three_admissible_encodings():
     [("C1", 0), ("C9", 1), ("C2", 2), ("C3", 2), ("C10", 2), ("C8", 3)],
 )
 def test_failed_check_maps_to_its_component(check: str, index: int):
-    """Each OCMR check drives the component the paper assigns it (Req 1.3-1.6)."""
+    """Each OCMR check drives the component the paper assigns it."""
     features = FeatureExtractor().extract(
         _candidate(),
         _EmptyGraph(),
@@ -125,7 +125,7 @@ def test_alias_ambiguity_is_unresolved_not_failed():
 
 
 def test_hard_contradiction_fails_soft_contradiction_is_unresolved():
-    """``f_c`` separates a hard conflict from a soft one (Req 1.7)."""
+    """``f_c`` separates a hard conflict from a soft one."""
     extractor = FeatureExtractor()
     hard = extractor.extract(
         _candidate(),
@@ -144,7 +144,7 @@ def test_hard_contradiction_fails_soft_contradiction_is_unresolved():
 
 
 def test_evidence_component_tracks_the_floor():
-    """Zero evidence fails; below-floor evidence is unresolved (Req 1.6)."""
+    """Zero evidence fails; below-floor evidence is unresolved."""
 
     class _Settings:
         supersede_evidence_min = 2
@@ -163,7 +163,7 @@ def test_evidence_component_tracks_the_floor():
 
 
 def test_k_counts_simultaneous_unresolved_or_failed_checks():
-    """``k`` and ``[k-1]₊`` follow eq. (3) (Req 1.8)."""
+    """``k`` and ``[k-1]₊`` follow eq. (3)."""
     features = RiskFeatures(f_e=UNRESOLVED, f_s=PASS, f_t=FAIL, f_v=PASS, f_c=UNRESOLVED)
     assert features.k == 3
     assert features.interaction == 2.0
@@ -174,14 +174,14 @@ def test_k_counts_simultaneous_unresolved_or_failed_checks():
 
 
 def test_extraction_is_deterministic():
-    """Repeated extraction of the same inputs yields identical features (Req 1.10)."""
+    """Repeated extraction of the same inputs yields identical features."""
     extractor = FeatureExtractor()
     args = (_candidate(), _EmptyGraph(), ValidationResult(valid=True), WriteContext())
     assert extractor.extract(*args).as_dict() == extractor.extract(*args).as_dict()
 
 
 # --------------------------------------------------------------------------- #
-# Rubrics (Req 1.9)
+# Rubrics
 # --------------------------------------------------------------------------- #
 def test_authority_rubric_reads_the_source_scheme():
     """Authority comes from the ``source_ref`` scheme, blank means unattributed."""
@@ -192,7 +192,7 @@ def test_authority_rubric_reads_the_source_scheme():
 
 
 def test_explicit_context_overrides_the_rubric():
-    """A corpus case can pin rubric values (Req 1.9)."""
+    """A corpus case can pin rubric values."""
     rubric = Rubric()
     context = WriteContext(authority=0.42, consequence=0.11, reversibility=0.99)
     assert rubric.authority(_candidate(), context) == pytest.approx(0.42)
@@ -222,7 +222,7 @@ def test_deletion_intent_is_treated_as_irreversible():
 
 
 # --------------------------------------------------------------------------- #
-# Escalation score and monotonicity (Req 2.x)
+# Escalation score and monotonicity
 # --------------------------------------------------------------------------- #
 def test_score_matches_equation_three():
     """``z(u)`` is computed exactly as eq. (3) specifies."""
@@ -265,7 +265,7 @@ def test_score_matches_equation_three():
 
 @pytest.mark.parametrize("component", ["f_e", "f_s", "f_t", "f_v", "f_c"])
 def test_risk_is_nondecreasing_in_each_failure_component(component: str):
-    """``∂r/∂f_i ≥ 0`` (Req 2.5)."""
+    """``∂r/∂f_i ≥ 0``."""
     policy = EscalationPolicy()
     low = RiskFeatures(**{component: PASS})
     high = RiskFeatures(**{component: FAIL})
@@ -273,7 +273,7 @@ def test_risk_is_nondecreasing_in_each_failure_component(component: str):
 
 
 def test_risk_is_nondecreasing_in_k_and_consequence():
-    """``∂r/∂k ≥ 0`` and ``∂r/∂q ≥ 0`` (Req 2.5)."""
+    """``∂r/∂k ≥ 0`` and ``∂r/∂q ≥ 0``."""
     policy = EscalationPolicy()
     one = RiskFeatures(f_e=FAIL)
     three = RiskFeatures(f_e=FAIL, f_s=FAIL, f_c=FAIL)
@@ -284,7 +284,7 @@ def test_risk_is_nondecreasing_in_k_and_consequence():
 
 
 def test_risk_is_nonincreasing_in_reversibility_and_authority():
-    """``∂r/∂v ≤ 0`` and ``∂r/∂a ≤ 0`` — the displayed discounts (Req 2.3, 2.5)."""
+    """``∂r/∂v ≤ 0`` and ``∂r/∂a ≤ 0`` — the displayed discounts."""
     policy = EscalationPolicy()
     assert policy.risk(RiskFeatures(reversibility=0.95)) <= policy.risk(
         RiskFeatures(reversibility=0.05)
@@ -357,7 +357,7 @@ def test_projection_enforces_the_admissible_set():
 
 
 # --------------------------------------------------------------------------- #
-# Fitting (Req 2.2, 2.4)
+# Fitting
 # --------------------------------------------------------------------------- #
 def _separable_samples() -> list[TrainingSample]:
     """Clean samples where escalation-worthy cases carry failures."""
@@ -393,7 +393,7 @@ def test_fit_separates_labels_and_stays_monotonic():
 
 
 def test_fit_is_deterministic():
-    """Identical inputs give bit-identical parameters (Req 2.4)."""
+    """Identical inputs give bit-identical parameters."""
     samples = _separable_samples()
     a = fit_policy(samples, iterations=400)
     b = fit_policy(samples, iterations=400)
@@ -408,7 +408,7 @@ def test_fit_on_empty_input_returns_the_prior():
 
 
 def test_build_training_samples_labels_review_and_reject_positive():
-    """``y = 1`` when autonomous execution would be wrong (Req 2.2)."""
+    """``y = 1`` when autonomous execution would be wrong."""
     cases = [
         RoutingCase(RiskFeatures(), RouteGuards(), Tier.accept),
         RoutingCase(RiskFeatures(), RouteGuards(), Tier.supersede),
@@ -420,7 +420,7 @@ def test_build_training_samples_labels_review_and_reject_positive():
 
 
 # --------------------------------------------------------------------------- #
-# Threshold selection (Req 3.x)
+# Threshold selection
 # --------------------------------------------------------------------------- #
 def _threshold_cases() -> list[RoutingCase]:
     clean = RiskFeatures(reversibility=0.9, authority=0.95, consequence=0.2)
@@ -436,7 +436,7 @@ def _threshold_cases() -> list[RoutingCase]:
 
 
 def test_thresholds_are_ordered_and_respect_the_mcr_ceiling():
-    """Selection returns ``τ_l < τ_h`` under the ≤2% MCR constraint (Req 3.1, 3.2)."""
+    """Selection returns ``τ_l < τ_h`` under the ≤2% MCR constraint."""
     cases = _threshold_cases()
     fitted = fit_policy(build_training_samples(cases), iterations=1500)
     selection = select_thresholds(cases, fitted.params, grid=0.05)
@@ -446,7 +446,7 @@ def test_thresholds_are_ordered_and_respect_the_mcr_ceiling():
 
 
 def test_infeasible_selection_is_reported_not_hidden():
-    """When the constraint cannot be met, ``feasible=False`` is surfaced (Req 3.3)."""
+    """When the constraint cannot be met, ``feasible=False`` is surfaced."""
     # Every case is consequential and review-worthy but looks perfectly clean, so
     # no threshold can escalate them without escalating everything.
     identical = RiskFeatures(reversibility=1.0, authority=1.0)
@@ -470,7 +470,7 @@ def test_selection_on_empty_input_is_infeasible():
 
 
 # --------------------------------------------------------------------------- #
-# Routing rule (Req 4.x)
+# Routing rule
 # --------------------------------------------------------------------------- #
 def test_prohibited_write_always_rejects():
     """``g(u)=1 -> reject``, ahead of every other clause (eq. 6)."""
@@ -481,7 +481,7 @@ def test_prohibited_write_always_rejects():
 
 
 def test_mandatory_failure_never_accepts():
-    """``m(u)=1`` blocks the accept branch at every threshold (Req 4.3)."""
+    """``m(u)=1`` blocks the accept branch at every threshold."""
     for tau_l in (0.01, 0.5, 0.99):
         policy = EscalationPolicy(PolicyParameters(tau_l=tau_l, tau_h=1.0))
         tier, _rule, _r = policy.route(RiskFeatures(), RouteGuards(m=True))
@@ -537,7 +537,7 @@ def test_everything_else_escalates():
 
 
 def test_guards_flag_mandatory_and_prohibited_checks():
-    """``compute_guards`` reads OCMR's verdict for ``g`` and ``m`` (Req 4.2, 4.3)."""
+    """``compute_guards`` reads OCMR's verdict for ``g`` and ``m``."""
     features = RiskFeatures()
     for check in sorted(MANDATORY_CHECKS):
         guards = compute_guards(
@@ -554,7 +554,7 @@ def test_guards_flag_mandatory_and_prohibited_checks():
 
 
 def test_unattributed_write_raises_the_prohibited_guard():
-    """A blank ``source_ref`` is prohibited (Req 4.2)."""
+    """A blank ``source_ref`` is prohibited."""
     guards = compute_guards(
         _candidate(source_ref=""), ValidationResult(valid=True), RiskFeatures()
     )
@@ -563,7 +563,7 @@ def test_unattributed_write_raises_the_prohibited_guard():
 
 
 def test_h_guard_requires_authority_temporal_resolution_and_recoverability():
-    """``h(u)`` needs all three conditions of §3.3 (Req 4.4)."""
+    """``h(u)`` needs all three conditions of §3.3."""
     base = dict(
         f_t=PASS, authority=0.95, incumbent_ids=("a1",), incumbent_recoverable=True
     )
@@ -590,7 +590,7 @@ def test_h_guard_requires_authority_temporal_resolution_and_recoverability():
 
 
 def test_routing_is_deterministic():
-    """The same features and guards always yield the same tier (Req 4.1)."""
+    """The same features and guards always yield the same tier."""
     policy = EscalationPolicy()
     features = RiskFeatures(f_c=FAIL, consequence=0.7)
     guards = RouteGuards()

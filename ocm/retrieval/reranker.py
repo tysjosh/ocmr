@@ -1,9 +1,9 @@
-"""Constraint-aware retrieval ``Reranker`` (R3) (Req 17.1, 17.2, 17.3).
+"""Constraint-aware retrieval ``Reranker`` (R3).
 
 The Reranker is the third stage of the retrieval pipeline (R0→R1→R2→**R3**→R4).
 It merges the structural hits from the Symbolic Retriever (R1) with the dense
 hits from the Semantic Retriever (R2) into a single, deduplicated candidate set
-and assigns each candidate one scalar score (Req 17.1)::
+and assigns each candidate one scalar score::
 
     score = alpha * semantic_similarity
           + beta  * graph_relevance
@@ -14,7 +14,7 @@ and assigns each candidate one scalar score (Req 17.1)::
 
 The weights come from :class:`ocm.core.config.RerankWeights`; when no weights are
 supplied the defaults (``alpha=0.40, beta=0.25, gamma=0.15, delta=0.10,
-eta=0.05, lambda=0.30``) are used (Req 17.2).
+eta=0.05, lambda=0.30``) are used.
 
 Signal sourcing
 ---------------
@@ -30,7 +30,7 @@ Each signal is resolved with a clear precedence so callers stay flexible:
 
 Special rules baked in:
 
-- **Symbolic exact match ⇒ ``semantic_similarity = 1.0``** (Req 15.4) and a high
+- **Symbolic exact match ⇒ ``semantic_similarity = 1.0``** and a high
   ``graph_relevance`` (``1.0``), because the item answers the structural query
   directly. A non-exact symbolic hit still gets a strong (decaying) graph
   signal; a semantic-only hit gets ``graph_relevance = 0.0`` unless overridden.
@@ -39,7 +39,7 @@ Special rules baked in:
   truthy ``contradicted`` flag, or when its ``status`` is ``quarantined``. A
   graded penalty can be supplied via ``metadata[...]["contradiction_penalty"]``.
 
-Contradiction monotonicity (Req 17.3)
+Contradiction monotonicity
 -------------------------------------
 Because ``lambda > 0`` and a contradicted item has ``contradiction_penalty > 0``
 while an otherwise-identical non-contradicted item has
@@ -69,7 +69,7 @@ MEMORY_TYPE_ASSERTION = "assertion"
 #: Status value that, on its own, marks an item as contradicted for scoring.
 STATUS_QUARANTINED = "quarantined"
 
-#: Default ``graph_relevance`` for an exact symbolic match (Req 15.4).
+#: Default ``graph_relevance`` for an exact symbolic match.
 EXACT_MATCH_GRAPH_RELEVANCE = 1.0
 
 #: Default ``graph_relevance`` for a non-exact symbolic hit (graph-connected but
@@ -133,7 +133,7 @@ class Reranker:
 
         Args:
             weights: Default weights for :meth:`rerank`. When ``None`` the
-                :class:`RerankWeights` defaults are used (Req 17.2). A per-call
+                :class:`RerankWeights` defaults are used. A per-call
                 ``weights`` argument overrides this.
             recency_window_days: Window used to normalize ``created_at`` into a
                 ``recency`` signal in ``[0, 1]`` when no explicit recency is
@@ -166,7 +166,7 @@ class Reranker:
                 memory id, ``memory_type``, ``status``, and a cosine
                 ``similarity`` in ``[0, 1]``.
             weights: Per-call weights override. When ``None`` the instance
-                weights (or :class:`RerankWeights` defaults) are used (Req 17.2).
+                weights (or :class:`RerankWeights` defaults) are used.
             contradicted_ids: Memory ids known to be contradicted (e.g. from W7
                 / ``CONTRADICTS`` edges). These receive a contradiction penalty.
             metadata: Optional per-``memory_id`` map of signal overrides. Any of
@@ -222,7 +222,7 @@ class Reranker:
 
     @staticmethod
     def score_components(components: Mapping[str, float], weights: RerankWeights) -> float:
-        """Apply ``weights`` to a raw-signal ``components`` mapping (Req 17.1).
+        """Apply ``weights`` to a raw-signal ``components`` mapping.
 
         Exposed as a small pure helper so the monotonicity property test can
         score two component sets that differ only in ``contradiction_penalty``.
@@ -234,7 +234,7 @@ class Reranker:
     # ------------------------------------------------------------------ #
     @staticmethod
     def _score(components: Mapping[str, float], weights: RerankWeights) -> float:
-        """Weighted sum of the raw signals (Req 17.1)."""
+        """Weighted sum of the raw signals."""
         return (
             weights.alpha * components["semantic_similarity"]
             + weights.beta * components["graph_relevance"]
@@ -253,8 +253,7 @@ class Reranker:
 
         Symbolic hits are folded first so a later semantic hit for the same id
         fills in similarity/text without dropping the symbolic ``exact_match``
-        flag. An exact symbolic match forces ``semantic_similarity = 1.0`` (Req
-        15.4) regardless of any semantic cosine score.
+        flag. An exact symbolic match forces ``semantic_similarity = 1.0`` regardless of any semantic cosine score.
         """
         merged: dict[str, dict[str, Any]] = {}
 
@@ -310,7 +309,7 @@ class Reranker:
         """
         exact_match = bool(record.get("exact_match", False))
 
-        # --- semantic_similarity (Req 15.4 forces 1.0 on exact match) ----
+        # --- semantic_similarity (forces 1.0 on exact match) ----
         if exact_match:
             semantic_similarity = 1.0
         elif "semantic_similarity" in item_meta:
@@ -347,7 +346,7 @@ class Reranker:
             created_at = item_meta.get("created_at", record.get("created_at"))
             recency = self._recency(created_at, reference_now)
 
-        # --- contradiction_penalty (Req 17.3) -----------------------------
+        # --- contradiction_penalty -----------------------------
         if "contradiction_penalty" in item_meta:
             contradiction_penalty = float(item_meta["contradiction_penalty"])
         elif (

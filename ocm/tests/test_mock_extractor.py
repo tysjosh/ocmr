@@ -4,11 +4,11 @@ These tests pin the behaviors W1 relies on and that downstream stages
 (normalizer, resolver, write pipeline, Task T1 integration test) depend on:
 
 * The extractor satisfies the :class:`Extractor` protocol and returns a
-  Pydantic-validated :class:`ExtractionResult` (Req 3.1, 3.2).
-* Identical input + identical config yields byte-identical output (Req 3.5).
+  Pydantic-validated :class:`ExtractionResult`.
+* Identical input + identical config yields byte-identical output.
 * The Task T1 scenario sentences extract the expected entities, events, and
   relations (supports the 13.9 integration test).
-* It runs offline with no API key / network (Req 3.7) — guaranteed by having
+* It runs offline with no API key / network — guaranteed by having
   no network imports and no external calls.
 """
 

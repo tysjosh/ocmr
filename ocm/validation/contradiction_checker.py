@@ -5,31 +5,29 @@ the accepted memory held in the :class:`~ocm.memory.graph_store.GraphStore` and
 returns a :class:`~ocm.memory.contracts.ContradictionResult`. Constraint C7
 (``ocm/validation/constraints.py``) delegates to this checker rather than
 re-implementing detection, so contradiction logic lives in exactly one place
-(Req 8.8, Req 9.7).
 
-Detected contradiction categories (Req 9.1-9.6):
+Detected contradiction categories:
 
-- **Explicit ``CONTRADICTS`` links (Req 9.4).** An accepted ``CONTRADICTS`` edge
+- **Explicit ``CONTRADICTS`` links.** An accepted ``CONTRADICTS`` edge
   incident to the candidate's subject or object signals a curated conflict.
-- **Single-valued / exact-predicate conflicts (Req 9.2, 9.3, 9.5).** For a
+- **Single-valued / exact-predicate conflicts.** For a
   relation whose cardinality permits only one target (``m:1`` such as
   ``ASSIGNED_TO``, or ``1:1``), an existing accepted assertion on the same
   subject (and, for ``1:1``, the same object) pointing at a *different* target is
   a conflict. Re-asserting the *same* triple is an idempotent no-op. A
   status-bearing single-valued relation surfaces a status conflict the same way
-  (Req 9.3).
-- **Temporal overlap conflicts (Req 9.6).** When the conflicting single-valued
+- **Temporal overlap conflicts.** When the conflicting single-valued
   assertions both carry validity windows (``valid_from`` / ``valid_to``) that
   *overlap*, the conflict is classified ``temporal``; non-overlapping windows are
   a valid historical succession and are **not** a contradiction.
 
-Severity / hardness grading (Req 9.1): a non-temporal contradiction where both
+Severity / hardness grading: a non-temporal contradiction where both
 the candidate and the conflicting accepted assertion exceed the high-confidence
 threshold (``settings.contradiction_high_confidence``, default 0.8) is a **hard**
 contradiction (``severity=high``); otherwise it is a **soft** warning
 (``severity=low``) that downstream gates may permit. The recommended action is
 ``supersede`` for a high-confidence ``correction``, ``quarantine`` for any other
-high-confidence conflict, and ``accept`` for a soft warning (Req 9.7).
+high-confidence conflict, and ``accept`` for a soft warning.
 
 Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 8.8.
 """
@@ -110,7 +108,7 @@ class ContradictionChecker:
     def _detect_explicit_contradicts(
         self, candidate: CandidateAssertion, graph: GraphStore
     ) -> tuple[list[str], float, str] | None:
-        """Find an accepted ``CONTRADICTS`` edge incident to the candidate (Req 9.4).
+        """Find an accepted ``CONTRADICTS`` edge incident to the candidate.
 
         Returns ``(conflicting_assertion_ids, counterpart_confidence, reason)`` or
         ``None``. The candidate itself asserting ``CONTRADICTS`` is not a conflict.
@@ -143,11 +141,11 @@ class ContradictionChecker:
     def _detect_single_valued(
         self, candidate: CandidateAssertion, graph: GraphStore
     ) -> tuple[list[str], float, bool] | None:
-        """Find single-valued / exact-predicate conflicts (Req 9.2, 9.3, 9.5, 9.6).
+        """Find single-valued / exact-predicate conflicts.
 
         Returns ``(conflicting_assertion_ids, counterpart_confidence, is_temporal)``
         or ``None``. ``is_temporal`` is ``True`` when every conflicting assertion
-        carries a validity window that overlaps the candidate's (Req 9.6).
+        carries a validity window that overlaps the candidate's.
         """
         try:
             sig = get_relation_signature(candidate.predicate)
@@ -206,7 +204,7 @@ class ContradictionChecker:
         Returns ``(overlaps, both_dated)``. When either side lacks a window the
         conflict is treated as overlapping (``overlaps=True``) but not temporal
         (``both_dated=False``). When both carry windows, ``overlaps`` reflects a
-        true interval intersection and ``both_dated`` is ``True`` (Req 9.6).
+        true interval intersection and ``both_dated`` is ``True``.
         """
         c_from, c_to = candidate.valid_from, candidate.valid_to
         e_from = ContradictionChecker._as_dt(edge_data.get("valid_from"))
@@ -264,7 +262,7 @@ class ContradictionChecker:
         *,
         is_temporal: bool,
     ) -> ContradictionResult:
-        """Grade a detected conflict into a :class:`ContradictionResult` (Req 9.1, 9.7)."""
+        """Grade a detected conflict into a :class:`ContradictionResult`."""
         conflict_ids, counterpart_conf, reason = detected
         candidate_high = float(candidate.confidence) > threshold
         counterpart_high = counterpart_conf > threshold

@@ -1,4 +1,4 @@
-"""Entry-point script: build the seeded benchmark JSONL (Req 23, 28.9).
+"""Entry-point script: build the seeded benchmark JSONL.
 
 Generates the reproducible benchmark dataset via
 :func:`ocm.evaluation.benchmark.generate_jsonl` and writes it to a JSONL file,

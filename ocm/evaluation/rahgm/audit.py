@@ -33,7 +33,6 @@ Unmatched reasons are counted as ``other``.
 Two rubric-based annotator simulators stand in for the paper's two human
 annotators, with the rule set adjudicating; Krippendorff's alpha is reported before
 adjudication and is labelled as rubric determinacy, not human agreement
-(Req 9.8, 14.1).
 
 Requirements: 13.1, 9.8, 14.1.
 """

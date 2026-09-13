@@ -2,7 +2,6 @@
 
 Feature: ontology-constrained-memory, Property 11.
 
-Validates: Requirements 8.5
 
 Constraint C4 (``c4_done_task_completion_event`` / ``ConstraintValidator``)
 enforces the write-time invariant that a Task may only become *accepted* with

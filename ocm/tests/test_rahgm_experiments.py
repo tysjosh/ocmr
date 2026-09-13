@@ -1,6 +1,6 @@
 """RAHGM experiment integration: replay, ablation, audit, and honest reporting.
 
-Covers Req 10.x (conditions and ordering), 13.x (the experiments), and 14.x (the
+Covers (conditions and ordering), 13.x (the experiments), and 14.x (the
 honest-reporting contract). These run on a reduced corpus so the whole suite stays
 fast; the paper-scale run is driven by ``python -m ocm.evaluation.rahgm.run_all``.
 """
@@ -68,7 +68,7 @@ def developed(small_corpus):
 # Policy development
 # --------------------------------------------------------------------------- #
 def test_policy_is_fitted_on_training_and_tuned_on_development(developed):
-    """Fitting uses training scenarios; thresholds use development (Req 2.2, 3.1)."""
+    """Fitting uses training scenarios; thresholds use development."""
     assert developed.n_train_cases > 0
     assert developed.n_dev_cases > 0
     assert developed.fit.monotonic
@@ -76,7 +76,7 @@ def test_policy_is_fitted_on_training_and_tuned_on_development(developed):
 
 
 def test_routing_cases_carry_real_ocmr_verdicts(small_corpus):
-    """Features come from the real OCMR checks, not a reimplementation (Req 1.x)."""
+    """Features come from the real OCMR checks, not a reimplementation."""
     cases = collect_routing_cases(small_corpus.partition(Partition.dev))
     assert len(cases) == len(small_corpus.writes_in(Partition.dev))
     # Malformed writes must raise the prohibited guard via OCMR's W5/C9 verdict.
@@ -99,7 +99,7 @@ def test_ocmr_verdict_runs_w5_then_w6(small_corpus):
 
 
 # --------------------------------------------------------------------------- #
-# Experiment 1 (Req 10.x, 13.2)
+# Experiment 1
 # --------------------------------------------------------------------------- #
 @pytest.fixture(scope="module")
 def experiment1(small_corpus, developed):
@@ -108,14 +108,14 @@ def experiment1(small_corpus, developed):
 
 
 def test_all_five_conditions_are_reported(experiment1):
-    """Table 3 has one row per condition (Req 10.1)."""
+    """Table 3 has one row per condition."""
     assert set(experiment1["conditions"]) == {c.value for c in Condition}
     for name, entry in experiment1["conditions"].items():
         assert entry["label"] == CONDITION_LABELS[Condition(name)]
 
 
 def test_conditions_see_identical_writes(experiment1):
-    """Every condition receives the same candidate writes in the same order (Req 10.2, 10.3)."""
+    """Every condition receives the same candidate writes in the same order."""
     results = experiment1["_results"]
     reference = [r.write_id for r in results["autonomous_ocmr"].records]
     for name, result in results.items():
@@ -123,7 +123,7 @@ def test_conditions_see_identical_writes(experiment1):
 
 
 def test_autonomous_ocmr_never_escalates(experiment1):
-    """C2 presents nothing to a reviewer (Req 10.1)."""
+    """C2 presents nothing to a reviewer."""
     metrics = experiment1["conditions"]["autonomous_ocmr"]["metrics"]
     assert metrics["review_rate"] == 0.0
     assert metrics["r100"] == 0.0
@@ -161,13 +161,13 @@ def test_rahgm_eliminates_the_false_quarantines_ocmr_leaves(experiment1):
 
 
 def test_rahgm_does_not_regress_durable_integrity(experiment1):
-    """``DVR(C5) − DVR(C2) ≤ 0.005`` (Req 12.5)."""
+    """``DVR(C5) − DVR(C2) ≤ 0.005``."""
     criteria = experiment1["success_criteria"]
     assert criteria["dvr_within_tolerance"]
 
 
 def test_success_criteria_are_reported_with_interpretation(experiment1):
-    """The criteria block explains its own verdict (Req 12.5, 14.1)."""
+    """The criteria block explains its own verdict."""
     criteria = experiment1["success_criteria"]
     assert set(criteria) >= {
         "met",
@@ -204,12 +204,12 @@ def test_tightening_the_ceiling_costs_review_demand(experiment1):
 
 
 def test_r100_is_labelled_as_modelled(experiment1):
-    """Reviewer minutes must be disclosed as modelled (Req 11.4, 14.1)."""
+    """Reviewer minutes must be disclosed as modelled."""
     assert experiment1["review_cost_model"]["modelled"] is True
 
 
 def test_write_order_is_preserved_within_a_scenario(small_corpus, developed):
-    """A transition at ``t`` is visible to ``t+1`` (Req 10.3)."""
+    """A transition at ``t`` is visible to ``t+1``."""
     scenario = small_corpus.partition(Partition.test)[0]
     writes_by_id = {w.write_id: w for w in scenario.writes}
     replayer = ScenarioReplayer(
@@ -235,7 +235,7 @@ def test_durable_violations_include_single_valued_contradictions(small_corpus, d
 
 
 # --------------------------------------------------------------------------- #
-# Ablation (Req 13.2)
+# Ablation
 # --------------------------------------------------------------------------- #
 def test_ablation_reports_every_variant(small_corpus, developed):
     """Table 4 covers the full, quarantine-only, scalar, and leave-one-out variants."""
@@ -302,7 +302,7 @@ def test_scalar_threshold_is_worse_than_the_failure_pattern(small_corpus, develo
 
 
 # --------------------------------------------------------------------------- #
-# Experiment 2 (Req 13.3, 14.1, 14.2)
+# Experiment 2
 # --------------------------------------------------------------------------- #
 @pytest.fixture(scope="module")
 def experiment2(small_corpus, developed):
@@ -318,7 +318,7 @@ def experiment2(small_corpus, developed):
 
 
 def test_experiment2_is_labelled_simulated(experiment2):
-    """The simulation must be disclosed, not implied (Req 14.1, 14.2)."""
+    """The simulation must be disclosed, not implied."""
     assert experiment2["simulated"] is True
     assert "simulated" in experiment2["disclosure"].lower()
     assert "not" in experiment2["disclosure"].lower()
@@ -331,13 +331,13 @@ def test_experiment2_covers_only_human_facing_conditions(experiment2):
 
 
 def test_experiment2_reports_every_explanation_depth(experiment2):
-    """All three depths are exercised by the Latin-square schedule (Req 6.3)."""
+    """All three depths are exercised by the Latin-square schedule."""
     for depth in ("minimal", "evidence", "full"):
         assert experiment2["by_depth"][depth]["n_items"] > 0
 
 
 def test_experiment2_reports_calibration(experiment2):
-    """Brier and ECE are reported per condition (Req 11.3)."""
+    """Brier and ECE are reported per condition."""
     for entry in experiment2["by_condition"].values():
         if entry.get("n_items"):
             assert "ece" in entry and "brier" in entry
@@ -351,7 +351,7 @@ def test_experiment2_reports_complacency(experiment2):
 
 
 # --------------------------------------------------------------------------- #
-# Experiment 3 (Req 13.4)
+# Experiment 3
 # --------------------------------------------------------------------------- #
 def test_feedback_streams_have_the_intended_character(small_corpus):
     """Adversarial feedback suppresses escalation on consequential cases."""
@@ -368,7 +368,7 @@ def test_feedback_streams_have_the_intended_character(small_corpus):
 
 
 def test_experiment3_runs_every_arm_and_stream(small_corpus, developed):
-    """Table 6 covers four policies across four feedback streams (Req 13.4)."""
+    """Table 6 covers four policies across four feedback streams."""
     report = run_experiment3(
         small_corpus, developed=developed, seeds=(1337,), max_blocks=2
     )
@@ -379,7 +379,7 @@ def test_experiment3_runs_every_arm_and_stream(small_corpus, developed):
 
 
 def test_frozen_arm_makes_no_proposals(small_corpus, developed):
-    """Frozen RAHGM never changes parameters (Req 8.5)."""
+    """Frozen RAHGM never changes parameters."""
     report = run_experiment3(
         small_corpus, developed=developed, seeds=(1337,), arms=("frozen",), max_blocks=2
     )
@@ -388,7 +388,7 @@ def test_frozen_arm_makes_no_proposals(small_corpus, developed):
 
 
 def test_gated_adaptation_never_regresses_durable_integrity(small_corpus, developed):
-    """The canary gate forbids any DVR increase (Req 8.1)."""
+    """The canary gate forbids any DVR increase."""
     report = run_experiment3(
         small_corpus,
         developed=developed,
@@ -400,7 +400,7 @@ def test_gated_adaptation_never_regresses_durable_integrity(small_corpus, develo
 
 
 def test_no_arm_disables_a_mandatory_control(small_corpus, developed):
-    """Structural immutability holds under every arm, including unconstrained (Req 7.4)."""
+    """Structural immutability holds under every arm, including unconstrained."""
     report = run_experiment3(
         small_corpus, developed=developed, seeds=(1337,), max_blocks=3
     )
@@ -408,7 +408,7 @@ def test_no_arm_disables_a_mandatory_control(small_corpus, developed):
 
 
 def test_unconstrained_arm_drifts_further_than_the_bounded_one(small_corpus, developed):
-    """The trust region demonstrably restricts movement (Req 7.3)."""
+    """The trust region demonstrably restricts movement."""
     report = run_experiment3(
         small_corpus,
         developed=developed,
@@ -423,10 +423,10 @@ def test_unconstrained_arm_drifts_further_than_the_bounded_one(small_corpus, dev
 
 
 # --------------------------------------------------------------------------- #
-# Experiment 4 (Req 13.5)
+# Experiment 4
 # --------------------------------------------------------------------------- #
 def test_experiment4_reports_downstream_outcomes(small_corpus, experiment1):
-    """Table 7 reports accuracy, unsupported conclusions, and staleness (Req 13.5)."""
+    """Table 7 reports accuracy, unsupported conclusions, and staleness."""
     report = run_experiment4(small_corpus, experiment1=experiment1)
     assert report["table7"]
     for entry in report["table7"]:
@@ -459,7 +459,7 @@ def test_experiment4_breaks_results_out_by_capability(small_corpus, experiment1)
 
 
 # --------------------------------------------------------------------------- #
-# Quarantine audit (Req 13.1)
+# Quarantine audit
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
     ("reason", "cause"),
@@ -472,7 +472,7 @@ def test_experiment4_breaks_results_out_by_capability(small_corpus, experiment1)
     ],
 )
 def test_quarantine_reasons_are_classified_by_the_published_rules(reason, cause):
-    """Cause assignment is a published rule set, not a judgment (Req 13.1)."""
+    """Cause assignment is a published rule set, not a judgment."""
     assigned, _check = classify_reason(reason)
     assert assigned == cause
 
@@ -621,7 +621,7 @@ def test_adaptation_helps_under_label_drift(small_corpus, developed):
 
 
 def test_drift_study_declares_it_is_not_in_the_paper(small_corpus, developed):
-    """Work beyond the paper's design must say so (Req 14.1)."""
+    """Work beyond the paper's design must say so."""
     report = run_drift_study(small_corpus, developed=developed, repeats=2)
     assert report["in_paper"] is False
     assert report["rationale"].strip()
@@ -742,24 +742,24 @@ def test_cascade_records_carry_the_ocmr_verdict(small_corpus, developed):
 
 
 # --------------------------------------------------------------------------- #
-# Honest reporting (Req 14.1, 14.2)
+# Honest reporting
 # --------------------------------------------------------------------------- #
 def test_scope_note_names_every_modelled_component():
-    """The scope note discloses each simulation and model (Req 14.1)."""
+    """The scope note discloses each simulation and model."""
     lowered = SCOPE_NOTE.lower()
     for phrase in ("simulation", "review-cost model", "annotator simulators", "rq2"):
         assert phrase in lowered
 
 
 def test_rendered_report_leads_with_the_scope_note(experiment1, experiment2):
-    """The note appears before any table (Req 14.1)."""
+    """The note appears before any table."""
     text = render_all({"experiment1": experiment1, "experiment2": experiment2})
     assert text.startswith(SCOPE_NOTE)
     assert "SIMULATED ANALYST" in text
 
 
 def test_reports_are_json_serializable(experiment1, experiment2):
-    """Artifacts must round-trip to JSON for machine consumption (Req 13.6)."""
+    """Artifacts must round-trip to JSON for machine consumption."""
     payload = {
         k: v for k, v in experiment1.items() if not k.startswith("_")
     }

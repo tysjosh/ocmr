@@ -1,9 +1,9 @@
-"""Metrics_Reporter — the full evaluation metric suite (Req 24).
+"""Metrics_Reporter — the full evaluation metric suite.
 
 This module turns the per-(baseline, example, question) result records produced
 by the Baseline_Runner (``ocm/evaluation/runner.py``) into the four metric
 families the research claim is assessed on, plus deltas of every baseline
-against **B0** (Req 24.5).
+against **B0**.
 
 Result record contract
 -----------------------
@@ -24,7 +24,7 @@ and the reporter can evolve independently. The fields the reporter consumes
 * ``expected_supporting_ids`` — gold supporting memory ids (or ``None``).
 * ``score`` / ``latency_ms`` — runner-provided score and latency.
 
-Some Req 24.3 write-time metrics need write-side signals that are not present in
+Some write-time metrics need write-side signals that are not present in
 question-level records. Those are computed from optional fields when the runner
 supplies them (``expected_invalid_write`` / ``invalid_write_detected``,
 ``quarantined`` / ``expected_quarantine``, ``entity_resolution_correct``) and
@@ -54,7 +54,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
-# The canonical comparison baseline (Req 24.5).
+# The canonical comparison baseline.
 B0 = "B0"
 
 # Category whose per-record correctness proxies long-horizon plan success.
@@ -186,10 +186,10 @@ def _ratio(numerator: float, denominator: float) -> Optional[float]:
 # Metrics_Reporter
 # --------------------------------------------------------------------------- #
 class MetricsReporter:
-    """Computes the Req 24 metric suite and B0 comparisons over result records."""
+    """Computes the metric suite and B0 comparisons over result records."""
 
     def compute(self, results: Iterable[Any]) -> dict[str, Any]:
-        """Compute all metrics grouped by ``baseline_name`` (Req 24.1–24.5).
+        """Compute all metrics grouped by ``baseline_name`` (–24.5).
 
         Args:
             results: An iterable of per-question result records (dicts or typed
@@ -246,7 +246,7 @@ class MetricsReporter:
             "counts": counts,
         }
 
-    # -- Req 24.1: retrieval -------------------------------------------- #
+    #: retrieval -------------------------------------------- #
     def _retrieval_metrics(self, records: list[Any], notes: list[str]) -> dict[str, Any]:
         scored = [r for r in records if _as_list(_get(r, "expected_supporting_ids", None))]
         if not scored:
@@ -284,7 +284,7 @@ class MetricsReporter:
             "supporting_evidence_recall": _mean(recalls),
         }
 
-    # -- Req 24.2: answer ----------------------------------------------- #
+    #: answer ----------------------------------------------- #
     def _answer_metrics(self, records: list[Any]) -> dict[str, Any]:
         total = len(records)
         answered = sum(1 for r in records if _has_answer(r))
@@ -347,7 +347,7 @@ class MetricsReporter:
             "brier_score": brier,
         }
 
-    # -- Req 24.3: write-time ------------------------------------------- #
+    #: write-time ------------------------------------------- #
     def _write_time_metrics(self, records: list[Any], notes: list[str]) -> dict[str, Any]:
         # Contradiction detection precision/recall treat a surfaced conflict as
         # the positive prediction and expected_conflict as the gold label.
@@ -452,7 +452,7 @@ class MetricsReporter:
         false_flags = sum(1 for r in negatives if _get(r, flag, False))
         return false_flags / len(negatives)
 
-    # -- Req 24.4: agent ------------------------------------------------ #
+    #: agent ------------------------------------------------ #
     def _agent_metrics(self, records: list[Any]) -> dict[str, Any]:
         # Long-horizon plan success: correctness proxy on the multi-step
         # planning category (entity-consistency across turns).
@@ -464,7 +464,7 @@ class MetricsReporter:
         # Overall answer-quality proxy (per-baseline correctness rate).
         answer_quality = _mean([1.0 if _is_answer_correct(r) else 0.0 for r in records])
 
-        # Latency / token means feed the B0 overhead deltas (Req 24.5).
+        # Latency / token means feed the B0 overhead deltas.
         latencies = [
             float(_get(r, "latency_ms", 0.0) or 0.0)
             for r in records
@@ -489,7 +489,7 @@ class MetricsReporter:
         }
 
     # ------------------------------------------------------------------ #
-    # Req 24.5: comparison vs B0
+    #: comparison vs B0
     # ------------------------------------------------------------------ #
     def _compare_to_b0(
         self, report: dict[str, Any], b0_present: bool, notes: list[str]
@@ -518,7 +518,7 @@ class MetricsReporter:
         data = self.compute(results)
         baselines = [b for b in data["_meta"]["baselines"] if b in data]
         lines: list[str] = []
-        lines.append("Metrics_Reporter summary (Req 24)")
+        lines.append("Metrics_Reporter summary")
         lines.append(f"  records: {data['_meta']['total_records']}  baselines: {', '.join(baselines) or '-'}")
         lines.append("")
 

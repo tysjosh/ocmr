@@ -1,8 +1,8 @@
 """Benchmark reproducibility, thresholds, anchors, and a metric cross-check.
 
-This module focuses on the Benchmark_Generator contract (Req 23.3, 23.4, 23.5)
+This module focuses on the Benchmark_Generator contract
 plus a small, focused cross-check that the Metrics_Reporter computes retrieval
-hit@k and a B0 comparison over benchmark-shaped result records (Req 24.1, 24.5).
+hit@k and a B0 comparison over benchmark-shaped result records.
 
 It deliberately does NOT re-test the full metric suite — that lives in
 ``test_metrics_reporter.py``. Here we only confirm the metrics layer composes
@@ -24,7 +24,7 @@ from ocm.evaluation.benchmark import (
 )
 from ocm.evaluation.metrics import MetricsReporter
 
-# The six curated anchors required by Req 23.4.
+# The six curated anchors required by.
 EXPECTED_ANCHOR_IDS = {
     "anchor-task-t1-conflict",
     "anchor-joseph-pharaoh",
@@ -36,10 +36,10 @@ EXPECTED_ANCHOR_IDS = {
 
 
 # --------------------------------------------------------------------------- #
-# Reproducibility (Req 23.5)
+# Reproducibility
 # --------------------------------------------------------------------------- #
 def test_generate_is_reproducible_for_fixed_seed():
-    """Two runs at the fixed seed produce identical examples (Req 23.5)."""
+    """Two runs at the fixed seed produce identical examples."""
     first = BenchmarkGenerator(seed=1337).generate()
     second = BenchmarkGenerator(seed=1337).generate()
 
@@ -50,7 +50,7 @@ def test_generate_is_reproducible_for_fixed_seed():
 
 
 def test_default_seed_matches_explicit_seed():
-    """The default constructor seed equals the documented DEFAULT_SEED (Req 23.5)."""
+    """The default constructor seed equals the documented DEFAULT_SEED."""
     assert DEFAULT_SEED == 1337
     default_run = [ex.model_dump() for ex in BenchmarkGenerator().generate()]
     explicit_run = [ex.model_dump() for ex in BenchmarkGenerator(seed=DEFAULT_SEED).generate()]
@@ -58,7 +58,7 @@ def test_default_seed_matches_explicit_seed():
 
 
 def test_different_seed_changes_generated_examples():
-    """A different seed perturbs the generated (non-anchor) examples (Req 23.5)."""
+    """A different seed perturbs the generated (non-anchor) examples."""
     base = BenchmarkGenerator(seed=1337).generate()
     other = BenchmarkGenerator(seed=2024).generate()
     # Anchors are hand-authored and seed-independent, so compare the generated
@@ -69,7 +69,7 @@ def test_different_seed_changes_generated_examples():
 
 
 def test_write_jsonl_is_byte_identical_across_runs(tmp_path: Path):
-    """Writing the seeded benchmark twice yields byte-identical files (Req 23.5)."""
+    """Writing the seeded benchmark twice yields byte-identical files."""
     examples = BenchmarkGenerator(seed=1337).generate()
     path_a = tmp_path / "bench_a.jsonl"
     path_b = tmp_path / "bench_b.jsonl"
@@ -79,7 +79,7 @@ def test_write_jsonl_is_byte_identical_across_runs(tmp_path: Path):
 
 
 def test_generate_jsonl_round_trips_to_byte_identical_file(tmp_path: Path):
-    """generate_jsonl twice at the same seed is byte-identical (Req 23.5)."""
+    """generate_jsonl twice at the same seed is byte-identical."""
     path_a = tmp_path / "gen_a.jsonl"
     path_b = tmp_path / "gen_b.jsonl"
     returned = generate_jsonl(path_a, seed=1337)
@@ -90,10 +90,10 @@ def test_generate_jsonl_round_trips_to_byte_identical_file(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------- #
-# Category / count thresholds (Req 23.3)
+# Category / count thresholds
 # --------------------------------------------------------------------------- #
 def test_all_six_categories_present():
-    """Every one of the six required categories appears (Req 23.3, 23.2)."""
+    """Every one of the six required categories appears."""
     examples = BenchmarkGenerator().generate()
     present = {ex.category for ex in examples}
     assert set(CATEGORIES) == present
@@ -101,7 +101,7 @@ def test_all_six_categories_present():
 
 
 def test_at_least_25_examples_per_category():
-    """Each category carries at least 25 examples (Req 23.3)."""
+    """Each category carries at least 25 examples."""
     examples = BenchmarkGenerator().generate()
     counts = Counter(ex.category for ex in examples)
     for category in CATEGORIES:
@@ -111,13 +111,13 @@ def test_at_least_25_examples_per_category():
 
 
 def test_total_at_least_150_examples():
-    """The full dataset has at least 150 examples total (Req 23.3)."""
+    """The full dataset has at least 150 examples total."""
     examples = BenchmarkGenerator().generate()
     assert len(examples) >= 150
 
 
 def test_every_example_has_required_fields():
-    """Each example carries id, category, sessions, and questions (Req 23.1)."""
+    """Each example carries id, category, sessions, and questions."""
     examples = BenchmarkGenerator().generate()
     for ex in examples:
         assert ex.id
@@ -133,10 +133,10 @@ def test_every_example_has_required_fields():
 
 
 # --------------------------------------------------------------------------- #
-# Anchor inclusion (Req 23.4)
+# Anchor inclusion
 # --------------------------------------------------------------------------- #
 def test_all_six_anchors_present():
-    """The six hand-authored anchors are present exactly once each (Req 23.4)."""
+    """The six hand-authored anchors are present exactly once each."""
     examples = BenchmarkGenerator().generate()
     anchor_ids = [ex.id for ex in examples if ex.id.startswith("anchor-")]
     assert set(anchor_ids) == EXPECTED_ANCHOR_IDS
@@ -146,7 +146,7 @@ def test_all_six_anchors_present():
 
 
 def test_anchors_carry_expected_supporting_ids():
-    """Anchor questions provide expected_supporting_ids for retrieval scoring (Req 23.4, 23.6)."""
+    """Anchor questions provide expected_supporting_ids for retrieval scoring."""
     examples = BenchmarkGenerator().generate()
     anchors = [ex for ex in examples if ex.id in EXPECTED_ANCHOR_IDS]
     assert anchors, "no anchors found"
@@ -157,14 +157,14 @@ def test_anchors_carry_expected_supporting_ids():
 
 
 def test_anchor_ids_are_unique_across_full_dataset():
-    """All example ids (anchors + generated) are unique (Req 23.4)."""
+    """All example ids (anchors + generated) are unique."""
     examples = BenchmarkGenerator().generate()
     ids = [ex.id for ex in examples]
     assert len(ids) == len(set(ids))
 
 
 # --------------------------------------------------------------------------- #
-# Metric cross-check over benchmark-shaped records (Req 24.1, 24.5)
+# Metric cross-check over benchmark-shaped records
 # --------------------------------------------------------------------------- #
 def _benchmark_result(**overrides):
     """A minimal benchmark-shaped result record for the metrics cross-check."""
@@ -186,7 +186,7 @@ def _benchmark_result(**overrides):
 
 
 def test_metrics_compute_retrieval_hit_at_k_and_b0_comparison():
-    """A tiny B0/B3 fixture yields retrieval hit@k and a B0 comparison (Req 24.1, 24.5)."""
+    """A tiny B0/B3 fixture yields retrieval hit@k and a B0 comparison."""
     records = [
         # B0 retrieves the supporting id at rank 1 → hit.
         _benchmark_result(baseline_name="B0"),
@@ -214,7 +214,7 @@ def test_metrics_compute_retrieval_hit_at_k_and_b0_comparison():
 
     out = MetricsReporter().compute(records)
 
-    # Req 24.1: retrieval hit@k computed for each baseline.
+    #: retrieval hit@k computed for each baseline.
     for baseline in ("B0", "B3"):
         retrieval = out[baseline]["retrieval"]
         for key in ("hit@1", "hit@3", "hit@5"):
@@ -225,7 +225,7 @@ def test_metrics_compute_retrieval_hit_at_k_and_b0_comparison():
     # B3 hits its single supporting-id question → hit@1 == 1.0.
     assert out["B3"]["retrieval"]["hit@1"] == 1.0
 
-    # Req 24.5: comparisons against B0 are present for the other baseline.
+    #: comparisons against B0 are present for the other baseline.
     assert out["_meta"]["b0_present"] is True
     assert "B3" in out["comparisons_vs_B0"]
     assert "hit@1_delta" in out["comparisons_vs_B0"]["B3"]

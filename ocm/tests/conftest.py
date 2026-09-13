@@ -7,7 +7,7 @@ This module makes every later test **hermetic and offline** by default:
 * ``deterministic_settings`` builds the canonical offline configuration
   (``deterministic_test_mode=True``, ``chroma_mode="memory"``,
   ``extractor="mock"``) so IDs are reproducible, the vector index is
-  in-memory, and no network/API key is required (Req 27.2, 27.5, 13.6, 3.4).
+  in-memory, and no network/API key is required.
 
 The configuration module (``ocm.core.config.Settings``) and the dependency
 container (``ocm.core.container.CoreContainer``) are created in later tasks.

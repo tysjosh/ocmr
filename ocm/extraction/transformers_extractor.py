@@ -33,7 +33,7 @@ Robustness
 Local models often wrap JSON in prose or Markdown fences, so the raw generation
 is parsed leniently (the first balanced ``{...}`` object is extracted). A failure
 to produce schema-valid JSON raises :class:`~ocm.extraction.base.ExtractionError`,
-which the write pipeline turns into a recorded validation failure (Req 3.3).
+which the write pipeline turns into a recorded validation failure.
 """
 
 from __future__ import annotations

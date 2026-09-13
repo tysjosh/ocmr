@@ -6,9 +6,9 @@ described in the design's "Write Pipeline Design (W1–W8)" section and exposed 
 extractor_version)``:
 
 * **W1 Extractor** — turn ``text`` into a validated
-  :class:`~ocm.memory.contracts.ExtractionResult` (Req 3.1). An
+  :class:`~ocm.memory.contracts.ExtractionResult`. An
   :class:`~ocm.extraction.base.ExtractionError` rejects the whole input and
-  records a validation failure (Req 3.3) instead of aborting the process.
+  records a validation failure instead of aborting the process.
 * **W2 Normalizer** — canonicalize values.
 * **W3 Entity Resolver** — resolve every extracted entity (and event) to an
   ``entity_id`` and **persist** the newly created/resolved nodes through the
@@ -18,14 +18,14 @@ extractor_version)``:
 * **W5 Schema Validator → W6 Constraint Validator (→ W7 Contradiction Checker)
   → W8 Commit Manager** — run **per candidate, independently**: a failure on one
   candidate routes that candidate to reject/quarantine without aborting the
-  batch (Req 10.6, 10.7).
+  batch.
 
 The run aggregates every committed outcome into ``accepted`` / ``superseded`` /
-``quarantined`` / ``rejected`` lists plus a :class:`~ocm.memory.contracts.WriteSummary`
-(Req 19.2), embeds accepted claims / documents / events via an injectable
-vector-index hook (Req 16.6; accepted assertions are embedded by the Commit
-Manager's own hook, Req 13.5), and records one per-write research log with the
-run counts and latency (Req 25.1).
+``quarantined`` / ``rejected`` lists plus a :class:`~ocm.memory.contracts.WriteSummary`,
+embeds accepted claims / documents / events via an injectable
+vector-index hook (accepted assertions are embedded by the Commit
+Manager's own hook), and records one per-write research log with the
+run counts and latency.
 
 **Entity status reconciliation.** A bare extracted status (e.g. "Task T1 is not
 started") carries no relation, so it is not a candidate assertion. Such status
@@ -34,7 +34,6 @@ a Task set to ``done`` is accepted only when a completion Event exists (C4); any
 other transition is checked against the permitted task-status map (C10). An
 illegal transition (e.g. ``done`` → ``todo`` under ``new_fact``) is quarantined
 as a status contradiction rather than silently overwriting accepted memory
-(Req 10.6).
 
 Requirements: 3.1, 10.1, 10.6, 10.7, 13.5, 16.6, 19.2, 25.1.
 """
@@ -93,7 +92,7 @@ from ocm.validation.schema_validator import SchemaValidator
 
 #: Hook invoked with ``(memory_type, model)`` for each accepted non-assertion
 #: memory item (claim / document / event) so it can be added to the
-#: Vector_Index (Req 16.6). Optional and side-effecting.
+#: Vector_Index. Optional and side-effecting.
 MemoryEmbedHook = Callable[[str, BaseModel], None]
 
 #: String tokens an LLM may emit for an absent value. JSON ``null`` decodes to
@@ -121,7 +120,7 @@ def _coerce_optional_datetime(value: Any) -> Any:
 #: Predicate for the first-class status assertion ``Task -[HAS_STATUS]-> StatusValue``.
 #: Promoting status to an assertion lets a status flip become an
 #: assertion-to-assertion contradiction whose quarantine points at the accepted
-#: status assertion (Req 8.11, 10.6).
+#: status assertion.
 HAS_STATUS = "HAS_STATUS"
 
 #: Confidence assigned to a derived status assertion (high but < 1.0 so a
@@ -144,7 +143,7 @@ logger = logging.getLogger(__name__)
 
 
 class WriteResult(BaseModel):
-    """Aggregate result of a :meth:`WritePipeline.run` call (Req 19.2).
+    """Aggregate result of a :meth:`WritePipeline.run` call.
 
     Carries the four mutually-exclusive outcome lists and the rolled-up
     :class:`WriteSummary`. Entity status conflicts are surfaced in
@@ -214,7 +213,7 @@ class WritePipeline:
             embed_hook: Optional assertion embed hook (forwarded behaviour lives
                 on the commit manager; kept here for reference/wiring parity).
             memory_embed_hook: Optional ``(memory_type, model)`` hook to embed
-                accepted claims / documents / events (Req 16.6).
+                accepted claims / documents / events.
             research_logger: Optional :class:`ResearchLogger` for per-write logs.
             settings: Optional :class:`Settings` (thresholds, determinism).
         """
@@ -250,9 +249,9 @@ class WritePipeline:
         """Run the full W1–W8 pipeline over ``text`` and return a :class:`WriteResult`.
 
         On an extractor failure (W1) the whole input is rejected and a validation
-        failure is recorded (Req 3.3); an empty :class:`WriteResult` is returned.
+        failure is recorded; an empty :class:`WriteResult` is returned.
         Otherwise every relation is processed independently through W4–W8 so one
-        bad candidate never aborts the batch (Req 10.6, 10.7).
+        bad candidate never aborts the batch.
         """
         started = time.perf_counter()
         now = created_at or datetime.now(timezone.utc)
@@ -457,7 +456,7 @@ class WritePipeline:
     def _persist_claims(
         self, extraction: ExtractionResult, source_ref: str, now: datetime
     ) -> None:
-        """Persist every extracted claim and embed it (Req 16.6)."""
+        """Persist every extracted claim and embed it."""
         for claim in extraction.claims:
             text = claim.get("text", "")
             if not text:
@@ -487,7 +486,7 @@ class WritePipeline:
         ref_to_id: dict[str, str],
         ref_to_resolution: dict[str, dict[str, Any]],
     ) -> None:
-        """Persist every extracted document and embed it (Req 16.6)."""
+        """Persist every extracted document and embed it."""
         for doc in extraction.documents:
             path = doc.get("path_or_url") or ""
             title = doc.get("title") or path or ""
@@ -1005,7 +1004,7 @@ class WritePipeline:
         Builds a ``<entity> -[HAS_STATUS]-> StatusValue`` candidate and routes it
         through the Commit Manager exactly like any other assertion, so the
         accepted status becomes durable, retrievable memory and a status flip
-        becomes an assertion-to-assertion contradiction (Req 8.11, 10.6):
+        becomes an assertion-to-assertion contradiction:
 
         * **accept** — the first status for the entity (no prior accepted status).
         * **supersede** — a legal change: the prior HAS_STATUS assertion is
@@ -1101,7 +1100,7 @@ class WritePipeline:
             outcome = self.commit_manager.commit(candidate, vr, created_at=now)
             # A brand-new final Decision that fails C8 was only mirrored into the
             # graph (durable persistence deferred); retract it so no accepted
-            # Decision node lingers (Req 8.9, 10.3). A decision that already had
+            # Decision node lingers. A decision that already had
             # an accepted status (e.g. a prior draft) is left intact — only the
             # failed upgrade is quarantined.
             if etype == "Decision" and current_aid is None:
@@ -1358,7 +1357,7 @@ class WritePipeline:
         return getattr(model, "id", "")
 
     def _embed_memory(self, memory_type: str, model: BaseModel) -> None:
-        """Embed an accepted claim / document / event via the hook (Req 16.6)."""
+        """Embed an accepted claim / document / event via the hook."""
         if self.memory_embed_hook is not None:
             self.memory_embed_hook(memory_type, model)
 
@@ -1390,7 +1389,7 @@ class WritePipeline:
 
     # -- logging / failure handling --------------------------------------
     def _record_failed_extraction(self, source_ref: str, started: float) -> WriteResult:
-        """Build the empty result for a failed extraction and log it (Req 3.3)."""
+        """Build the empty result for a failed extraction and log it."""
         summary = WriteSummary(
             num_candidates=0,
             num_accepted=0,
@@ -1419,7 +1418,7 @@ class WritePipeline:
         latency_ms: float,
         used_llm: bool,
     ) -> None:
-        """Record one per-write research log (Req 25.1)."""
+        """Record one per-write research log."""
         if self.research_logger is None:
             return
         self.research_logger.log_write(

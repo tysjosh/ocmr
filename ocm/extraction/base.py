@@ -3,19 +3,19 @@
 The Extractor is the first write-pipeline stage (W1). It turns unstructured
 input text into a strict-JSON, Pydantic-validated :class:`ExtractionResult`
 holding candidate ``entities``, ``events``, ``claims``, ``documents``,
-``decisions``, and ``relations`` (Req 3.1, 3.2).
+``decisions``, and ``relations``.
 
 Two implementations exist:
 
 * :class:`~ocm.extraction.mock_extractor.MockExtractor` — the deterministic,
-  offline default that requires no API key or network access (Req 3.4, 3.5,
+  offline default that requires no API key or network access (
   3.7).
-* ``LLMExtractor`` — the opt-in OpenAI-compatible backend (Req 3.6).
+* ``LLMExtractor`` — the opt-in OpenAI-compatible backend.
 
 If an extractor cannot produce output that validates into
 :class:`ExtractionResult`, it raises :class:`ExtractionError`; the write
 pipeline turns that into a rejected input plus a recorded validation
-failure (Req 3.3).
+failure.
 
 Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7.
 """
@@ -32,8 +32,8 @@ class ExtractionError(Exception):
 
     The :class:`~ocm.extraction.mock_extractor.MockExtractor` raises this when
     its assembled candidate payload fails Pydantic validation into
-    :class:`ExtractionResult` (Req 3.3). The opt-in LLM extractor raises it on
-    timeouts or non-JSON / schema-invalid responses (Req 3.3, 3.6).
+    :class:`ExtractionResult`. The opt-in LLM extractor raises it on
+    timeouts or non-JSON / schema-invalid responses.
     """
 
 
@@ -42,7 +42,7 @@ class Extractor(Protocol):
     """Structural interface for a W1 extractor.
 
     Implementations expose a stable ``version`` string (recorded as
-    ``extractor_version`` for provenance, Req 12.1) and an :meth:`extract`
+    ``extractor_version`` for provenance) and an :meth:`extract`
     method returning a validated :class:`ExtractionResult`.
     """
 
@@ -59,6 +59,6 @@ class Extractor(Protocol):
             A Pydantic-validated :class:`ExtractionResult`.
 
         Raises:
-            ExtractionError: If valid output cannot be produced (Req 3.3).
+            ExtractionError: If valid output cannot be produced.
         """
         ...

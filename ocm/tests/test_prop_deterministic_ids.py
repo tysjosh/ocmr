@@ -6,15 +6,15 @@ This module validates correctness Property 8 over the *real* Write Pipeline
 (W1-W8) wired end to end with the offline :class:`MockExtractor`, an in-memory
 :class:`SQLiteRepository`, a fresh :class:`GraphStore`, and a deterministic
 :class:`IdGenerator` (``deterministic=True``), under
-``Settings(deterministic_test_mode=True, ...)`` (Req 27.5).
+``Settings(deterministic_test_mode=True,...)``.
 
 Property 8 -- *Deterministic IDs across runs*: under
 ``deterministic_test_mode``, two independent runs over a fixed input batch
 produce **identical** entity ID sequences and identical accepted-assertion ID
-sequences (Req 27.5, 3.5). Because the Mock_Extractor is a pure function of its
-input (Req 3.5) and the IdGenerator derives ids from
+sequences. Because the Mock_Extractor is a pure function of its
+input and the IdGenerator derives ids from
 ``entity_type|normalized_name|source_ref`` plus a per-run counter that is reset
-on each fresh ``IdGenerator`` construction (Req 27.5), running the same batch of
+on each fresh ``IdGenerator`` construction, running the same batch of
 texts through two freshly-built pipeline stacks -- in the same order, with a
 fixed ``created_at`` so timestamps never depend on the wall clock -- must
 reproduce byte-identical id sequences.
@@ -25,7 +25,6 @@ text, over a small vocabulary so multiple writes touch overlapping entities and
 the id streams are non-trivial. Batch size, sentence choice, and names are
 varied with Hypothesis across >= 100 iterations.
 
-Validates: Requirements 27.5, 3.5.
 """
 
 from __future__ import annotations
@@ -157,7 +156,6 @@ def _run_batch(batch: list[str]) -> tuple[list[str], list[str]]:
 def test_deterministic_ids_across_runs(batch: list[str]) -> None:
     """Two runs over a fixed batch produce identical entity/assertion id sequences.
 
-    Validates: Requirements 27.5, 3.5
     """
     entities_run1, assertions_run1 = _run_batch(batch)
     entities_run2, assertions_run2 = _run_batch(batch)

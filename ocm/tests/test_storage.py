@@ -1,18 +1,16 @@
 """Unit tests for repository persistence and graph rebuild (task 3.4).
 
-Validates: Requirements 11.1, 11.5, 11.8
 
 These example-based tests complement the property-based round-trip test in
 ``test_prop_schema_roundtrip.py`` by exercising the *storage layer* end to end:
 
 * Concrete models (Person, Project, Assertion, QuarantineRecord, Provenance)
   survive a write/read cycle through :class:`SQLiteRepository` ``":memory:"``
-  and come back equal (Req 11.1 — the seven tables persist every memory kind).
+  and come back equal (— the seven tables persist every memory kind).
 * :func:`rebuild_graph` projects ONLY ``accepted`` assertions as edges, so
   quarantined / rejected / superseded assertions never enter the graph
-  (Req 11.5).
 * The rebuilt graph equals the pre-restart accepted state and the rebuild is
-  deterministic across repeated runs (Req 11.8).
+  deterministic across repeated runs.
 """
 
 from __future__ import annotations
@@ -86,7 +84,7 @@ def _assertion(aid: str, status: AssertionStatus) -> Assertion:
 
 
 # ---------------------------------------------------------------------------
-# 1. Model round-trips through SQLite (Req 11.1).
+# 1. Model round-trips through SQLite.
 # ---------------------------------------------------------------------------
 def test_entity_round_trip_person_and_project(repo: SQLiteRepository) -> None:
     """Person and Project entities survive upsert/get equal to the original."""
@@ -120,7 +118,7 @@ def test_assertion_round_trip(repo: SQLiteRepository) -> None:
 
 
 def test_quarantine_round_trip(repo: SQLiteRepository) -> None:
-    """A QuarantineRecord (incl. JSON payload) round-trips and persists (Req 11.7)."""
+    """A QuarantineRecord (incl. JSON payload) round-trips and persists."""
     q = QuarantineRecord(
         id="quarantine:1",
         candidate_payload={"predicate": "OWNS", "confidence": 0.4, "tags": ["a"]},
@@ -138,7 +136,7 @@ def test_quarantine_round_trip(repo: SQLiteRepository) -> None:
 
 
 def test_provenance_round_trip(repo: SQLiteRepository) -> None:
-    """A Provenance record round-trips equal, queryable by subject (Req 12.4)."""
+    """A Provenance record round-trips equal, queryable by subject."""
     p = Provenance(
         id="prov:1",
         subject_id="assertion:1",
@@ -152,7 +150,7 @@ def test_provenance_round_trip(repo: SQLiteRepository) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. Graph rebuild is accepted-only (Req 11.5, 11.8).
+# 2. Graph rebuild is accepted-only.
 # ---------------------------------------------------------------------------
 def _seed_mixed_status_repo(repo: SQLiteRepository) -> Assertion:
     """Seed entities + one assertion of every status; return the accepted one."""
@@ -168,7 +166,7 @@ def _seed_mixed_status_repo(repo: SQLiteRepository) -> Assertion:
 
 
 def test_rebuild_graph_contains_only_accepted_assertions(repo: SQLiteRepository) -> None:
-    """rebuild_graph projects accepted assertions only (Req 11.5, 11.8)."""
+    """rebuild_graph projects accepted assertions only."""
     accepted = _seed_mixed_status_repo(repo)
 
     graph = rebuild_graph(repo)
@@ -207,7 +205,7 @@ def test_rebuild_skips_dangling_accepted_assertion(repo: SQLiteRepository) -> No
 
 
 # ---------------------------------------------------------------------------
-# 3. Rebuild is deterministic and equals the pre-restart accepted state (Req 11.8).
+# 3. Rebuild is deterministic and equals the pre-restart accepted state.
 # ---------------------------------------------------------------------------
 def test_rebuild_is_deterministic_and_equals_pre_restart_state(
     repo: SQLiteRepository,

@@ -1,17 +1,17 @@
-"""Consolidated retrieval unit tests for Req 26.5.
+"""Consolidated retrieval unit tests for.
 
-Requirement 26.5 calls for focused unit tests covering the core retrieval
+ calls for focused unit tests covering the core retrieval
 behaviours end-of-stage. This module gathers those required cases into one
 hermetic, offline suite (deterministic embeddings + in-memory vector index +
 in-memory SQLite repository), complementing — not duplicating — the
 component-level suites (``test_symbolic_retriever.py``,
 ``test_semantic_retriever.py``, ``test_retrieval_pipeline.py``):
 
-* Symbolic retrieval returns the correct owner (Req 15.1).
-* Semantic retrieval returns a relevant claim (Req 16.1).
-* A conflict query retrieves a quarantined contradiction (Req 16.3).
-* The reranker penalizes a contradicted assertion (Req 17.3).
-* An evidence package includes provenance sources (Req 18.3).
+* Symbolic retrieval returns the correct owner.
+* Semantic retrieval returns a relevant claim.
+* A conflict query retrieves a quarantined contradiction.
+* The reranker penalizes a contradicted assertion.
+* An evidence package includes provenance sources.
 
 Requirements: 15.1, 16.1, 16.3, 17.3, 18.3, 26.5.
 """
@@ -68,10 +68,10 @@ def _seed_owner_graph() -> GraphStore:
 
 
 # --------------------------------------------------------------------------
-# Req 15.1 — symbolic retrieval returns the correct owner
+# — symbolic retrieval returns the correct owner
 # --------------------------------------------------------------------------
 def test_symbolic_retrieval_returns_correct_owner() -> None:
-    """Seed Alice OWNS Orion; classify "who owns Orion?" -> owner Alice (Req 15.1)."""
+    """Seed Alice OWNS Orion; classify "who owns Orion?" -> owner Alice."""
     graph = _seed_owner_graph()
     classification = QueryClassifier().classify("Who owns Orion?")
 
@@ -92,10 +92,10 @@ def test_symbolic_retrieval_returns_correct_owner() -> None:
 
 
 # --------------------------------------------------------------------------
-# Req 16.1 — semantic retrieval returns a relevant claim
+# — semantic retrieval returns a relevant claim
 # --------------------------------------------------------------------------
 def test_semantic_retrieval_returns_relevant_claim() -> None:
-    """An in-memory index returns a topically relevant claim for a query (Req 16.1)."""
+    """An in-memory index returns a topically relevant claim for a query."""
     index = VectorIndex(DeterministicEmbeddingProvider(), chroma_mode="memory")
     index.add("clm_owner", "Alice owns Project Orion", MEMORY_TYPE_CLAIM, STATUS_ACCEPTED)
     index.add("clm_budget", "Quarterly budget figures", MEMORY_TYPE_CLAIM, STATUS_ACCEPTED)
@@ -114,17 +114,17 @@ def test_semantic_retrieval_returns_relevant_claim() -> None:
 
 
 # --------------------------------------------------------------------------
-# Req 16.3 — a conflict query retrieves a quarantined contradiction
+# — a conflict query retrieves a quarantined contradiction
 # --------------------------------------------------------------------------
 def test_conflict_query_retrieves_quarantined_contradiction() -> None:
-    """A contradiction_check query surfaces the quarantined contradiction (Req 16.3)."""
+    """A contradiction_check query surfaces the quarantined contradiction."""
     index = VectorIndex(DeterministicEmbeddingProvider(), chroma_mode="memory")
     index.add("clm_accepted", "Alice owns Project Orion", MEMORY_TYPE_CLAIM, STATUS_ACCEPTED)
     index.add("clm_quarantined", "Bob owns Project Orion", MEMORY_TYPE_CLAIM, STATUS_QUARANTINED)
 
     retriever = SemanticRetriever(index)
 
-    # A normal query keeps the quarantined contradiction hidden (Req 16.2/16.5).
+    # A normal query keeps the quarantined contradiction hidden (/16.5).
     normal = retriever.retrieve(
         "who owns Project Orion",
         QueryClassifier().classify("who owns Project Orion"),
@@ -150,10 +150,10 @@ def test_conflict_query_retrieves_quarantined_contradiction() -> None:
 
 
 # --------------------------------------------------------------------------
-# Req 17.3 — the reranker penalizes a contradicted assertion
+# — the reranker penalizes a contradicted assertion
 # --------------------------------------------------------------------------
 def test_reranker_penalizes_contradicted_assertion() -> None:
-    """Two identical hits: the contradicted one scores strictly lower (Req 17.3)."""
+    """Two identical hits: the contradicted one scores strictly lower."""
     clean = SemanticHit(
         memory_id="asr_clean",
         memory_type="assertion",
@@ -186,10 +186,10 @@ def test_reranker_penalizes_contradicted_assertion() -> None:
 
 
 # --------------------------------------------------------------------------
-# Req 18.3 — an evidence package includes provenance sources
+# — an evidence package includes provenance sources
 # --------------------------------------------------------------------------
 def test_evidence_package_includes_sources() -> None:
-    """A packaged result attaches provenance for its supporting assertions (Req 18.3)."""
+    """A packaged result attaches provenance for its supporting assertions."""
     repo = SQLiteRepository(":memory:")
     ids = IdGenerator(deterministic=True)
     provenance = ProvenanceTracker(repo, ids)

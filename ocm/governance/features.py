@@ -11,7 +11,7 @@ collects the three scalar modifiers the router also consumes: consequence ``q``,
 reversibility ``v``, and source authority ``a``, plus ``k``, the number of
 simultaneously unresolved or failed checks.
 
-Component provenance (Req 1.3–1.7):
+Component provenance (–1.7):
 
 ===========  ====================================================  ==============================
 Component    OCMR sources                                          ``0.5`` (unresolved) condition
@@ -26,7 +26,7 @@ Component    OCMR sources                                          ``0.5`` (unre
 Nothing here re-implements a constraint: the extractor reads the
 :class:`~ocm.memory.contracts.ValidationResult` OCMR already produced and queries
 the graph for the incumbent state the encoding needs. Extraction is fully
-deterministic and never calls a language model (Req 1.10).
+deterministic and never calls a language model.
 
 Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10.
 """
@@ -47,9 +47,9 @@ from ocm.ontology.relations import (
 )
 
 # --------------------------------------------------------------------------- #
-# Encoding constants (immutable — adaptation may never change these, Req 7.4)
+# Encoding constants (immutable — adaptation may never change these)
 # --------------------------------------------------------------------------- #
-#: The three admissible encodings of a check outcome (Req 1.2).
+#: The three admissible encodings of a check outcome.
 PASS = 0.0
 UNRESOLVED = 0.5
 FAIL = 1.0
@@ -73,7 +73,7 @@ _RESULTS_IN = "RESULTS_IN"
 
 
 # --------------------------------------------------------------------------- #
-# Source authority rubric (Req 1.9)
+# Source authority rubric
 # --------------------------------------------------------------------------- #
 #: Preregistered source-authority rubric, keyed by ``source_ref`` scheme. An
 #: unattributed or unrecognized source falls back to :data:`DEFAULT_AUTHORITY`.
@@ -100,7 +100,7 @@ UNATTRIBUTED_AUTHORITY = 0.0
 AUTHORITATIVE_FLOOR = 0.90
 
 
-#: Preregistered consequence rubric by predicate (Req 1.9). The value is the
+#: Preregistered consequence rubric by predicate. The value is the
 #: consequence of getting *this* assertion wrong in durable memory.
 PREDICATE_CONSEQUENCE: Mapping[str, float] = {
     "OWNS": 0.80,
@@ -151,7 +151,6 @@ class WriteContext:
     it from the candidate and the incumbent graph state, which is the behavior
     used in production; the evaluation corpus supplies explicit values so a case
     can pin a specific consequence / reversibility / authority combination
-    (Req 1.9).
 
     Attributes:
         consequence: ``q ∈ [0,1]`` — the consequence of an incorrect transition.
@@ -182,7 +181,7 @@ class WriteContext:
 
 @dataclass(frozen=True)
 class RiskFeatures:
-    """The escalation feature bundle for one candidate write (Req 1.1, 1.8).
+    """The escalation feature bundle for one candidate write.
 
     ``f_e``/``f_s``/``f_t``/``f_v``/``f_c`` are the paper's typed status vector;
     ``consequence``/``reversibility``/``authority`` are the scalar modifiers; ``k``
@@ -190,7 +189,7 @@ class RiskFeatures:
 
     ``failed_checks`` and ``unresolved_checks`` name the OCMR checks behind the
     encoding so a review item can show *which* checks drove the escalation rather
-    than an unexplained number (Req 4.5).
+    than an unexplained number.
     """
 
     f_e: float = PASS
@@ -259,7 +258,6 @@ class Rubric:
     The rubrics are deliberately simple, total, and inspectable: every value is a
     table lookup plus a small number of documented escalations. They are part of
     the evaluation suite so a reader can reproduce any assigned score by hand
-    (Req 1.9).
     """
 
     def __init__(
@@ -456,7 +454,7 @@ class FeatureExtractor:
         failed: list[str],
         unresolved: list[str],
     ) -> float:
-        """``f_e`` — C1 identity uniqueness and entity-resolution status (Req 1.3)."""
+        """``f_e`` — C1 identity uniqueness and entity-resolution status."""
         if check in ENTITY_CHECKS:
             failed.append("C1")
             return FAIL
@@ -476,7 +474,7 @@ class FeatureExtractor:
         failed: list[str],
         unresolved: list[str],
     ) -> float:
-        """``f_s`` — W5 structural checks and C9 domain/range (Req 1.4)."""
+        """``f_s`` — W5 structural checks and C9 domain/range."""
         if is_schema_failure:
             failed.append(check or SCHEMA_CHECK_PREFIX)
             return FAIL
@@ -502,7 +500,7 @@ class FeatureExtractor:
         failed: list[str],
         unresolved: list[str],
     ) -> float:
-        """``f_t`` — C2 sanity, C3 acyclic PRECEDES, C10 transitions (Req 1.5)."""
+        """``f_t`` — C2 sanity, C3 acyclic PRECEDES, C10 transitions."""
         if check in TEMPORAL_CHECKS:
             failed.append(check or "C2")
             return FAIL
@@ -529,7 +527,7 @@ class FeatureExtractor:
         failed: list[str],
         unresolved: list[str],
     ) -> float:
-        """``f_v`` — the C8 / ``e_min`` evidence floor (Req 1.6)."""
+        """``f_v`` — the C8 / ``e_min`` evidence floor."""
         if check in EVIDENCE_CHECKS:
             failed.append(check or "C8")
             return FAIL
@@ -555,7 +553,7 @@ class FeatureExtractor:
         failed: list[str],
         unresolved: list[str],
     ) -> float:
-        """``f_c`` — the W7 Contradiction_Checker verdict via C7 (Req 1.7)."""
+        """``f_c`` — the W7 Contradiction_Checker verdict via C7."""
         if contradiction_result is not None and getattr(
             contradiction_result, "has_conflict", False
         ):

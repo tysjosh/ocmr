@@ -1,6 +1,5 @@
 """Property 9: Reranker contradiction monotonicity (Feature: ontology-constrained-memory).
 
-Validates Requirements 17.1, 17.2, 17.3.
 
 The reranker (R3) scores each candidate with::
 
@@ -8,9 +7,9 @@ The reranker (R3) scores each candidate with::
           + delta*provenance_quality + eta*recency - lambda*contradiction_penalty
 
 with default weights ``alpha=0.40, beta=0.25, gamma=0.15, delta=0.10,
-eta=0.05, lambda=0.30`` (Req 17.1, 17.2). Because ``lambda = 0.30 > 0``, an item
+eta=0.05, lambda=0.30``. Because ``lambda = 0.30 > 0``, an item
 carrying a positive ``contradiction_penalty`` must score *strictly* lower than an
-otherwise-identical item whose penalty is ``0`` (Req 17.3, contradiction
+otherwise-identical item whose penalty is ``0`` (contradiction
 monotonicity).
 
 This module asserts that property two ways:
@@ -33,7 +32,7 @@ from ocm.core.config import RerankWeights
 from ocm.retrieval.reranker import Reranker
 from ocm.tests.markers import pbt_property
 
-# Default weights (Req 17.2): lambda_ = 0.30 drives the penalty term.
+# Default weights: lambda_ = 0.30 drives the penalty term.
 _WEIGHTS = RerankWeights()
 
 # Raw signals live in [0, 1]; contradiction penalty is strictly positive in (0, 1].
@@ -90,7 +89,6 @@ def test_score_components_penalty_lowers_score_by_lambda(
 ) -> None:
     """A positive contradiction penalty lowers the score by exactly lambda*p.
 
-    Validates Requirements 17.1, 17.2, 17.3.
     """
     base_signals = dict(
         semantic_similarity=semantic_similarity,
@@ -107,7 +105,7 @@ def test_score_components_penalty_lowers_score_by_lambda(
 
     # Exact algebraic relationship: only the -lambda*penalty term changes.
     assert contradicted_score == pytest.approx(clean_score - _WEIGHTS.lambda_ * penalty)
-    # Monotonicity (Req 17.3): lambda = 0.30 > 0 and penalty > 0 ⇒ strictly lower.
+    # Monotonicity: lambda = 0.30 > 0 and penalty > 0 ⇒ strictly lower.
     assert contradicted_score < clean_score
 
 
@@ -134,7 +132,6 @@ def test_rerank_ranks_contradicted_item_strictly_lower(
     contradicted (via ``contradicted_ids`` or a ``quarantined`` status). The
     contradicted item must score strictly lower and sort after the clean one.
 
-    Validates Requirements 17.1, 17.2, 17.3.
     """
     pinned = {
         "semantic_similarity": semantic_similarity,
@@ -172,9 +169,9 @@ def test_rerank_ranks_contradicted_item_strictly_lower(
     assert dirty.components["contradiction_penalty"] > 0.0
     assert dirty.contradicted is True
 
-    # Monotonicity (Req 17.3): contradicted scores strictly lower ...
+    # Monotonicity: contradicted scores strictly lower...
     assert dirty.score < clean.score
-    # ... and the exact gap is lambda * penalty (Req 17.1, 17.2).
+    #... and the exact gap is lambda * penalty.
     expected_gap = _WEIGHTS.lambda_ * dirty.components["contradiction_penalty"]
     assert clean.score - dirty.score == pytest.approx(expected_gap)
     # ... so the clean item sorts ahead of the contradicted one.

@@ -1,18 +1,18 @@
-"""MemoryTool — the single seam between an agent and OCM (Req 20.1, 20.2, 20.3).
+"""MemoryTool — the single seam between an agent and OCM.
 
 The :class:`MemoryTool` is the only object the :class:`~ocm.agent.loop.AgentLoop`
 (task 16.1) talks to. It maps 1:1 onto the two memory operations the agent needs:
 
 * :meth:`query` → the Retrieval Pipeline (R0→R4), returning an
-  :class:`~ocm.retrieval.evidence_packager.EvidencePackage` (Req 20.2).
+  :class:`~ocm.retrieval.evidence_packager.EvidencePackage`.
 * :meth:`write` → the Write Pipeline (W1→W8), returning a
-  :class:`~ocm.memory.write_pipeline.WriteResult` (Req 20.3).
+  :class:`~ocm.memory.write_pipeline.WriteResult`.
 
 Because the tool delegates to the wired :class:`~ocm.core.container.CoreContainer`
 pipelines — the very same objects behind the HTTP endpoints (``POST /memory/query``
 and ``POST /memory/write``) — the agent can run either in-process (direct
 container) or over HTTP without any code change. This keeps OCM pluggable: the
-loop never imports storage, graph, or retrieval internals (Req 20.1).
+loop never imports storage, graph, or retrieval internals.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ class MemoryTool:
 
     The tool holds no state of its own; it forwards to the container's
     ``retrieval_pipeline`` and ``write_pipeline`` so the agent depends only on
-    this thin seam (Req 20.1).
+    this thin seam.
     """
 
     def __init__(self, container: "CoreContainer") -> None:
@@ -45,7 +45,7 @@ class MemoryTool:
         self.container = container
 
     # ------------------------------------------------------------------ #
-    # Read path (Req 20.2)
+    # Read path
     # ------------------------------------------------------------------ #
     def query(
         self,
@@ -53,7 +53,7 @@ class MemoryTool:
         top_k: int = 5,
         include_conflicts: bool = False,
     ) -> EvidencePackage:
-        """Retrieve memory for ``query_text`` (Req 20.2).
+        """Retrieve memory for ``query_text``.
 
         Runs the full retrieval pipeline (R0 classify → R1 symbolic →
         R2 semantic → R3 rerank → R4 package) and returns the structured
@@ -75,7 +75,7 @@ class MemoryTool:
         )
 
     # ------------------------------------------------------------------ #
-    # Write path (Req 20.3)
+    # Write path
     # ------------------------------------------------------------------ #
     def write(
         self,
@@ -83,7 +83,7 @@ class MemoryTool:
         source_ref: str,
         write_intent: Union[WriteIntent, str, None] = None,
     ) -> "WriteResult":
-        """Write ``text`` to memory with a ``source_ref`` (Req 20.3).
+        """Write ``text`` to memory with a ``source_ref``.
 
         Runs the full write pipeline (W1 extract → … → W8 commit/quarantine).
         Governance (schema validation, constraints, the contradiction gate, and
@@ -92,7 +92,7 @@ class MemoryTool:
 
         Args:
             text: The turn content / new information to persist.
-            source_ref: Provenance reference for the write (Req 20.3). The
+            source_ref: Provenance reference for the write. The
                 :class:`AgentLoop` supplies a per-turn ref.
             write_intent: Optional :class:`WriteIntent`; ``None`` lets the
                 pipeline apply its default (``new_fact``).

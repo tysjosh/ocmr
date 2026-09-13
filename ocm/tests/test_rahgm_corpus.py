@@ -1,6 +1,6 @@
 """RAHGM evaluation corpus: dimensions, balance, partitions, and ground truth.
 
-Covers Req 9.x. The corpus is the reference standard for every routing metric, so
+Covers. The corpus is the reference standard for every routing metric, so
 these tests assert the §3.2 construction exactly rather than approximately.
 """
 
@@ -31,17 +31,17 @@ def corpus():
 
 
 # --------------------------------------------------------------------------- #
-# Dimensions and balance (Req 9.1, 9.2)
+# Dimensions and balance
 # --------------------------------------------------------------------------- #
 def test_corpus_has_1500_writes_in_50_scenarios_of_30(corpus):
-    """1,500 candidate writes, 50 scenarios, 30 writes each (Req 9.1)."""
+    """1,500 candidate writes, 50 scenarios, 30 writes each."""
     assert len(corpus) == N_SCENARIOS == 50
     assert len(corpus.writes) == TOTAL_WRITES == 1500
     assert all(len(s.writes) == WRITES_PER_SCENARIO == 30 for s in corpus)
 
 
 def test_write_classes_are_balanced_500_each(corpus):
-    """500 routine, 500 correction, 500 conflict (Req 9.2)."""
+    """500 routine, 500 correction, 500 conflict."""
     counts = corpus.class_counts()
     assert counts == {
         WriteClass.routine.value: 500,
@@ -69,7 +69,7 @@ def test_gold_transitions_cover_all_four_tiers(corpus):
 
 
 def test_gold_transition_follows_the_write_class(corpus):
-    """Class and gold transition agree by construction (Req 9.7)."""
+    """Class and gold transition agree by construction."""
     for write in corpus.writes:
         if write.write_class is WriteClass.routine:
             assert write.gold_transition is Tier.accept
@@ -80,10 +80,10 @@ def test_gold_transition_follows_the_write_class(corpus):
 
 
 # --------------------------------------------------------------------------- #
-# Variation axes (Req 9.3)
+# Variation axes
 # --------------------------------------------------------------------------- #
 def test_every_variation_axis_is_exercised(corpus):
-    """All eight §3.2 axes appear in the corpus (Req 9.3)."""
+    """All eight §3.2 axes appear in the corpus."""
     coverage = corpus.perturbation_coverage()
     assert set(coverage) == set(PERTURBATION_AXES)
     for axis, count in coverage.items():
@@ -91,7 +91,7 @@ def test_every_variation_axis_is_exercised(corpus):
 
 
 def test_every_template_family_is_generated(corpus):
-    """No template is unreachable — each contributes cases (Req 9.3)."""
+    """No template is unreachable — each contributes cases."""
     counts = corpus.template_counts()
     assert len(counts) >= 15
     for template, count in counts.items():
@@ -99,10 +99,10 @@ def test_every_template_family_is_generated(corpus):
 
 
 # --------------------------------------------------------------------------- #
-# Poisoned evidence (Req 9.4)
+# Poisoned evidence
 # --------------------------------------------------------------------------- #
 def test_twenty_percent_of_scenarios_are_poisoned(corpus):
-    """Poisoned or unsupported evidence appears in 20% of scenarios (Req 9.4)."""
+    """Poisoned or unsupported evidence appears in 20% of scenarios."""
     poisoned = [s for s in corpus if s.poisoned]
     assert len(poisoned) == int(round(N_SCENARIOS * POISONED_SCENARIO_FRACTION)) == 10
 
@@ -117,17 +117,17 @@ def test_poisoned_scenarios_contain_poisoned_writes(corpus):
 
 
 def test_poisoned_writes_have_minimal_authority(corpus):
-    """Poisoned evidence cannot confer authority (Req 1.9)."""
+    """Poisoned evidence cannot confer authority."""
     for write in corpus.writes:
         if write.poisoned_evidence:
             assert write.authority <= 0.05
 
 
 # --------------------------------------------------------------------------- #
-# Partitions (Req 9.5)
+# Partitions
 # --------------------------------------------------------------------------- #
 def test_partition_sizes_match_the_paper(corpus):
-    """Training 25, development 10, canary 5, test 10 (Req 9.5)."""
+    """Training 25, development 10, canary 5, test 10."""
     for name, expected in PARTITION_SIZES.items():
         assert len(corpus.partition(name)) == expected
 
@@ -143,7 +143,7 @@ def test_partitions_are_disjoint_and_exhaustive(corpus):
 
 
 def test_no_entity_id_is_shared_across_partitions(corpus):
-    """Namespacing prevents any fact or alias crossing a partition (Req 9.5).
+    """Namespacing prevents any fact or alias crossing a partition.
 
     Shared vocabulary nodes (``status:*``) are excluded: they are a fixed
     enumeration, not scenario content.
@@ -173,10 +173,10 @@ def test_no_write_id_is_duplicated(corpus):
 
 
 # --------------------------------------------------------------------------- #
-# Ground truth (Req 9.6, 9.7)
+# Ground truth
 # --------------------------------------------------------------------------- #
 def test_every_write_carries_complete_ground_truth(corpus):
-    """Correct transition, consequentiality, and least evidence (Req 9.6)."""
+    """Correct transition, consequentiality, and least evidence."""
     for write in corpus.writes:
         assert isinstance(write.gold_transition, Tier)
         assert isinstance(write.consequential, bool)
@@ -184,7 +184,7 @@ def test_every_write_carries_complete_ground_truth(corpus):
 
 
 def test_consequentiality_follows_the_stated_rule(corpus):
-    """``consequential = q ≥ 0.60 or v ≤ 0.30`` (Req 9.6)."""
+    """``consequential = q ≥ 0.60 or v ≤ 0.30``."""
     for write in corpus.writes:
         expected = write.consequence >= 0.60 or write.reversibility <= 0.30
         assert write.consequential is expected
@@ -247,7 +247,7 @@ def test_routine_writes_displace_no_seeded_incumbent(corpus):
 
 
 def test_only_declared_chains_contend_for_a_target(corpus):
-    """Target reuse happens only inside a declared contention chain (Req 9.7).
+    """Target reuse happens only inside a declared contention chain.
 
     Independent writes keep order-independent gold labels. Chain writes are
     order-*dependent* by design, and their shared target is what creates the
@@ -277,7 +277,7 @@ def test_writes_are_temporally_ordered(corpus):
 
 
 def test_dated_writes_postdate_their_incumbent(corpus):
-    """A correction is the newer fact, which ``h(u)`` requires (Req 4.4)."""
+    """A correction is the newer fact, which ``h(u)`` requires."""
     for scenario in corpus:
         incumbents = {a.assertion_id: a for a in scenario.incumbents}
         for write in scenario.writes:
@@ -481,10 +481,10 @@ def test_indices_are_contiguous(corpus):
 
 
 # --------------------------------------------------------------------------- #
-# Determinism (Req 9.7)
+# Determinism
 # --------------------------------------------------------------------------- #
 def test_generation_is_deterministic_for_a_seed():
-    """The same seed yields an identical corpus (Req 9.7)."""
+    """The same seed yields an identical corpus."""
     a = generate_corpus(DEFAULT_SEED, n_scenarios=6)
     b = generate_corpus(DEFAULT_SEED, n_scenarios=6)
     assert [w.as_dict() for w in a.writes] == [w.as_dict() for w in b.writes]

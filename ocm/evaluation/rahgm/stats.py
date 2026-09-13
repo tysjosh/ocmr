@@ -218,7 +218,7 @@ class RandomInterceptLogit:
             names: Column names for ``X``.
 
         Returns:
-            The :class:`ModelFit`, with odds ratios and 95% CIs (Req 12.4).
+            The :class:`ModelFit`, with odds ratios and 95% CIs.
         """
         y_arr = np.asarray(y, dtype=float)
         X_arr = np.asarray(X, dtype=float)
@@ -372,7 +372,7 @@ def _expit(x: np.ndarray) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------- #
-# Random-intercept Gaussian (decision time, Req 12.2)
+# Random-intercept Gaussian (decision time)
 # --------------------------------------------------------------------------- #
 class RandomInterceptGaussian:
     """Crossed random-intercept linear model, fitted by exact maximum likelihood.
@@ -502,7 +502,7 @@ class RandomInterceptGaussian:
 
 
 # --------------------------------------------------------------------------- #
-# Cumulative logit (workload, Req 12.2)
+# Cumulative logit (workload)
 # --------------------------------------------------------------------------- #
 class CumulativeLogit:
     """Proportional-odds model with cluster-robust standard errors.
@@ -656,7 +656,7 @@ class HolmResult:
 def holm(
     tests: Sequence[tuple[str, float]], *, alpha: float = 0.05
 ) -> list[HolmResult]:
-    """Holm–Bonferroni correction over the primary contrasts (Req 12.3).
+    """Holm–Bonferroni correction over the primary contrasts.
 
     Args:
         tests: ``(name, p_value)`` pairs.

@@ -7,21 +7,20 @@ decides whether the mention refers to an entity that already exists or whether a
 new entity should be minted — and, crucially, it **never silently merges two
 distinct entities**. When the evidence is suggestive but not conclusive it
 creates a new entity and flags a ``POSSIBLY_SAME_AS`` link to the candidate(s)
-for downstream/human review (Req 5.6).
+for downstream/human review.
 
-The matching priority order is applied **exactly** (Req 5.8):
+The matching priority order is applied **exactly**:
 
-1. **Exact ID match** → ``resolved_existing`` (Req 5.1).
-2. **Exact normalized name + type match** → ``resolved_existing`` (Req 5.2).
-3. **Alias + type match** → ``resolved_existing`` (Req 5.3).
+1. **Exact ID match** → ``resolved_existing``.
+2. **Exact normalized name + type match** → ``resolved_existing``.
+3. **Alias + type match** → ``resolved_existing``.
 4. **Contextual match** (co-occurring relation / source_ref evidence) →
-   ``resolved_existing`` (Req 5.4).
-5. **No match** → create a new entity, ``created_new`` (Req 5.5).
+   ``resolved_existing``.
+5. **No match** → create a new entity, ``created_new``.
 6. **Uncertain match** → create a ``POSSIBLY_SAME_AS`` relation, ``possible_match``
-   (Req 5.6).
 
 The result is a :class:`ResolutionOutcome` carrying ``resolution_status``,
-``entity_id``, and ``candidate_matches`` (Req 5.7). When the resolver cannot
+``entity_id``, and ``candidate_matches``. When the resolver cannot
 mint an id (no :class:`IdGenerator` supplied) and cannot confidently resolve, it
 returns ``unresolved`` so the dependent candidate assertion is quarantined
 rather than committed against a guessed identity.
@@ -90,7 +89,7 @@ def _alpha_numeric_key(name: str) -> tuple[str, int] | None:
 
 
 class EntityResolver:
-    """Conservative resolver applying the Req 5.8 priority order exactly."""
+    """Conservative resolver applying the priority order exactly."""
 
     def resolve(
         self,
@@ -104,7 +103,7 @@ class EntityResolver:
         :param entity_ref: normalized mention with at least ``type`` and
             ``name``; may also carry ``id``, ``aliases``, and a ``context`` dict
             (``{"related_ids": [...], "source_ref": "..."}``) used for
-            contextual matching (Req 5.4).
+            contextual matching.
         :param graph: the accepted-memory graph used to look up existing
             entities.
         :param ids: id generator used to mint a new id for create-new /
@@ -117,7 +116,7 @@ class EntityResolver:
         name = entity_ref.get("name", "") or ""
 
         # A reference without a type cannot be matched against typed nodes nor
-        # minted meaningfully: surface it as unresolved (Req 5.7).
+        # minted meaningfully: surface it as unresolved.
         if not entity_type:
             return ResolutionOutcome(
                 resolution_status=ResolutionStatus.unresolved,
@@ -125,7 +124,7 @@ class EntityResolver:
                 candidate_matches=[],
             )
 
-        # --- 1. Exact ID match (Req 5.1) ----------------------------------
+        # --- 1. Exact ID match ----------------------------------
         ref_id = entity_ref.get("id")
         if ref_id and graph.has_entity(ref_id):
             return ResolutionOutcome(
@@ -134,7 +133,7 @@ class EntityResolver:
                 candidate_matches=[],
             )
 
-        # --- 2. Exact normalized name + type match (Req 5.2) --------------
+        # --- 2. Exact normalized name + type match --------------
         name_matches = self._match_by_name(graph, entity_type, name)
         if len(name_matches) == 1:
             return ResolutionOutcome(
@@ -147,7 +146,7 @@ class EntityResolver:
             # name: genuinely ambiguous, so do not pick one — flag for review.
             return self._uncertain(entity_ref, name_matches, ids, source_ref)
 
-        # --- 3. Alias + type match (Req 5.3) ------------------------------
+        # --- 3. Alias + type match ------------------------------
         alias_matches = self._match_by_alias(graph, entity_type, entity_ref, name)
         if len(alias_matches) == 1:
             return ResolutionOutcome(
@@ -158,7 +157,7 @@ class EntityResolver:
         if len(alias_matches) > 1:
             return self._uncertain(entity_ref, alias_matches, ids, source_ref)
 
-        # --- 4. Contextual match (Req 5.4) --------------------------------
+        # --- 4. Contextual match --------------------------------
         # Near matches: same type, token overlap with the mention, but neither
         # an exact-name nor an alias hit. These are the *uncertain* candidates.
         near_matches = self._near_matches(graph, entity_type, name)
@@ -170,12 +169,12 @@ class EntityResolver:
                 candidate_matches=[],
             )
 
-        # --- 6. Uncertain match (Req 5.6) ---------------------------------
+        # --- 6. Uncertain match ---------------------------------
         # Near matches exist but context did not confidently disambiguate.
         if near_matches:
             return self._uncertain(entity_ref, near_matches, ids, source_ref)
 
-        # --- 5. No match → create new (Req 5.5) ---------------------------
+        # --- 5. No match → create new ---------------------------
         return self._create_new(entity_type, name, ids, source_ref)
 
     # ------------------------------------------------------------------
@@ -290,7 +289,7 @@ class EntityResolver:
         entity_ref: dict[str, Any],
         near_matches: list[str],
     ) -> str | None:
-        """Resolve via contextual evidence, conservatively (Req 5.4).
+        """Resolve via contextual evidence, conservatively.
 
         Returns a single id only when exactly one near-match candidate is
         positively supported by context (it is graph-connected to one of the
@@ -343,7 +342,7 @@ class EntityResolver:
         ids: IdGenerator | None,
         source_ref: str,
     ) -> ResolutionOutcome:
-        """Produce a ``possible_match`` outcome (Req 5.6).
+        """Produce a ``possible_match`` outcome.
 
         Conservatively creates a *new* entity for the mention (no silent merge)
         and records the candidate existing ids in ``candidate_matches`` so a

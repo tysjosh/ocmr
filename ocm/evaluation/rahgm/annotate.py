@@ -1,4 +1,4 @@
-"""Annotation simulators and Krippendorff's alpha (Req 9.8).
+"""Annotation simulators and Krippendorff's alpha.
 
 The paper's corpus and quarantine audit are labelled by two independent human
 annotators with a third adjudicating disagreements, reporting Krippendorff's alpha

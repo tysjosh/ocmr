@@ -4,30 +4,29 @@ The Commit Manager is the final stage of the write pipeline. It takes a
 :class:`~ocm.memory.contracts.CandidateAssertion` together with the
 :class:`~ocm.memory.contracts.ValidationResult` produced by W5/W6 (which folds in
 the W7 contradiction verdict) and routes the candidate to exactly one of four
-mutually-exclusive outcomes (Req 10):
+mutually-exclusive outcomes:
 
 * **accept** — the candidate passed schema + all constraints + no blocking
   contradiction. A new ``accepted`` :class:`~ocm.ontology.models.Assertion` is
   minted and written through to the durable ``Storage_Repository``, mirrored as
   an edge in the ``Graph_Store``, embedded into the ``Vector_Index`` (via an
-  injectable hook), and its provenance is recorded (Req 10.1).
+  injectable hook), and its provenance is recorded.
 * **supersede** — a ``correction`` that replaces one or more existing accepted
   assertions. Each old assertion is flipped to ``superseded`` (row + graph edge
   removed), the new assertion is accepted, and a ``SUPERSEDES`` edge links the
   new assertion to each old one. Provenance is preserved for **both** sides
-  (Req 10.2, 12.3, 2.13).
 * **quarantine** — the candidate is structurally valid but reviewable or
   conflicting. A :class:`~ocm.ontology.models.QuarantineRecord` is written to the
   ``Quarantine_Store`` and the candidate is **excluded from accepted memory**
-  (never added to the graph) (Req 10.3, 10.9).
+  (never added to the graph).
 * **reject** — the candidate is malformed or ontology-illegal. The rejection is
   logged and the candidate is **never** written to the graph or default
-  retrieval (Req 10.4, 10.8).
+  retrieval.
 
 Invariants enforced here: quarantined and rejected candidates are never written
-to the ``Graph_Store`` as accepted memory (Req 10.5); every validation failure is
-excluded from accepted memory (Req 10.6) and reported back on the
-:class:`~ocm.memory.contracts.WriteOutcome` (Req 10.7).
+to the ``Graph_Store`` as accepted memory; every validation failure is
+excluded from accepted memory and reported back on the
+:class:`~ocm.memory.contracts.WriteOutcome`.
 
 Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 12.3, 2.13.
 """
@@ -47,16 +46,16 @@ from ocm.memory.repository import StorageRepository
 from ocm.ontology.enums import AssertionStatus, Severity
 from ocm.ontology.models import Assertion
 
-#: Predicate used for the assertion-to-assertion supersession link (Req 2.13).
+#: Predicate used for the assertion-to-assertion supersession link.
 SUPERSEDES = "SUPERSEDES"
 
 #: Hook invoked with an accepted :class:`Assertion` so its embedding can be added
-#: to the Vector_Index (Req 10.1, 13.5). Optional and side-effecting.
+#: to the Vector_Index. Optional and side-effecting.
 EmbedHook = Callable[[Assertion], None]
 
 #: Hook invoked with ``(memory_id, new_status)`` when an embedded item's status
 #: changes (e.g. an assertion is superseded) so the Vector_Index metadata stays
-#: consistent with durable storage (Req 10.5, 16.2). Optional and side-effecting.
+#: consistent with durable storage. Optional and side-effecting.
 StatusHook = Callable[[str, str], None]
 
 
@@ -90,7 +89,7 @@ class CommitManager:
             status_hook: Optional ``(memory_id, new_status)`` callable invoked
                 when an embedded assertion's status changes (a supersession), so
                 the Vector_Index metadata is re-tagged and the superseded item
-                drops out of accepted-only retrieval (Req 10.5, 16.2). Skipped
+                drops out of accepted-only retrieval. Skipped
                 when ``None``.
             logger: Optional logger for rejections; defaults to a module logger.
         """
@@ -111,7 +110,7 @@ class CommitManager:
         *,
         created_at: datetime | None = None,
     ) -> WriteOutcome:
-        """Commit a single candidate per its validation verdict (Req 10).
+        """Commit a single candidate per its validation verdict.
 
         Args:
             candidate: The proposed assertion from W4.
@@ -122,7 +121,6 @@ class CommitManager:
         Returns:
             A :class:`WriteOutcome` describing the single outcome, carrying any
             ids minted and the reported reason for non-accept outcomes
-            (Req 10.7).
         """
         now = created_at or datetime.now(timezone.utc)
         action = self._resolve_action(vr)
@@ -137,7 +135,7 @@ class CommitManager:
 
     @staticmethod
     def summarize(outcomes: Iterable[WriteOutcome]) -> WriteSummary:
-        """Aggregate a batch of outcomes into a :class:`WriteSummary` (Req 19.2)."""
+        """Aggregate a batch of outcomes into a :class:`WriteSummary`."""
         outcomes = list(outcomes)
         counts = {"accepted": 0, "superseded": 0, "quarantined": 0, "rejected": 0}
         for outcome in outcomes:
@@ -163,7 +161,7 @@ class CommitManager:
             return vr.recommended_action
         return "accept" if vr.valid else "reject"
 
-    # -- accept (Req 10.1) -------------------------------------------------
+    # -- accept -------------------------------------------------
     def _accept(self, candidate: CandidateAssertion, now: datetime) -> WriteOutcome:
         """Mint, persist, graph, embed, and record provenance for an accept."""
         existing_id = self._existing_accepted_triple_id(candidate)
@@ -217,7 +215,7 @@ class CommitManager:
             return None
         return existing.id
 
-    # -- supersede (Req 10.2, 12.3, 2.13) ----------------------------------
+    # -- supersede ----------------------------------
     def _supersede(
         self, candidate: CandidateAssertion, vr: ValidationResult, now: datetime
     ) -> WriteOutcome:
@@ -257,7 +255,7 @@ class CommitManager:
 
         Provenance for the old assertion is preserved: existing rows are never
         deleted, and we ensure at least one provenance row exists for it so the
-        "both sides retain provenance" guarantee holds (Req 12.3).
+        "both sides retain provenance" guarantee holds.
         """
         old = self.repo.get_assertion(old_id)
         # Persist the status change (row stays, status flips to superseded).
@@ -266,10 +264,10 @@ class CommitManager:
             # Remove the now-superseded edge from the accepted-only graph.
             self.graph.remove_assertion(old.subject_id, old.object_id, old.predicate)
             # Re-tag the superseded assertion in the Vector_Index so it no longer
-            # surfaces in accepted-only semantic retrieval (Req 10.5, 16.2).
+            # surfaces in accepted-only semantic retrieval.
             if self.status_hook is not None:
                 self.status_hook(old_id, AssertionStatus.superseded.value)
-            # Preserve provenance for the old assertion (Req 12.3).
+            # Preserve provenance for the old assertion.
             if not self.provenance_tracker.for_subject(old_id):
                 self.provenance_tracker.record(
                     subject_id=old_id,
@@ -285,7 +283,7 @@ class CommitManager:
         candidate: CandidateAssertion,
         now: datetime,
     ) -> None:
-        """Create an accepted ``SUPERSEDES`` assertion linking new -> old (Req 2.13)."""
+        """Create an accepted ``SUPERSEDES`` assertion linking new -> old."""
         link = Assertion(
             id=self.ids.assertion_id(new_assertion.id, SUPERSEDES, old_id, candidate.source_ref),
             subject_id=new_assertion.id,
@@ -301,7 +299,7 @@ class CommitManager:
         self.repo.upsert_assertion(link)
         self.graph.add_assertion(link)
 
-    # -- quarantine (Req 10.3, 10.9) ---------------------------------------
+    # -- quarantine ---------------------------------------
     def _quarantine(
         self, candidate: CandidateAssertion, vr: ValidationResult, now: datetime
     ) -> WriteOutcome:
@@ -315,7 +313,7 @@ class CommitManager:
             conflicting_ids=list(vr.conflicting_ids),
             created_at=now,
         )
-        # Record provenance for the quarantined candidate (Req 12.1).
+        # Record provenance for the quarantined candidate.
         self.provenance_tracker.record(
             subject_id=record.id,
             source_ref=candidate.source_ref,
@@ -329,7 +327,7 @@ class CommitManager:
             reason=reason,
         )
 
-    # -- reject (Req 10.4, 10.8) -------------------------------------------
+    # -- reject -------------------------------------------
     def _reject(self, candidate: CandidateAssertion, vr: ValidationResult) -> WriteOutcome:
         """Log the rejection; never touch the graph or default retrieval."""
         reason = vr.reason or vr.failed_check or "rejected: malformed or ontology-illegal"
@@ -377,8 +375,8 @@ class CommitManager:
         """Write an accepted assertion through to repo + graph + vector + provenance.
 
         Order: durable row first (source of truth), then the in-memory graph
-        edge (Req 11.6 write-through), then the optional embedding, then
-        provenance keyed by the assertion id (Req 12.1).
+        edge (write-through), then the optional embedding, then
+        provenance keyed by the assertion id.
         """
         self.repo.upsert_assertion(assertion)
         self.graph.add_assertion(assertion)

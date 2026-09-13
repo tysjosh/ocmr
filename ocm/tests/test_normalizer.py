@@ -5,14 +5,14 @@ These tests pin the value-level normalization behaviors that downstream stages
 
 * Status synonyms map to canonical enum values, type-aware, including the
   headline "completed" -> "done" rule for Tasks while "completed" stays
-  "completed" for Projects (Req 4.3).
+  "completed" for Projects.
 * Priority synonyms map to canonical enum values, including "high priority" ->
-  "high" (Req 4.4).
+  "high".
 * Relation names canonicalize to registered predicate identifiers, e.g.
-  "assigned to" -> "ASSIGNED_TO", "owns" -> "OWNS" (Req 4.5).
-* Confidence values are parsed and clamped into [0, 1] (Req 4.6).
+  "assigned to" -> "ASSIGNED_TO", "owns" -> "OWNS".
+* Confidence values are parsed and clamped into [0, 1].
 * Distinct entities are preserved as distinct and never merged on the basis of
-  normalization (Req 4.7).
+  normalization.
 """
 
 from __future__ import annotations
@@ -45,11 +45,11 @@ def _entity(entity_type: str, name: str, **fields) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# Status synonym mapping (Req 4.3)
+# Status synonym mapping
 # --------------------------------------------------------------------------- #
 
 def test_task_completed_maps_to_done() -> None:
-    """A Task status of "completed" canonicalizes to "done" (Req 4.3)."""
+    """A Task status of "completed" canonicalizes to "done"."""
     result = Normalizer().normalize(
         _result(entities=[_entity("Task", "T1", status="completed")])
     )
@@ -57,7 +57,7 @@ def test_task_completed_maps_to_done() -> None:
 
 
 def test_project_completed_stays_completed() -> None:
-    """Status mapping is type-aware: a Project stays "completed" (Req 4.3)."""
+    """Status mapping is type-aware: a Project stays "completed"."""
     result = Normalizer().normalize(
         _result(entities=[_entity("Project", "Orion", status="completed")])
     )
@@ -65,7 +65,7 @@ def test_project_completed_stays_completed() -> None:
 
 
 def test_task_not_started_maps_to_todo() -> None:
-    """"not started" canonicalizes to the Task "todo" enum value (Req 4.3)."""
+    """"not started" canonicalizes to the Task "todo" enum value."""
     result = Normalizer().normalize(
         _result(entities=[_entity("Task", "T1", status="not started")])
     )
@@ -73,7 +73,7 @@ def test_task_not_started_maps_to_todo() -> None:
 
 
 def test_task_in_progress_synonym_maps_to_in_progress() -> None:
-    """"in progress" canonicalizes to the "in_progress" enum value (Req 4.3)."""
+    """"in progress" canonicalizes to the "in_progress" enum value."""
     result = Normalizer().normalize(
         _result(entities=[_entity("Task", "T1", status="in progress")])
     )
@@ -81,7 +81,7 @@ def test_task_in_progress_synonym_maps_to_in_progress() -> None:
 
 
 def test_status_normalized_at_top_level_too() -> None:
-    """Status synonyms are mapped whether nested in "fields" or top-level (Req 4.3)."""
+    """Status synonyms are mapped whether nested in "fields" or top-level."""
     result = Normalizer().normalize(
         _result(entities=[{"type": "Task", "name": "T1", "status": "completed"}])
     )
@@ -89,11 +89,11 @@ def test_status_normalized_at_top_level_too() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Priority synonym mapping (Req 4.4)
+# Priority synonym mapping
 # --------------------------------------------------------------------------- #
 
 def test_priority_high_priority_maps_to_high() -> None:
-    """"high priority" canonicalizes to "high" (Req 4.4)."""
+    """"high priority" canonicalizes to "high"."""
     result = Normalizer().normalize(
         _result(entities=[_entity("Task", "T1", priority="high priority")])
     )
@@ -101,7 +101,7 @@ def test_priority_high_priority_maps_to_high() -> None:
 
 
 def test_priority_in_range_value_preserved() -> None:
-    """An already-canonical priority value is preserved (Req 4.4)."""
+    """An already-canonical priority value is preserved."""
     result = Normalizer().normalize(
         _result(entities=[_entity("Task", "T1", priority="urgent")])
     )
@@ -109,11 +109,11 @@ def test_priority_in_range_value_preserved() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Confidence parsing / clamping (Req 4.6)
+# Confidence parsing / clamping
 # --------------------------------------------------------------------------- #
 
 def test_confidence_above_one_clamps_to_one() -> None:
-    """A numeric confidence above 1.0 clamps to 1.0 (Req 4.6)."""
+    """A numeric confidence above 1.0 clamps to 1.0."""
     result = Normalizer().normalize(
         _result(relations=[{"subject": "a", "predicate": "OWNS",
                             "object": "b", "confidence": 1.5}])
@@ -122,7 +122,7 @@ def test_confidence_above_one_clamps_to_one() -> None:
 
 
 def test_confidence_below_zero_clamps_to_zero() -> None:
-    """A negative numeric confidence clamps to 0.0 (Req 4.6)."""
+    """A negative numeric confidence clamps to 0.0."""
     result = Normalizer().normalize(
         _result(relations=[{"subject": "a", "predicate": "OWNS",
                             "object": "b", "confidence": -3}])
@@ -131,7 +131,7 @@ def test_confidence_below_zero_clamps_to_zero() -> None:
 
 
 def test_confidence_in_range_preserved() -> None:
-    """An in-range confidence value is preserved unchanged (Req 4.6)."""
+    """An in-range confidence value is preserved unchanged."""
     result = Normalizer().normalize(
         _result(relations=[{"subject": "a", "predicate": "OWNS",
                             "object": "b", "confidence": 0.42}])
@@ -140,7 +140,7 @@ def test_confidence_in_range_preserved() -> None:
 
 
 def test_confidence_percentage_string_parsed() -> None:
-    """A percentage string like "80%" parses to 0.8 (Req 4.6)."""
+    """A percentage string like "80%" parses to 0.8."""
     result = Normalizer().normalize(
         _result(relations=[{"subject": "a", "predicate": "OWNS",
                             "object": "b", "confidence": "80%"}])
@@ -149,7 +149,7 @@ def test_confidence_percentage_string_parsed() -> None:
 
 
 def test_confidence_textual_term_parsed() -> None:
-    """A textual confidence term like "high" parses to its numeric value (Req 4.6)."""
+    """A textual confidence term like "high" parses to its numeric value."""
     result = Normalizer().normalize(
         _result(relations=[{"subject": "a", "predicate": "OWNS",
                             "object": "b", "confidence": "high"}])
@@ -158,11 +158,11 @@ def test_confidence_textual_term_parsed() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Predicate canonicalization (Req 4.5)
+# Predicate canonicalization
 # --------------------------------------------------------------------------- #
 
 def test_predicate_assigned_to_canonicalized() -> None:
-    """The relation name "assigned to" canonicalizes to "ASSIGNED_TO" (Req 4.5)."""
+    """The relation name "assigned to" canonicalizes to "ASSIGNED_TO"."""
     result = Normalizer().normalize(
         _result(relations=[{"subject": "T1", "predicate": "assigned to",
                             "object": "Bob", "confidence": 0.9}])
@@ -171,7 +171,7 @@ def test_predicate_assigned_to_canonicalized() -> None:
 
 
 def test_predicate_owns_canonicalized() -> None:
-    """The relation name "owns" canonicalizes to "OWNS" (Req 4.5)."""
+    """The relation name "owns" canonicalizes to "OWNS"."""
     result = Normalizer().normalize(
         _result(relations=[{"subject": "Alice", "predicate": "owns",
                             "object": "Orion", "confidence": 0.9}])
@@ -180,11 +180,11 @@ def test_predicate_owns_canonicalized() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Distinct entities preserved (Req 4.7)
+# Distinct entities preserved
 # --------------------------------------------------------------------------- #
 
 def test_distinct_entities_are_not_merged() -> None:
-    """Two entities with different names remain two distinct entries (Req 4.7)."""
+    """Two entities with different names remain two distinct entries."""
     result = Normalizer().normalize(
         _result(entities=[
             _entity("Person", "alice"),
@@ -197,7 +197,7 @@ def test_distinct_entities_are_not_merged() -> None:
 
 
 def test_normalization_does_not_collapse_identical_canonical_names() -> None:
-    """Entities whose names canonicalize to the same form are still preserved (Req 4.7)."""
+    """Entities whose names canonicalize to the same form are still preserved."""
     result = Normalizer().normalize(
         _result(entities=[
             _entity("Person", "alice smith"),

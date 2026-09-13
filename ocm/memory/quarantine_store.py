@@ -3,13 +3,13 @@
 ``QuarantineStore`` is a thin facade over the ``quarantine_records`` table,
 accessed exclusively through the :class:`~ocm.memory.repository.StorageRepository`
 interface. It persists :class:`~ocm.ontology.models.QuarantineRecord` items so
-they survive process restarts (Req 11.7) and powers ``GET /memory/conflicts``.
+they survive process restarts and powers ``GET /memory/conflicts``.
 
 Because every record is written straight to durable storage via
 ``repo.upsert_quarantine`` and read back via ``repo.list_quarantine``, the store
 holds no in-memory state of its own: a fresh ``QuarantineStore`` constructed
 against the same repository (e.g. after a restart) sees exactly the records that
-were persisted before (Req 11.7).
+were persisted before.
 
 The store exposes three operations matching the design contract
 (``Quarantine_Store.add/list/set_status``):
@@ -44,7 +44,7 @@ class QuarantineStore:
         Args:
             repo: The durable :class:`StorageRepository` (source of truth on
                 disk). All reads and writes go through it so records persist
-                across restarts (Req 11.7).
+                across restarts.
             ids: Optional :class:`IdGenerator`. When omitted a non-deterministic
                 generator is used so each record gets a unique id.
         """
@@ -94,7 +94,7 @@ class QuarantineStore:
         """List persisted quarantine records, optionally filtered by status.
 
         Delegates to ``repo.list_quarantine`` so the result reflects durable
-        storage and therefore persists across restarts (Req 11.7).
+        storage and therefore persists across restarts.
 
         Args:
             status: Optional :class:`QuarantineStatus` (or its string value) to

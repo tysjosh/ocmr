@@ -2,7 +2,6 @@
 
 Feature: ontology-constrained-memory, Property 10
 
-Validates Requirements 2.5, 9.5.
 
 ``ASSIGNED_TO`` is a many-to-one (``m:1``) relation: a Task may point at exactly
 one accepted assignee. This property drives the *real* governance stack —
@@ -13,11 +12,11 @@ the invariant holds for *any* stream of distinct assignees:
 * For a fixed Task ``t1`` and a generated list of distinct Person ids (all seeded
   as active entities), we submit high-confidence ``ASSIGNED_TO`` ``new_fact``
   candidates one at a time through validate + commit.
-* **After the stream**, the Task has *at most one* accepted ``ASSIGNED_TO`` edge
-  (Req 2.5): the first assignee wins; every later distinct assignee is routed to
+* **After the stream**, the Task has *at most one* accepted ``ASSIGNED_TO`` edge:
+  the first assignee wins; every later distinct assignee is routed to
   quarantine, never silently added to accepted memory.
 * **During the stream**, the second (and every later) distinct assignee is
-  detected as a conflict by the ``ContradictionChecker`` (Req 9.5):
+  detected as a conflict by the ``ContradictionChecker``:
   ``has_conflict`` is ``True``, ``kind`` is ``hard`` (both sides high-confidence),
   and the recommended action is ``quarantine``.
 """
@@ -47,7 +46,7 @@ TS = datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 TASK_ID = "t1"
 #: Strictly above the default contradiction_high_confidence threshold (0.8) so
 #: both the candidate and the accepted counterpart grade as high-confidence and
-#: a conflict is classified ``hard`` (Req 9.5).
+#: a conflict is classified ``hard``.
 HIGH = 0.95
 
 
@@ -132,7 +131,7 @@ def test_assigned_to_is_single_valued(person_indices: list[int]) -> None:
             # Whenever an accepted ASSIGNED_TO edge already exists for t1 (i.e.
             # for every assignee after the first), the Contradiction_Checker must
             # flag this distinct assignee as a hard, quarantine-worthy conflict
-            # (Req 9.5) — it is never silently accepted.
+            # — it is never silently accepted.
             existing = graph.find_edges_by_predicate("ASSIGNED_TO")
             if existing:
                 cresult = ContradictionChecker(settings).check(candidate, graph)
@@ -153,7 +152,7 @@ def test_assigned_to_is_single_valued(person_indices: list[int]) -> None:
                 # Every later distinct assignee is quarantined, not accepted.
                 assert outcome.decision == "quarantined"
 
-        # Invariant (Req 2.5): the Task ends with at most one accepted
+        # Invariant: the Task ends with at most one accepted
         # ASSIGNED_TO edge, and it is the first assignee in the stream.
         assigned_edges = [
             edge
@@ -170,7 +169,6 @@ def test_assigned_to_is_single_valued(person_indices: list[int]) -> None:
 def test_single_valued_example_two_assignees() -> None:
     """A concrete example: t1 assigned to A then B keeps only A accepted.
 
-    Validates Requirements 2.5, 9.5
     """
     repo, graph, validator, settings, manager = _build_stack()
     try:

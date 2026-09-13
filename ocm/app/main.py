@@ -1,4 +1,4 @@
-"""FastAPI application factory for the OCM ``API_Service`` (Req 19.1).
+"""FastAPI application factory for the OCM ``API_Service``.
 
 :func:`create_app` builds the FastAPI application, wiring a single
 :class:`~ocm.core.container.CoreContainer` onto ``app.state.container`` so the
@@ -32,12 +32,12 @@ def create_app(
     *,
     enable_debug_routes: bool | None = None,
 ) -> FastAPI:
-    """Build and return the OCM FastAPI application (Req 19.1).
+    """Build and return the OCM FastAPI application.
 
     Args:
         container: A pre-wired :class:`CoreContainer` (tests inject a
             deterministic, in-memory one). When omitted a default container is
-            constructed from ``Settings()`` (offline-first defaults, Req 27.2).
+            constructed from ``Settings`` (offline-first defaults).
         enable_debug_routes: Force-enable/disable the ``routes_debug`` router.
             When ``None`` (default) the debug router is mounted whenever
             ``settings.deterministic_test_mode`` is set.
@@ -59,7 +59,7 @@ def create_app(
     )
     app.state.container = container
 
-    # Five production endpoints (Req 19.2–19.6).
+    # Five production endpoints (–19.6).
     app.include_router(memory_router)
 
     # Non-production inspection endpoints (task 15.3), mounted only in debug /

@@ -4,8 +4,8 @@
 storage paths, determinism, and the reranker/governance thresholds. With **no
 configuration supplied** the defaults select the offline ``Mock_Extractor`` and
 the local ``sentence-transformers/all-MiniLM-L6-v2`` embedding model so the
-whole system runs fully offline (Req 27.2). Both the extractor and embedding
-implementations are selectable via configuration (Req 27.3).
+whole system runs fully offline. Both the extractor and embedding
+implementations are selectable via configuration.
 
 See the design's "Configuration Model" section for the canonical field set.
 """
@@ -42,11 +42,11 @@ class RerankWeights(BaseModel):
 class Settings(BaseModel):
     """Top-level OCM configuration (environment + optional file override).
 
-    Offline-first defaults (Req 27.2): ``extractor="mock"`` and local
+    Offline-first defaults: ``extractor="mock"`` and local
     embeddings, requiring no API key or network access.
     """
 
-    # --- Extraction selection (Req 27.3) -----------------------------------
+    # --- Extraction selection -----------------------------------
     extractor: Literal["mock", "llm"] = "mock"
     llm_base_url: Optional[str] = None
     llm_api_key: Optional[str] = None
@@ -57,7 +57,7 @@ class Settings(BaseModel):
     # JSON-only output.
     llm_use_json_mode: bool = True
 
-    # --- Embedding selection (Req 27.3, 13.x) ------------------------------
+    # --- Embedding selection ------------------------------
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_mode: Literal["local"] = "local"
 
@@ -70,7 +70,7 @@ class Settings(BaseModel):
     # see vectors from earlier containers in the same process.
     chroma_collection: Optional[str] = None
 
-    # --- Determinism (Req 27.5) --------------------------------------------
+    # --- Determinism --------------------------------------------
     deterministic_test_mode: bool = False
 
     # --- Retrieval / governance knobs --------------------------------------

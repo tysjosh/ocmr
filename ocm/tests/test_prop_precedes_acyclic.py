@@ -1,6 +1,5 @@
 """Property 5: PRECEDES graph stays acyclic (Feature: ontology-constrained-memory).
 
-Validates Requirements 8.4.
 
 The Event/PRECEDES projection of the ``Graph_Store`` must always be a directed
 acyclic graph: a candidate ``PRECEDES`` edge that would close a cycle is never

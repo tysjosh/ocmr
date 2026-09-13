@@ -1,7 +1,7 @@
 """Constraint Validator (W6) — graph-level constraints C1 through C10.
 
-Each constraint is implemented as a **separate, independently-callable function**
-(Req 8.12). Every function returns a :class:`ValidationResult` describing whether
+Each constraint is implemented as a **separate, independently-callable function**.
+Every function returns a :class:`ValidationResult` describing whether
 the constraint held (``valid``), and on failure: the ``failed_check`` name, a
 human-readable ``reason``, a ``severity``, the ``conflicting_ids`` involved, and
 the ``recommended_action`` (``reject`` / ``quarantine`` / ``supersede``).
@@ -9,13 +9,13 @@ the ``recommended_action`` (``reject`` / ``quarantine`` / ``supersede``).
 The :class:`ConstraintValidator` orchestrates the applicable constraints for a
 candidate assertion against the :class:`~ocm.memory.graph_store.GraphStore` and
 aggregates them into a single :class:`ValidationResult`, returning the first
-(most-severe-by-order) failure (Req 8.1). Passing C9 marks a candidate
+(most-severe-by-order) failure. Passing C9 marks a candidate
 *eligible*, never *accepted* — final acceptance still requires the contradiction,
-provenance, and write-intent checks downstream (Req 8.13).
+provenance, and write-intent checks downstream.
 
 The contradiction gate (C7) does **not** re-implement contradiction detection;
 it **delegates** to the Contradiction_Checker (W7) which is injected as
-``contradiction_checker`` (Req 8.8). W7 is implemented in a later task, so this
+``contradiction_checker``. W7 is implemented in a later task, so this
 module never hard-imports it: when no checker is supplied, C7 is a pass-through
 no-op and the WritePipeline wiring injects the real checker once available.
 
@@ -125,12 +125,12 @@ def _coerce_task_status(value: Any) -> TaskStatus | None:
 
 
 # --------------------------------------------------------------------------- #
-# C1 — Identity uniqueness (Req 8.2)
+# C1 — Identity uniqueness
 # --------------------------------------------------------------------------- #
 def c1_identity_uniqueness(
     entity_type: str, entity_id: str, graph: GraphStore
 ) -> ValidationResult:
-    """Fail when two nodes of a *different* type would share an ``id`` (Req 8.2).
+    """Fail when two nodes of a *different* type would share an ``id``.
 
     Re-asserting an entity with the same ``(type, id)`` is fine (idempotent
     upsert). A collision — the id already exists under a different type — is an
@@ -150,12 +150,12 @@ def c1_identity_uniqueness(
 
 
 # --------------------------------------------------------------------------- #
-# C2 — Temporal sanity (Req 8.3)
+# C2 — Temporal sanity
 # --------------------------------------------------------------------------- #
 def c2_temporal_sanity(event: Any) -> ValidationResult:
     """Fail when an Event's ``timestamp_end`` precedes its ``timestamp_start``.
 
-    A missing ``timestamp_end`` passes (Req 8.3). ``event`` may be an Event
+    A missing ``timestamp_end`` passes. ``event`` may be an Event
     model or a payload mapping.
     """
     payload = _as_payload(event)
@@ -176,10 +176,10 @@ def c2_temporal_sanity(event: Any) -> ValidationResult:
 
 
 # --------------------------------------------------------------------------- #
-# C3 — Acyclic PRECEDES (Req 8.4)
+# C3 — Acyclic PRECEDES
 # --------------------------------------------------------------------------- #
 def c3_acyclic_precedes(candidate: CandidateAssertion, graph: GraphStore) -> ValidationResult:
-    """Fail when a ``PRECEDES`` edge would close a cycle (Req 8.4).
+    """Fail when a ``PRECEDES`` edge would close a cycle.
 
     Only applies to ``PRECEDES`` candidates; all other predicates pass. Uses the
     graph's accepted PRECEDES projection to test whether a path already runs from
@@ -200,12 +200,12 @@ def c3_acyclic_precedes(candidate: CandidateAssertion, graph: GraphStore) -> Val
 
 
 # --------------------------------------------------------------------------- #
-# C4 — Done-task completion event (Req 8.5)
+# C4 — Done-task completion event
 # --------------------------------------------------------------------------- #
 def c4_done_task_completion_event(
     task_id: str, task_status: Any, graph: GraphStore
 ) -> ValidationResult:
-    """Fail when a ``done`` Task has no completion Event via ``RESULTS_IN`` (Req 8.5).
+    """Fail when a ``done`` Task has no completion Event via ``RESULTS_IN``.
 
     A completion Event is any Event related to the Task by an accepted
     ``RESULTS_IN`` edge (``Event RESULTS_IN Task``). When none exists the Task is
@@ -229,10 +229,10 @@ def c4_done_task_completion_event(
 
 
 # --------------------------------------------------------------------------- #
-# C5 — Inactive assignee (Req 8.6)
+# C5 — Inactive assignee
 # --------------------------------------------------------------------------- #
 def c5_inactive_assignee(candidate: CandidateAssertion, graph: GraphStore) -> ValidationResult:
-    """Fail an ``ASSIGNED_TO`` whose target Person is ``inactive`` (Req 8.6).
+    """Fail an ``ASSIGNED_TO`` whose target Person is ``inactive``.
 
     Only applies to ``ASSIGNED_TO`` candidates. An ``active`` or ``unknown``
     (or unresolved) assignee passes; an ``inactive`` assignee is quarantined.
@@ -255,10 +255,10 @@ def c5_inactive_assignee(candidate: CandidateAssertion, graph: GraphStore) -> Va
 
 
 # --------------------------------------------------------------------------- #
-# C6 — Confidence bounds (Req 8.7)
+# C6 — Confidence bounds
 # --------------------------------------------------------------------------- #
 def c6_confidence_bounds(confidence: float) -> ValidationResult:
-    """Fail when ``confidence`` falls outside [0, 1] (Req 8.7).
+    """Fail when ``confidence`` falls outside [0, 1].
 
     Pydantic structurally guards confidence on the models; C6 is the graph-level
     guarantee so a hand-built value cannot slip through.
@@ -280,7 +280,7 @@ def c6_confidence_bounds(confidence: float) -> ValidationResult:
 
 
 # --------------------------------------------------------------------------- #
-# C7 — Contradiction gate (Req 8.8) — delegates to W7
+# C7 — Contradiction gate — delegates to W7
 # --------------------------------------------------------------------------- #
 def _accepted_confidences_near(graph: GraphStore, candidate: CandidateAssertion) -> dict[str, float]:
     """Map ``assertion_id -> confidence`` for accepted edges around the candidate.
@@ -328,7 +328,7 @@ def c7_contradiction_gate(
     contradiction_checker: ContradictionCheckerProtocol | None = None,
     settings: Any = None,
 ) -> ValidationResult:
-    """Block silent acceptance of a high-confidence contradiction (Req 8.8).
+    """Block silent acceptance of a high-confidence contradiction.
 
     Delegates detection entirely to the Contradiction_Checker (W7): C7 never
     duplicates contradiction logic. When no checker is injected the gate is a
@@ -433,12 +433,12 @@ def c7_contradiction_gate(
 
 
 # --------------------------------------------------------------------------- #
-# C8 — Decision evidence floor (Req 8.9)
+# C8 — Decision evidence floor
 # --------------------------------------------------------------------------- #
 def c8_decision_evidence_floor(
     decision_id: str, decision_status: Any, graph: GraphStore, settings: Any = None
 ) -> ValidationResult:
-    """Fail a ``final`` Decision lacking enough ``EVIDENCE_FOR`` support (Req 8.9).
+    """Fail a ``final`` Decision lacking enough ``EVIDENCE_FOR`` support.
 
     Counts accepted ``EVIDENCE_FOR`` edges from a Document or Event into the
     Decision; when the count is below ``settings.decision_evidence_floor`` (default
@@ -467,15 +467,15 @@ def c8_decision_evidence_floor(
 
 
 # --------------------------------------------------------------------------- #
-# C9 — Graph-level domain/range (Req 8.10)
+# C9 — Graph-level domain/range
 # --------------------------------------------------------------------------- #
 def c9_graph_domain_range(candidate: CandidateAssertion, graph: GraphStore) -> ValidationResult:
-    """Validate the predicate against the *resolved* subject/object types (Req 8.10).
+    """Validate the predicate against the *resolved* subject/object types.
 
     Unlike W5's structural check, C9 resolves the actual entity types from the
     Graph_Store and verifies them against the relation signature's
     ``source_types`` / ``target_types``. Passing makes the candidate *eligible*,
-    not *accepted* (Req 8.13).
+    not *accepted*.
     """
     try:
         sig = get_relation_signature(candidate.predicate)
@@ -522,12 +522,12 @@ def c9_graph_domain_range(candidate: CandidateAssertion, graph: GraphStore) -> V
 
 
 # --------------------------------------------------------------------------- #
-# C10 — Task status transition (Req 8.11)
+# C10 — Task status transition
 # --------------------------------------------------------------------------- #
 def c10_task_status_transition(
     current_status: Any, next_status: Any, write_intent: Any = WriteIntent.new_fact
 ) -> ValidationResult:
-    """Fail a Task status transition not permitted by the map (Req 8.11).
+    """Fail a Task status transition not permitted by the map.
 
     ``correction`` write_intent bypasses the map (permitted). An unchanged status
     is treated as a no-op and passes. Otherwise the transition must appear in
@@ -564,7 +564,7 @@ def c10_task_status_transition(
 # Aggregating validator
 # --------------------------------------------------------------------------- #
 class ConstraintValidator:
-    """Run the applicable C1-C10 constraints and aggregate into one result (Req 8.1).
+    """Run the applicable C1-C10 constraints and aggregate into one result.
 
     The validator runs constraints in canonical order and returns the **first**
     failure with its ``reason`` / ``severity`` / ``conflicting_ids`` /

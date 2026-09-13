@@ -1,4 +1,4 @@
-"""Unit tests for the Query Classifier (R0) (Req 14.1, 14.2)."""
+"""Unit tests for the Query Classifier (R0)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ def classifier() -> QueryClassifier:
     return QueryClassifier()
 
 
-# -- Req 14.1: classification into one of the six query types ---------------
+#: classification into one of the six query types ---------------
 
 
 @pytest.mark.parametrize(
@@ -41,7 +41,7 @@ def test_classify_query_type(classifier, query, expected_type):
     assert result.query_type == expected_type
 
 
-# -- Req 14.2: result shape -------------------------------------------------
+#: result shape -------------------------------------------------
 
 
 def test_result_contains_all_fields(classifier):
