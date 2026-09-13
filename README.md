@@ -9,6 +9,10 @@ rejected rather than silently overwriting good data.
 Implementation lives in [`ocm/`](ocm/). Evaluation entry points are the
 `run_*.py` scripts at the repository root.
 
+**Already-produced output is in [`results/`](results/)** — see
+[`results/README.md`](results/README.md) for what each file is and which command
+produces it, so the reported numbers can be inspected without re-running anything.
+
 ## Setup
 
 Python **3.11+**.
@@ -72,8 +76,12 @@ MultiWOZ dialogues are fetched per split at run time and need access to
 ### Gold trajectories for LM-O
 
 LM-O is annotation-scoped: it needs a JSON file giving the sequence of values each
-`knowledge-update` question passes through. Generate one with
-`annotate_file` from
+`knowledge-update` question passes through. **The 47 trajectories behind the
+reported row are included** at
+[`results/longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json`](results/longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json),
+so no annotation pass is needed to reproduce it.
+
+To regenerate them instead, use `annotate_file` from
 [`ocm/evaluation/datasets/longmemeval_annotate.py`](ocm/evaluation/datasets/longmemeval_annotate.py),
 passing a chat callable:
 
@@ -106,12 +114,14 @@ invoked at scoring time.
 
 ```bash
 python run_lmo_durable_state.py \
-  --annotations local_results/longmemeval_kupdate_annotations__<model-slug>.json \
+  --annotations results/longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json \
   --data data/longmemeval_oracle.json \
   --arms B0,B2,Bsup,Bevi,B3 \
   --embeddings local \
   --out local_results/lmo_durable_state.json
 ```
+
+Compare against [`results/lmo_durable_state.json`](results/lmo_durable_state.json).
 
 Keep `--embeddings local`. The `deterministic` default hashes text into vectors,
 which is fine for the durable-state buckets but makes answer-recall numbers

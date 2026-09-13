@@ -1,0 +1,162 @@
+{
+  "knowledge_update": {
+    "dataset": "longmemeval",
+    "subset": "knowledge-update",
+    "methods": [
+      "B0",
+      "B2",
+      "Bevi",
+      "B3"
+    ],
+    "seeds": [
+      1337,
+      7,
+      42,
+      99,
+      2024
+    ],
+    "n_examples": 47,
+    "decisive_metrics": {
+      "B0": {
+        "task_success": {
+          "mean": 100.0,
+          "low": 100.0,
+          "high": 100.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "contradiction_rate": {
+          "mean": 0.0,
+          "low": 0.0,
+          "high": 0.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "constraint_violations": {
+          "mean": 106.38297872340425,
+          "low": 106.38297872340425,
+          "high": 106.38297872340425,
+          "half_width": 0.0,
+          "n": 5
+        }
+      },
+      "B2": {
+        "task_success": {
+          "mean": 100.0,
+          "low": 100.0,
+          "high": 100.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "contradiction_rate": {
+          "mean": 0.0,
+          "low": 0.0,
+          "high": 0.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "constraint_violations": {
+          "mean": 106.38297872340425,
+          "low": 106.38297872340425,
+          "high": 106.38297872340425,
+          "half_width": 0.0,
+          "n": 5
+        }
+      },
+      "Bevi": {
+        "task_success": {
+          "mean": 100.0,
+          "low": 100.0,
+          "high": 100.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "contradiction_rate": {
+          "mean": 0.0,
+          "low": 0.0,
+          "high": 0.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "constraint_violations": {
+          "mean": 0.0,
+          "low": 0.0,
+          "high": 0.0,
+          "half_width": 0.0,
+          "n": 5
+        }
+      },
+      "B3": {
+        "task_success": {
+          "mean": 100.0,
+          "low": 100.0,
+          "high": 100.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "contradiction_rate": {
+          "mean": 0.0,
+          "low": 0.0,
+          "high": 0.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "constraint_violations": {
+          "mean": 0.0,
+          "low": 0.0,
+          "high": 0.0,
+          "half_width": 0.0,
+          "n": 5
+        }
+      }
+    },
+    "write_outcomes": {
+      "B0": {
+        "candidates": 485,
+        "accepted": 485,
+        "superseded": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "B2": {
+        "candidates": 485,
+        "accepted": 485,
+        "superseded": 0,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "Bevi": {
+        "candidates": 485,
+        "accepted": 235,
+        "superseded": 250,
+        "quarantined": 0,
+        "rejected": 0
+      },
+      "B3": {
+        "candidates": 485,
+        "accepted": 235,
+        "superseded": 250,
+        "quarantined": 0,
+        "rejected": 0
+      }
+    }
+  },
+  "abstention": {
+    "B0": {
+      "abstention_accuracy": 100.0,
+      "n": 30
+    },
+    "B2": {
+      "abstention_accuracy": 100.0,
+      "n": 30
+    },
+    "Bevi": {
+      "abstention_accuracy": 100.0,
+      "n": 30
+    },
+    "B3": {
+      "abstention_accuracy": 100.0,
+      "n": 30
+    }
+  }
+}
