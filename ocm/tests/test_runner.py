@@ -1,4 +1,4 @@
-"""Baseline_Runner tests (Req 22.6, 25.3, 28.9).
+"""Baseline_Runner tests.
 
 Drives B0–B3 over a small slice of the seeded benchmark on a deterministic,
 offline configuration and asserts the runner produces (a) per-(baseline,
@@ -16,7 +16,7 @@ from ocm.evaluation.benchmark import (
 )
 from ocm.evaluation.runner import BaselineRunner, load_benchmark
 
-# Required research-log fields per benchmark record (Req 25.3).
+# Required research-log fields per benchmark record.
 _BENCHMARK_LOG_FIELDS = {
     "baseline_name",
     "answer",
@@ -141,6 +141,6 @@ def test_conflict_surfacing_recorded_when_package_surfaces_it():
     assert r["conflict_surfaced"] is True
     assert r["conflict_ids"], "expected conflicting ids to be recorded"
     assert r["conflict_correct"] is True
-    # The matching benchmark log carries the conflicts list (Req 25.3).
+    # The matching benchmark log carries the conflicts list.
     bench = runner.benchmark_records()[0]
     assert bench["conflicts"], "benchmark log should record the surfaced conflicts"

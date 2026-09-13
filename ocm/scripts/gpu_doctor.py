@@ -3,7 +3,7 @@
 Motivated by a real failure: on a host without CPython development headers,
 Triton could not JIT-compile its CUDA helper, so every ``model.generate`` call
 raised. Because :class:`~ocm.memory.write_pipeline.WritePipeline` absorbs
-extraction failures as recorded validation failures (Req 3.3), the harness kept
+extraction failures as recorded validation failures, the harness kept
 running and would have reported a full arm table computed over an *empty* memory
 store. This script surfaces that class of fault in seconds instead.
 

@@ -1,6 +1,5 @@
-"""Property 1: Schema round-trip identity (task 2.2).
+"""Property 1: Schema round-trip identity.
 
-Validates: Requirements 1.12, 3.2
 
 For any valid ontology/contract model instance ``x`` (Person, Organization,
 Project, Task, Event, Claim, Document, Decision, Assertion, QuarantineRecord,

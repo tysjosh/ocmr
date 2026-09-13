@@ -1,4 +1,4 @@
-"""Typed_Violation_Metric (Req 7, Req 8.1).
+"""Typed_Violation_Metric.
 
 Classifies the durable ACTIVE (accepted) store of a configuration into named
 violation types plus a total, generalizing the existing
@@ -6,7 +6,7 @@ violation types plus a total, generalizing the existing
 new typed breakdown and the legacy count stay derivable side by side.
 
 The metric is a **pure read** over ``container.repo.list_assertions("accepted")``
-(Req 7.5) and ``container.graph`` — it never mutates state. Because it counts only
+ and ``container.graph`` — it never mutates state. Because it counts only
 accepted assertions, a rejected/quarantined poison write contributes nothing, which
 is what makes the Full / Schema_Provenance arms report ``0`` structurally: a write
 that never entered the accepted store cannot be an Invalid_Active_State.
@@ -26,8 +26,6 @@ pipeline agree on what "invalid" means:
   miss: a ``done`` Task with no completion Event via ``RESULTS_IN`` (C4), or a status
   reached from a terminal status such as the ``done`` -> ``todo`` flip (a transition the
   C10 map forbids).
-
-Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.1.
 """
 
 from __future__ import annotations
@@ -56,10 +54,10 @@ _EVIDENCE_SOURCE_TYPES = {"Document", "Event"}
 
 @dataclass
 class WriteOutcomeTally:
-    """Per-arm counts of durable-write outcomes (Req 8.1).
+    """Per-arm counts of durable-write outcomes.
 
     Mirrors the four write-pipeline outcome buckets exactly — no new outcome
-    categories are introduced (Req 8.2). Defaults to all-zero so the runner can
+    categories are introduced. Defaults to all-zero so the runner can
     accumulate the pipeline's ``WriteResult.summary`` buckets into it.
     """
 
@@ -71,14 +69,14 @@ class WriteOutcomeTally:
 
 @dataclass
 class TypedViolationReport:
-    """Typed_Violation_Report for one configuration (arm) (Req 7.1-7.4, 8.1)."""
+    """Typed_Violation_Report for one configuration (arm)."""
 
     schema_invalid: int = 0
     unsupported_final_decision: int = 0
     temporally_invalid_interval: int = 0
     illegal_status_state: int = 0
     total: int = 0
-    #: Legacy ``durable_constraint_violations`` count, kept derivable (Req 7.4).
+    #: Legacy ``durable_constraint_violations`` count, kept derivable.
     single_valued_contradictions: int = 0
     write_outcomes: WriteOutcomeTally = field(default_factory=WriteOutcomeTally)
 
@@ -159,14 +157,14 @@ def _accepted_evidence_count(graph: Any, decision_id: str) -> int:
 # Metric
 # --------------------------------------------------------------------------- #
 def typed_violations(container: Any) -> TypedViolationReport:
-    """Classify a configuration's durable ACTIVE (accepted) store (Req 7).
+    """Classify a configuration's durable ACTIVE (accepted) store.
 
-    Enumerates ``container.repo.list_assertions("accepted")`` **only** (Req 7.5) and
+    Enumerates ``container.repo.list_assertions("accepted")`` **only** and
     classifies each accepted assertion into the first matching violation type. The
-    reported ``total`` equals the sum of the four per-type counts (Req 7.3), and
+    reported ``total`` equals the sum of the four per-type counts, and
     ``single_valued_contradictions`` carries the legacy
     ``durable_constraint_violations`` count so that measure stays derivable
-    alongside the typed breakdown (Req 7.4). An empty accepted store yields an
+    alongside the typed breakdown. An empty accepted store yields an
     all-zero report. The metric never mutates state.
     """
     graph = getattr(container, "graph", None)
@@ -247,7 +245,7 @@ def typed_violations(container: Any) -> TypedViolationReport:
         + illegal_status_state
     )
 
-    # Generalize the legacy measure (Req 7.4): keep the single-valued-contradiction
+    # Generalize the legacy measure: keep the single-valued-contradiction
     # count derivable alongside the typed breakdown. The typed types are orthogonal
     # to this count (the poison writes are constructed to not be contradictions), so
     # the two never double-count.

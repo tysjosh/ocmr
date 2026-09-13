@@ -1,4 +1,4 @@
-"""Entry-point script: compute and report evaluation metrics (Req 28.10).
+"""Entry-point script: compute and report evaluation metrics.
 
 Feeds result records into the :class:`~ocm.evaluation.metrics.MetricsReporter`
 and prints the human-readable metric table (retrieval, answer, write-time, and
@@ -17,8 +17,6 @@ Usage::
     # run inline over a benchmark, then report
     python -m ocm.scripts.report_metrics --benchmark benchmark.jsonl
     python -m ocm.scripts.report_metrics --benchmark benchmark.jsonl --json metrics.json
-
-Requirements: 24.1–24.5, 28.10.
 """
 
 from __future__ import annotations

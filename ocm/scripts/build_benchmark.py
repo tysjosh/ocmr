@@ -1,4 +1,4 @@
-"""Entry-point script: build the seeded benchmark JSONL (Req 23, 28.9).
+"""Entry-point script: build the seeded benchmark JSONL.
 
 Generates the reproducible benchmark dataset via
 :func:`ocm.evaluation.benchmark.generate_jsonl` and writes it to a JSONL file,
@@ -9,8 +9,6 @@ Usage::
 
     python -m ocm.scripts.build_benchmark                      # -> benchmark.jsonl, seed 1337
     python -m ocm.scripts.build_benchmark --out data/bench.jsonl --seed 7
-
-Requirements: 23.1, 23.2, 23.3, 23.5, 28.9.
 """
 
 from __future__ import annotations

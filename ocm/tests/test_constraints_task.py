@@ -1,12 +1,11 @@
-"""Unit tests for the task-oriented graph constraints C4 and C5 (task 6.5).
+"""Unit tests for the task-oriented graph constraints C4 and C5.
 
-Validates: Requirements 8.5, 8.6, 26.3
 
-* **C4 — done-task completion event (Req 8.5).** A Task whose status is ``done``
+* **C4 — done-task completion event.** A Task whose status is ``done``
   must be related to a completion Event by an accepted ``RESULTS_IN`` edge
   (``Event RESULTS_IN Task``). A done Task with no such Event is quarantined; a
   done Task with one passes; a non-``done`` Task always passes.
-* **C5 — inactive assignee (Req 8.6).** An ``ASSIGNED_TO`` candidate whose target
+* **C5 — inactive assignee.** An ``ASSIGNED_TO`` candidate whose target
   Person is ``inactive`` is quarantined; an ``active`` (or ``unknown`` /
   unresolved) assignee passes; non-``ASSIGNED_TO`` predicates are out of scope.
 """
@@ -79,10 +78,10 @@ def _assigned_to(task_id: str, person_id: str) -> CandidateAssertion:
 
 
 # ---------------------------------------------------------------------------
-# C4 — done-task completion event (Req 8.5)
+# C4 — done-task completion event
 # ---------------------------------------------------------------------------
 def test_c4_done_task_without_completion_event_quarantined(graph: GraphStore) -> None:
-    """A done Task lacking a RESULTS_IN completion Event is quarantined (Req 8.5)."""
+    """A done Task lacking a RESULTS_IN completion Event is quarantined."""
     task = _task(status=TaskStatus.done)
     graph.add_entity("Task", task)
 
@@ -95,7 +94,7 @@ def test_c4_done_task_without_completion_event_quarantined(graph: GraphStore) ->
 
 
 def test_c4_done_task_with_completion_event_passes(graph: GraphStore) -> None:
-    """A done Task with an Event RESULTS_IN it passes C4 (Req 8.5)."""
+    """A done Task with an Event RESULTS_IN it passes C4."""
     task = _task(status=TaskStatus.done)
     event = _event()
     graph.add_entity("Task", task)
@@ -109,7 +108,7 @@ def test_c4_done_task_with_completion_event_passes(graph: GraphStore) -> None:
 
 
 def test_c4_non_done_task_passes_without_event(graph: GraphStore) -> None:
-    """A non-done Task is out of scope for C4 and passes (Req 8.5)."""
+    """A non-done Task is out of scope for C4 and passes."""
     task = _task(status=TaskStatus.in_progress)
     graph.add_entity("Task", task)
 
@@ -120,7 +119,7 @@ def test_c4_non_done_task_passes_without_event(graph: GraphStore) -> None:
 
 
 def test_c4_accepts_string_status(graph: GraphStore) -> None:
-    """C4 coerces a raw string status the same as the enum (Req 8.5)."""
+    """C4 coerces a raw string status the same as the enum."""
     task = _task(status=TaskStatus.done)
     graph.add_entity("Task", task)
 
@@ -131,10 +130,10 @@ def test_c4_accepts_string_status(graph: GraphStore) -> None:
 
 
 # ---------------------------------------------------------------------------
-# C5 — inactive assignee (Req 8.6)
+# C5 — inactive assignee
 # ---------------------------------------------------------------------------
 def test_c5_assigned_to_inactive_person_quarantined(graph: GraphStore) -> None:
-    """ASSIGNED_TO an inactive Person is quarantined (Req 8.6)."""
+    """ASSIGNED_TO an inactive Person is quarantined."""
     person = _person(status=PersonStatus.inactive)
     graph.add_entity("Task", _task())
     graph.add_entity("Person", person)
@@ -148,7 +147,7 @@ def test_c5_assigned_to_inactive_person_quarantined(graph: GraphStore) -> None:
 
 
 def test_c5_assigned_to_active_person_passes(graph: GraphStore) -> None:
-    """ASSIGNED_TO an active Person passes C5 (Req 8.6)."""
+    """ASSIGNED_TO an active Person passes C5."""
     person = _person(status=PersonStatus.active)
     graph.add_entity("Task", _task())
     graph.add_entity("Person", person)
@@ -160,7 +159,7 @@ def test_c5_assigned_to_active_person_passes(graph: GraphStore) -> None:
 
 
 def test_c5_assigned_to_unknown_status_person_passes(graph: GraphStore) -> None:
-    """ASSIGNED_TO a Person with unknown status passes C5 (Req 8.6)."""
+    """ASSIGNED_TO a Person with unknown status passes C5."""
     person = _person(status=PersonStatus.unknown)
     graph.add_entity("Task", _task())
     graph.add_entity("Person", person)
@@ -172,7 +171,7 @@ def test_c5_assigned_to_unknown_status_person_passes(graph: GraphStore) -> None:
 
 
 def test_c5_unresolved_assignee_passes(graph: GraphStore) -> None:
-    """A missing/unresolved assignee is left to W5/C9, so C5 passes (Req 8.6)."""
+    """A missing/unresolved assignee is left to W5/C9, so C5 passes."""
     graph.add_entity("Task", _task())
 
     result = c5_inactive_assignee(_assigned_to("task:1", "person:missing"), graph)
@@ -182,7 +181,7 @@ def test_c5_unresolved_assignee_passes(graph: GraphStore) -> None:
 
 
 def test_c5_non_assigned_to_predicate_out_of_scope(graph: GraphStore) -> None:
-    """C5 only applies to ASSIGNED_TO; other predicates pass (Req 8.6)."""
+    """C5 only applies to ASSIGNED_TO; other predicates pass."""
     person = _person(status=PersonStatus.inactive)
     graph.add_entity("Project", _task())  # any non-ASSIGNED_TO subject/edge
     graph.add_entity("Person", person)

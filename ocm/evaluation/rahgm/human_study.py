@@ -17,8 +17,6 @@ What this does **not** deliver: an answer to RQ2. Any explanation-depth effect
 reported here is a consequence of :data:`~ocm.evaluation.rahgm.analyst.DEPTH_COMPETENCE`,
 which is an assumption about people, not a measurement of them. Every emitted
 artifact carries that disclosure.
-
-Requirements: 6.3, 11.3, 12.1, 12.2, 12.3, 13.3, 14.1, 14.2.
 """
 
 from __future__ import annotations
@@ -198,7 +196,7 @@ def run_experiment2(
         for participant_index, profile in enumerate(profiles):
             analyst = SimulatedAnalyst(profile)
             # Counterbalancing: scenario order rotates by participant and the
-            # depth schedule is a Latin square offset by participant (Req 6.3).
+            # depth schedule is a Latin square offset by participant.
             depths = depth_schedule(
                 scenarios_per_participant, offset=participant_index % len(DEPTH_ORDER)
             )
@@ -500,7 +498,7 @@ def _fit_models(
 def _primary_contrasts(
     models: dict[str, Any], traces: Sequence[tuple[Condition, AdjudicationTrace]]
 ) -> dict[str, Any]:
-    """The three preregistered contrasts with Holm correction (Req 12.3).
+    """The three preregistered contrasts with Holm correction.
 
     C4 vs C3 tests the routing mechanism, C5 vs C4 tests feedback adaptation, and
     the depth contrast tests RQ2. Because ``frozen_rahgm`` is the reference cell,

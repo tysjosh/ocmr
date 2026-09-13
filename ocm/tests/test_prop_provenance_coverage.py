@@ -1,4 +1,4 @@
-"""Property test for provenance coverage (task 8.8).
+"""Property test for provenance coverage.
 
 Feature: ontology-constrained-memory, Property 4.
 
@@ -12,7 +12,7 @@ against a live :class:`GraphStore` / :class:`SQLiteRepository(":memory:")`.
 Property 4 — *Every accepted assertion has provenance*: after processing an
 arbitrary stream of valid candidate assertions, **every** assertion that ends up
 ``accepted`` in the repository has at least one provenance record, and that
-record's ``subject_id`` matches the accepted assertion's id (Req 12.1, 12.2,
+record's ``subject_id`` matches the accepted assertion's id (
 12.4). The Commit_Manager records provenance on the accept path keyed by the
 assertion id, so the durable ``provenance`` table must always cover the accepted
 set.
@@ -31,7 +31,6 @@ All candidates use ``write_intent="new_fact"`` so conflicts route to quarantine
 Entity counts, predicate choice, endpoints, and confidences are varied with
 Hypothesis across >= 100 iterations.
 
-Validates: Requirements 12.1, 12.2, 12.4.
 """
 
 from __future__ import annotations
@@ -56,7 +55,7 @@ from ocm.validation.constraints import ConstraintValidator
 
 TS = datetime(2024, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 
-# Any in-range confidence is a *valid* candidate (Req 1.6). Varying across the
+# Any in-range confidence is a *valid* candidate. Varying across the
 # whole [0, 1] range exercises both the soft (low-confidence) and hard
 # (high-confidence) contradiction paths for ASSIGNED_TO.
 confidence = st.floats(
@@ -131,7 +130,6 @@ def _build_stack(num_persons: int, num_projects: int, num_tasks: int):
 def test_provenance_coverage(stream) -> None:
     """Every accepted assertion has >=1 provenance record with matching subject_id.
 
-    Validates: Requirements 12.1, 12.2, 12.4
     """
     num_persons, num_projects, num_tasks, steps = stream
     repo, graph, validator, manager, settings = _build_stack(
@@ -168,7 +166,7 @@ def test_provenance_coverage(stream) -> None:
         assert accepted, "expected at least one accepted assertion"
 
         # Property 4: every accepted assertion has >=1 provenance record, and
-        # that record's subject_id matches the assertion id (Req 12.1, 12.4).
+        # that record's subject_id matches the assertion id.
         for assertion in accepted:
             records = manager.provenance_tracker.for_subject(assertion.id)
             assert len(records) >= 1, (

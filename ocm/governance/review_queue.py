@@ -6,15 +6,13 @@ audit found missing. A ``review`` route creates a durable OCMR quarantine record
 overwritten while the write is held, and an analyst can later **release** the
 write by committing it through the same Commit_Manager.
 
-Explanation depth is a presentation variable only (Req 6.2). The three levels are
+Explanation depth is a presentation variable only. The three levels are
 strictly nested:
 
 * ``minimal`` — recommended action plus failed or unresolved constraints;
 * ``evidence`` — adds supporting and conflicting evidence snippets with provenance;
 * ``full`` — adds the memory timeline, alternative actions, reversibility, and the
   predicted downstream consequence.
-
-Requirements: 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3.
 """
 
 from __future__ import annotations
@@ -143,7 +141,7 @@ class TimelineEntry:
 # --------------------------------------------------------------------------- #
 @dataclass
 class ReviewItem:
-    """One queued write awaiting adjudication (§3.4, Req 5.2).
+    """One queued write awaiting adjudication (§3.4).
 
     Holds the incumbent and proposed assertions, the requested operation, source,
     timestamp, the :class:`RoutingDecision` (which names the failed checks and the
@@ -258,7 +256,7 @@ class Adjudication:
 def render_explanation(
     item: ReviewItem, depth: ExplanationDepth | str
 ) -> dict[str, Any]:
-    """Render a review item at one explanation depth (Req 6.1, 6.2).
+    """Render a review item at one explanation depth.
 
     The three depths are strictly nested: ``minimal ⊂ evidence ⊂ full``. Depth
     changes presentation only and never the route — the route was already fixed by
@@ -340,7 +338,7 @@ def _action_effect(action: ReviewAction, item: ReviewItem) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Latin square (Req 6.3)
+# Latin square
 # --------------------------------------------------------------------------- #
 def latin_square(
     n_levels: int, n_blocks: int, offset: int = 0
@@ -349,7 +347,7 @@ def latin_square(
 
     Row ``offset`` of a cyclic Latin square, repeated to cover ``n_blocks``. Each
     participant gets a different ``offset``, so every level appears equally often
-    at every position across participants (Req 6.3).
+    at every position across participants.
     """
     if n_levels <= 0:
         raise ValueError("n_levels must be positive")
@@ -372,11 +370,10 @@ class ReviewQueue:
     Commit_Manager and transitions the durable quarantine record to ``resolved``.
     A ``reject`` dismisses the record; ``quarantine`` leaves it unresolved; and
     ``request_evidence`` returns the item to the queue with an incremented
-    request count (Req 5.3).
+    request count.
 
     Because release goes through the same Commit_Manager, a supersession retains
     the prior assertion and its provenance, so every release is reversible
-    (Req 5.4).
     """
 
     def __init__(
@@ -531,7 +528,7 @@ class ReviewQueue:
         self.adjudications.append(record)
         return record
 
-    # -- release (Req 5.3, 5.4) -------------------------------------------
+    # -- release -------------------------------------------
     def _release(
         self, item: ReviewItem, action: ReviewAction, now: datetime
     ) -> WriteOutcome | None:

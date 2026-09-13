@@ -3,7 +3,7 @@
 Applies all five governance conditions to the same sequence of candidate writes,
 in the same order, against the same incumbent memory states. Because a scenario's
 30 writes share one container, an erroneous transition at ``t`` remains available
-to influence every later state ``M_{t+1}..M_T`` (Req 10.3).
+to influence every later state ``M_{t+1}..M_T``.
 
 The replay drives the **real** OCMR machinery: each candidate goes through the
 actual :class:`~ocm.validation.schema_validator.SchemaValidator` (W5) and
@@ -17,8 +17,6 @@ Candidate writes are supplied directly as typed tuples rather than as text run
 through an extractor. That matches the paper's unit of analysis — the write ``u =
 (x, e, t, E, s, o)`` — and keeps ground truth objective: no extraction noise sits
 between the corpus label and the governed decision.
-
-Requirements: 10.1, 10.2, 10.3, 11.1, 11.2, 13.2.
 """
 
 from __future__ import annotations

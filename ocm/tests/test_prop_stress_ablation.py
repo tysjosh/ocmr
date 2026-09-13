@@ -10,42 +10,41 @@ correctness properties map 1:1 onto the tests that validate them.
 Currently implemented:
 
 * **Property 1 — Full arm clean; gate-only strictly worse than
-  schema+provenance** (task 5.2): for any generated workload the ``Full_Arm``
+  schema+provenance**: for any generated workload the ``Full_Arm``
   and ``Schema_Provenance_Arm`` totals are ``0`` while the ``Gate_Only_Arm``
   total is strictly greater than the ``Schema_Provenance_Arm`` total — the
-  decisive shared-input comparison (Req 5.4, 9.7, 9.8, 10.3, 13.2).
-* **Property 2 — Ungoverned and gate-only leave invalid state** (task 5.3):
+  decisive shared-input comparison.
+* **Property 2 — Ungoverned and gate-only leave invalid state**:
   for any generated workload both the ``Ungoverned_Arm`` total and the
   ``Gate_Only_Arm`` total are strictly greater than zero — the poison writes
   survive in durable memory when the schema/constraint checks are off, and the
-  contradiction gate alone (fed the same inputs) cannot see them (Req 9.6, 10.2).
-* **Property 7 — Generator determinism** (task 2.3): for any seed, invoking
+  contradiction gate alone (fed the same inputs) cannot see them.
+* **Property 7 — Generator determinism**: for any seed, invoking
   :func:`~ocm.evaluation.datasets.stress_workload.generate_stress_workload`
   twice produces an identical list of ``BenchmarkExample`` objects and an
   identical oracle ``writes_by_ref`` mapping. This is the reproducibility
-  guarantee the offline single-seed evaluation relies on (Req 6.2, 13.4).
-* **Property 8 — Runner determinism** (task 5.5): for any seed, running
+  guarantee the offline single-seed evaluation relies on.
+* **Property 8 — Runner determinism**: for any seed, running
   :func:`~ocm.evaluation.stress_ablation.run_stress_ablation` twice produces
   identical Typed_Violation_Reports for every arm — the reproducibility
-  guarantee that lets the offline diagnostic rely on a single seed (Req 11.2).
-* **Property 9 — Workload composition and labeling** (task 2.4): for any seed
+  guarantee that lets the offline diagnostic rely on a single seed.
+* **Property 9 — Workload composition and labeling**: for any seed
   the workload contains ≥1 Valid_Write, ≥1 Poison_Write, ≥1 case of each of the
   four poison classes, and every example carries a valid ``WriteClass``
-  (Req 5.2, 5.5, 9.9, 9.10).
-* **Property 4 — Valid writes are admitted with zero violations** (task 5.7):
+* **Property 4 — Valid writes are admitted with zero violations**:
   for any generated workload, every Valid_Write is admitted by the ``Full_Arm``
   as an accepted outcome (with no rejected or quarantined outcome) and
   contributes zero Invalid_Active_State to the ``Full_Arm``'s
-  Typed_Violation_Report (Req 5.1, 5.3, 13.3). This mirrors the runner's Full_Arm
+  Typed_Violation_Report. This mirrors the runner's Full_Arm
   configuration (``STRESS_ARMS["Full_Arm"]`` + injected oracle) but replays only
   the cheap VALID cases, so it runs at the spec's ``MIN_PROPERTY_ITERATIONS``
   minimum rather than driving the full four-arm ``run_stress_ablation``.
-* **Property 10 — The reconcile-path guard is default-preserving** (task 5.6):
+* **Property 10 — The reconcile-path guard is default-preserving**:
   for any C4/C8/C10-governed status/decision write, replaying it under a
   default-governed container (``enable_constraint_validation=True``, the
   guard's non-taken branch) routes the offending ``HAS_STATUS`` to the
   quarantine bucket and keeps it out of the accepted store — the same
-  non-accepted outcome the pre-Option-B reconcile path produced (Req 12.6,
+  non-accepted outcome the pre-Option-B reconcile path produced (
   13.6, 15.2). This is the property-based partner to the ``test_stress_workload``
   task-1.2 example tests; it builds lightweight ``CoreContainer`` instances
   directly and replays only the EVIDENCE/STATUS poison writes, varying the
@@ -111,7 +110,6 @@ def test_generator_determinism(
 ) -> None:
     """Two invocations with the same seed produce identical examples + writes_by_ref.
 
-    Validates: Requirements 6.2, 13.4
     """
     counts = dict(
         n_schema=n_schema,
@@ -164,7 +162,6 @@ def test_workload_composition_and_labeling(
 ) -> None:
     """Workload has >0 valid, >0 poison, >=1 of each poison class, valid labels.
 
-    Validates: Requirements 5.2, 5.5, 9.9, 9.10
     """
     counts = dict(
         n_schema=n_schema,
@@ -177,7 +174,7 @@ def test_workload_composition_and_labeling(
     examples, _oracle, cases = generate_stress_workload(seed, **counts)
 
     # Every example carries a valid WriteClass, both on the case label and on the
-    # BenchmarkExample.category (which is the WriteClass value string) — Req 5.5.
+    # BenchmarkExample.category (which is the WriteClass value string).
     valid_values = {wc.value for wc in WriteClass}
     for case in cases:
         assert isinstance(case.write_class, WriteClass), (
@@ -201,15 +198,15 @@ def test_workload_composition_and_labeling(
     # Tally the write classes actually produced.
     produced = [case.write_class for case in cases]
 
-    # >=1 Valid_Write (Req 5.2).
+    # >=1 Valid_Write.
     valid_count = produced.count(WriteClass.VALID)
     assert valid_count > 0, "workload contains no Valid_Write"
 
-    # >=1 Poison_Write overall (Req 5.2).
+    # >=1 Poison_Write overall.
     poison_count = sum(produced.count(pc) for pc in _POISON_CLASSES)
     assert poison_count > 0, "workload contains no Poison_Write"
 
-    # >=1 case of each of the four poison classes (Req 9.9, 9.10) so all four
+    # >=1 case of each of the four poison classes so all four
     # per-type counts can be > 0 under the ungoverned/gate-only arms.
     for poison_class in _POISON_CLASSES:
         assert produced.count(poison_class) > 0, (
@@ -225,7 +222,6 @@ def test_workload_composition_and_labeling(
 def test_full_clean_gate_only_worse_than_schema_prov(seed: int) -> None:
     """Full/Schema+Prov totals are 0; gate-only total exceeds schema+prov.
 
-    Validates: Requirements 5.4, 9.7, 9.8, 10.3, 13.2
 
     Each ``run_stress_ablation(seed=...)`` replays the full pipeline across all
     four arms (and drives ``run_multiseed`` for run-to-run identity), so this
@@ -239,20 +235,20 @@ def test_full_clean_gate_only_worse_than_schema_prov(seed: int) -> None:
     schema_prov = result.arms["Schema_Provenance_Arm"]
     gate_only = result.arms["Gate_Only_Arm"]
 
-    # Full_Arm admits every valid write and removes every poison write (Req 5.4, 9.8).
+    # Full_Arm admits every valid write and removes every poison write.
     assert full.total == 0, (
         f"Full_Arm left Invalid_Active_State (total={full.total}) for seed={seed}: "
         f"{full}"
     )
 
-    # Schema_Provenance_Arm also removes every poison write (Req 9.7).
+    # Schema_Provenance_Arm also removes every poison write.
     assert schema_prov.total == 0, (
         "Schema_Provenance_Arm left Invalid_Active_State "
         f"(total={schema_prov.total}) for seed={seed}: {schema_prov}"
     )
 
     # The decisive comparison: fed the SAME inputs, gate-only leaves invalid state
-    # that schema+provenance removes, so its total is strictly greater (Req 10.3).
+    # that schema+provenance removes, so its total is strictly greater.
     assert gate_only.total > schema_prov.total, (
         "Gate_Only_Arm total is not strictly greater than Schema_Provenance_Arm "
         f"total for seed={seed}: gate_only={gate_only.total} "
@@ -267,7 +263,6 @@ def test_full_clean_gate_only_worse_than_schema_prov(seed: int) -> None:
 def test_ungoverned_and_gate_only_leave_invalid_state(seed: int) -> None:
     """Ungoverned and gate-only arms leave a non-zero Invalid_Active_State total.
 
-    Validates: Requirements 9.6, 10.2
 
     Each ``run_stress_ablation(seed=...)`` replays the full pipeline across all
     four arms, so this varies the workload by seed — the runner uses a fixed
@@ -281,7 +276,7 @@ def test_ungoverned_and_gate_only_leave_invalid_state(seed: int) -> None:
     gate_only = result.arms["Gate_Only_Arm"]
 
     # With schema + constraint validation both off, every poison write is left
-    # accepted in the durable store (Req 9.6).
+    # accepted in the durable store.
     assert ungoverned.total > 0, (
         f"Ungoverned_Arm left no Invalid_Active_State (total={ungoverned.total}) "
         f"for seed={seed}: {ungoverned}"
@@ -289,7 +284,7 @@ def test_ungoverned_and_gate_only_leave_invalid_state(seed: int) -> None:
 
     # Fed the SAME inputs, the contradiction gate alone still cannot see these
     # non-contradiction poison writes, so gate-only also leaves invalid state
-    # in durable memory (Req 10.2).
+    # in durable memory.
     assert gate_only.total > 0, (
         f"Gate_Only_Arm left no Invalid_Active_State (total={gate_only.total}) "
         f"for seed={seed}: {gate_only}"
@@ -303,7 +298,7 @@ def test_ungoverned_and_gate_only_leave_invalid_state(seed: int) -> None:
 def test_all_four_poison_classes_gate_invisible_constraint_caught(seed: int) -> None:
     """Each of the four per-type counts is >0 under Gate_Only, 0 under Schema+Prov/Full.
 
-    Validates: Requirements 1.4, 1.5, 1.6, 2.2, 2.3, 2.4, 3.3, 3.4, 3.5, 4.3, 4.4,
+    Validates:,
     4.5, 4.6, 9.9, 9.11, 9.12, 15.1, 15.5
 
     Each ``run_stress_ablation(seed=...)`` replays the full pipeline across all
@@ -361,7 +356,6 @@ def test_all_four_poison_classes_gate_invisible_constraint_caught(seed: int) -> 
 def test_runner_determinism(seed: int) -> None:
     """Running the runner twice with the same seed yields identical per-arm reports.
 
-    Validates: Requirements 11.2
 
     Each ``run_stress_ablation(seed=...)`` replays the full pipeline across all
     four arms. The offline oracle pipeline is deterministic, so a second run with
@@ -511,7 +505,6 @@ def _is_c10_case(case: StressCase) -> bool:
 def test_reconcile_guard_is_default_preserving(seed: int) -> None:
     """Default (guard-off-branch) config quarantines every C4/C8/C10 poison write.
 
-    Validates: Requirements 12.6, 13.6, 15.2
 
     For any seed, generate the C4/C8/C10-governed poison writes (the EVIDENCE and
     STATUS classes) and replay each under a default-governed container
@@ -619,12 +612,11 @@ def _full_arm_container(oracle) -> CoreContainer:
 def test_valid_writes_admitted_with_zero_violations(seed: int, n_valid: int) -> None:
     """Every Valid_Write is accepted under the Full_Arm and adds zero violations.
 
-    Validates: Requirements 5.1, 5.3, 13.3
 
     For any generated workload, replay only the VALID cases through a Full_Arm
     container (the runner's ``STRESS_ARMS["Full_Arm"]`` toggle triple with the
     deterministic oracle injected). Each Valid_Write must produce at least one
-    accepted outcome and no rejected or quarantined outcome (Req 5.1, 5.3, 13.3),
+    accepted outcome and no rejected or quarantined outcome,
     and the Full_Arm's Typed_Violation_Report over the resulting accepted store
     must have a zero total — a Valid_Write contributes no Invalid_Active_State.
 
@@ -657,7 +649,7 @@ def test_valid_writes_admitted_with_zero_violations(seed: int, n_valid: int) -> 
         rejected = sum(len(res.rejected) for res in results)
         quarantined = sum(len(res.quarantined) for res in results)
 
-        # Never rejected outright (Req 5.3, 13.3).
+        # Never rejected outright.
         assert rejected == 0, (
             f"{case.case_id}: Valid_Write was rejected under the Full_Arm for "
             f"seed={seed}"
@@ -683,7 +675,7 @@ def test_valid_writes_admitted_with_zero_violations(seed: int, n_valid: int) -> 
                 )
 
     # The Valid_Writes contribute zero Invalid_Active_State to the Full_Arm's
-    # Typed_Violation_Report (Req 5.1, 5.4-scoped-to-valid, 13.3).
+    # Typed_Violation_Report (5.4-scoped-to-valid, 13.3).
     report = typed_violations(container)
     assert report.total == 0, (
         f"Full_Arm Typed_Violation_Report total is not zero after replaying only "

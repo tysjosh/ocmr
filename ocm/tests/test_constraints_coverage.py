@@ -1,25 +1,23 @@
 """Consolidated constraint coverage tests for the Constraint_Validator (W6).
 
 This module provides example-based unit coverage for the graph-level constraints
-that are *not* exercised by the temporal (C2/C3, task 6.4) or task (C4/C5,
-task 6.5) test files, plus the aggregating :class:`ConstraintValidator`. Together
+that are *not* exercised by the temporal (C2/C3) or task (C4/C5) test
+files, plus the aggregating :class:`ConstraintValidator`. Together
 with those files the suite spans every constraint C1–C10.
 
 Coverage here:
 
-* **C1 — identity uniqueness** (Req 8.2): an id may not be reused under a
+* **C1 — identity uniqueness**: an id may not be reused under a
   different entity type.
-* **C6 — confidence bounds** (Req 8.7): confidence must lie within [0, 1].
-* **C8 — decision evidence floor** (Req 8.9): a ``final`` Decision needs at least
+* **C6 — confidence bounds**: confidence must lie within [0, 1].
+* **C8 — decision evidence floor**: a ``final`` Decision needs at least
   ``decision_evidence_floor`` EVIDENCE_FOR supports.
-* **C9 — graph-level domain/range** (Req 8.10): a predicate's subject/object must
+* **C9 — graph-level domain/range**: a predicate's subject/object must
   match the relation signature against the *resolved* entity types.
-* **C10 — task status transition** (Req 8.11): a Task status change must be in the
+* **C10 — task status transition**: a Task status change must be in the
   transition map; ``correction`` bypasses it.
-* **ConstraintValidator.validate** (Req 8.12): runs the applicable constraints and
+* **ConstraintValidator.validate**: runs the applicable constraints and
   returns the first failure.
-
-Requirements: 8.2, 8.7, 8.9, 8.10, 8.11, 8.12, 26.6, 28.4.
 """
 
 from __future__ import annotations
@@ -97,7 +95,7 @@ def _candidate(
 
 
 # --------------------------------------------------------------------------- #
-# C1 — Identity uniqueness (Req 8.2)
+# C1 — Identity uniqueness
 # --------------------------------------------------------------------------- #
 def test_c1_reuse_id_under_different_type_fails() -> None:
     graph = GraphStore()
@@ -130,7 +128,7 @@ def test_c1_unused_id_passes() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# C6 — Confidence bounds (Req 8.7)
+# C6 — Confidence bounds
 # --------------------------------------------------------------------------- #
 def test_c6_above_one_fails() -> None:
     result = c6_confidence_bounds(1.5)
@@ -157,7 +155,7 @@ def test_c6_closed_boundaries_pass(value: float) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# C9 — Graph-level domain/range (Req 8.10)
+# C9 — Graph-level domain/range
 # --------------------------------------------------------------------------- #
 def test_c9_wrong_domain_fails() -> None:
     """OWNS requires a Person/Organization subject; a Task subject is invalid."""
@@ -196,7 +194,7 @@ def test_c9_unknown_predicate_fails() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# C10 — Task status transition (Req 8.11)
+# C10 — Task status transition
 # --------------------------------------------------------------------------- #
 def test_c10_illegal_transition_quarantines() -> None:
     result = c10_task_status_transition(TaskStatus.todo, TaskStatus.done)
@@ -223,7 +221,7 @@ def test_c10_correction_bypasses_map() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# C8 — Decision evidence floor (Req 8.9)
+# C8 — Decision evidence floor
 # --------------------------------------------------------------------------- #
 def test_c8_final_decision_without_evidence_quarantines() -> None:
     graph = GraphStore()
@@ -263,7 +261,7 @@ def test_c8_draft_decision_passes_without_evidence() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# ConstraintValidator aggregation (Req 8.12)
+# ConstraintValidator aggregation
 # --------------------------------------------------------------------------- #
 def test_validator_returns_first_failure() -> None:
     """A candidate violating C9 (wrong domain) is surfaced as the failure."""

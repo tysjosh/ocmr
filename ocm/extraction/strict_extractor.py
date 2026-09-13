@@ -3,8 +3,8 @@
 Why this exists
 ---------------
 :class:`~ocm.memory.write_pipeline.WritePipeline` deliberately treats an
-:class:`~ocm.extraction.base.ExtractionError` as a *recorded validation failure*
-(Req 3.3): it logs a warning, records zero candidates, and carries on. That is
+:class:`~ocm.extraction.base.ExtractionError` as a *recorded validation failure*:
+it logs a warning, records zero candidates, and carries on. That is
 correct when the **model** misbehaves — a local model wrapping JSON in prose is a
 normal, measurable outcome that belongs in the results.
 

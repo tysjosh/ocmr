@@ -1,33 +1,28 @@
-"""Behavioral API tests for the five memory endpoints (task 15.4).
+"""Behavioral API tests for the five memory endpoints.
 
-These go beyond the endpoint-shape checks in ``test_api_endpoints.py`` (task
-15.2) and exercise the *behavior* of each route end to end against a
+These go beyond the endpoint-shape checks in ``test_api_endpoints.py`` and exercise the *behavior* of each route end to end against a
 deterministic, in-memory :class:`~ocm.core.container.CoreContainer` wired into
 :func:`ocm.app.main.create_app` via FastAPI's
 :class:`~starlette.testclient.TestClient`:
 
 * ``POST /memory/write`` returns accepted outcomes + a consistent summary, and a
-  contradiction write produces a quarantined outcome (Req 28.1).
+  contradiction write produces a quarantined outcome.
 * ``POST /memory/query`` returns **both** symbolic (exact) and semantic
   (non-exact) results in ``retrieved_items`` plus supporting evidence
-  (Req 28.2, 28.7).
 * ``POST /memory/validate`` returns a verdict **without mutating state** — the
   Graph_Store edge count and the durable assertion rows are unchanged
-  (Req 19.4).
 * ``GET /memory/entity/{id}`` returns the entity payload, its type, and the
-  assertions it participates in (Req 19.5).
+  assertions it participates in.
 * ``GET /memory/conflicts`` returns unresolved conflicts and quarantined
-  candidates after a contradiction write (Req 19.6, 28.8).
+  candidates after a contradiction write.
 * A service-start smoke test: :func:`create_app` builds and exposes the five
-  routes, and a simple GET succeeds (Req 28.1).
+  routes, and a simple GET succeeds.
 
 The deterministic container uses an in-memory SQLite repo and in-memory vector
 index, so the stateful tests never touch disk. Importing :mod:`ocm.app.main`
 does run its module-level ``app = create_app()`` (default settings), which can
 create ``ocm.db`` / ``.chroma`` on disk; the module-scoped cleanup fixture
 removes any such artifacts after the tests run.
-
-Requirements: 28.1, 28.2, 28.7, 28.8, 19.4, 19.5, 19.6.
 """
 
 from __future__ import annotations
@@ -100,14 +95,14 @@ def _write(client: TestClient, text: str, source_ref: str) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# 1. POST /memory/write — accepted + summary (Req 28.1)
+# 1. POST /memory/write — accepted + summary
 # --------------------------------------------------------------------------- #
 def test_write_returns_accepted_and_consistent_summary(client_and_container):
-    """A valid write returns accepted outcomes with a consistent summary (Req 28.1)."""
+    """A valid write returns accepted outcomes with a consistent summary."""
     client, _ = client_and_container
     body = _write(client, "Alice owns Project Orion. Bob is assigned to Task T1.", "src-1")
 
-    # OWNS + ASSIGNED_TO are accepted (Req 28.1: write returns accepted results).
+    # OWNS + ASSIGNED_TO are accepted (: write returns accepted results).
     assert {"OWNS", "ASSIGNED_TO"} <= _accepted_predicates(body)
     assert len(body["accepted"]) >= 2
 
@@ -126,10 +121,10 @@ def test_write_returns_accepted_and_consistent_summary(client_and_container):
 
 
 # --------------------------------------------------------------------------- #
-# 1b. POST /memory/write — quarantined on contradiction (Req 28.1)
+# 1b. POST /memory/write — quarantined on contradiction
 # --------------------------------------------------------------------------- #
 def test_write_quarantines_status_contradiction(client_and_container):
-    """A high-confidence contradiction is quarantined, not silently accepted (Req 28.1)."""
+    """A high-confidence contradiction is quarantined, not silently accepted."""
     client, _ = client_and_container
     _write(client, "Alice owns Project Orion. Bob is assigned to Task T1.", "src-1")
     # T1 becomes ``done`` via the completion event.
@@ -144,10 +139,10 @@ def test_write_quarantines_status_contradiction(client_and_container):
 
 
 # --------------------------------------------------------------------------- #
-# 2. POST /memory/query — symbolic + semantic results (Req 28.2, 28.7)
+# 2. POST /memory/query — symbolic + semantic results
 # --------------------------------------------------------------------------- #
 def test_query_returns_symbolic_and_semantic_results(client_and_container):
-    """Query returns both symbolic (exact) and semantic results + evidence (Req 28.2, 28.7)."""
+    """Query returns both symbolic (exact) and semantic results + evidence."""
     client, _ = client_and_container
     _write(client, "Alice owns Project Orion. Bob is assigned to Task T1.", "src-1")
 
@@ -159,7 +154,7 @@ def test_query_returns_symbolic_and_semantic_results(client_and_container):
 
     items = body["retrieved_items"]
     assert items, "query returned no retrieved items"
-    # Req 28.7 — the merged candidate set carries BOTH a symbolic (exact) hit
+    # — the merged candidate set carries BOTH a symbolic (exact) hit
     # and at least one semantic (non-exact) hit.
     assert any(item["exact_match"] for item in items), "expected a symbolic exact match"
     assert any(not item["exact_match"] for item in items), "expected a semantic (non-exact) hit"
@@ -167,7 +162,7 @@ def test_query_returns_symbolic_and_semantic_results(client_and_container):
     # The symbolic hit is the ASSIGNED_TO assignment edge.
     assert any(item.get("predicate") == "ASSIGNED_TO" for item in items if item["exact_match"])
 
-    # Req 28.2 / 28.8 — supporting evidence (ids + confidence) accompanies the answer.
+    # / 28.8 — supporting evidence (ids + confidence) accompanies the answer.
     assert body["supporting_assertions"], "expected supporting assertions"
     for sa in body["supporting_assertions"]:
         assert sa["id"]
@@ -175,10 +170,10 @@ def test_query_returns_symbolic_and_semantic_results(client_and_container):
 
 
 # --------------------------------------------------------------------------- #
-# 3. POST /memory/validate — no state mutation (Req 19.4)
+# 3. POST /memory/validate — no state mutation
 # --------------------------------------------------------------------------- #
 def test_validate_does_not_mutate_state(client_and_container):
-    """Validate returns a verdict without writing to graph or storage (Req 19.4)."""
+    """Validate returns a verdict without writing to graph or storage."""
     client, container = client_and_container
     _write(client, "Alice owns Project Orion. Bob is assigned to Task T1.", "src-1")
 
@@ -206,17 +201,17 @@ def test_validate_does_not_mutate_state(client_and_container):
     assert {"valid", "decision", "reason", "severity", "failed_check", "conflicting_ids"} <= set(body)
     assert body["decision"] in {"accept", "supersede", "quarantine", "reject"}
 
-    # Nothing was committed: graph + durable storage are unchanged (Req 19.4).
+    # Nothing was committed: graph + durable storage are unchanged.
     assert container.graph.num_edges() == edges_before
     assert container.graph.num_nodes() == nodes_before
     assert len(container.repo.list_assertions()) == assertions_before
 
 
 # --------------------------------------------------------------------------- #
-# 4. GET /memory/entity/{id} — entity + assertions (Req 19.5)
+# 4. GET /memory/entity/{id} — entity + assertions
 # --------------------------------------------------------------------------- #
 def test_entity_returns_entity_and_assertions(client_and_container):
-    """Entity endpoint returns the entity, its type, and its assertions (Req 19.5)."""
+    """Entity endpoint returns the entity, its type, and its assertions."""
     client, container = client_and_container
     _write(client, "Alice owns Project Orion. Bob is assigned to Task T1.", "src-1")
 
@@ -235,17 +230,17 @@ def test_entity_returns_entity_and_assertions(client_and_container):
 
 
 def test_entity_returns_404_for_unknown_entity(client_and_container):
-    """Entity endpoint 404s for an unknown id (Req 19.5)."""
+    """Entity endpoint 404s for an unknown id."""
     client, _ = client_and_container
     resp = client.get("/memory/entity/nope-does-not-exist")
     assert resp.status_code == 404
 
 
 # --------------------------------------------------------------------------- #
-# 5. GET /memory/conflicts — unresolved + quarantined (Req 19.6, 28.8)
+# 5. GET /memory/conflicts — unresolved + quarantined
 # --------------------------------------------------------------------------- #
 def test_conflicts_returns_unresolved_and_quarantined(client_and_container):
-    """Conflicts endpoint surfaces unresolved conflicts + quarantines (Req 19.6, 28.8)."""
+    """Conflicts endpoint surfaces unresolved conflicts + quarantines."""
     client, _ = client_and_container
 
     # No conflicts before any contradiction.
@@ -265,7 +260,7 @@ def test_conflicts_returns_unresolved_and_quarantined(client_and_container):
     assert len(body["unresolved_conflicts"]) >= 1
     assert len(body["quarantined_candidates"]) >= 1
 
-    # Req 28.8 — the curated conflict view carries ids, reason, severity, and
+    # — the curated conflict view carries ids, reason, severity, and
     # the conflicting ids it involves.
     conflict = body["unresolved_conflicts"][0]
     assert conflict["memory_id"]
@@ -279,10 +274,10 @@ def test_conflicts_returns_unresolved_and_quarantined(client_and_container):
 
 
 # --------------------------------------------------------------------------- #
-# 6. Service-start smoke test (Req 28.1)
+# 6. Service-start smoke test
 # --------------------------------------------------------------------------- #
 def test_service_start_smoke():
-    """create_app builds and exposes the five routes; a simple GET succeeds (Req 28.1)."""
+    """create_app builds and exposes the five routes; a simple GET succeeds."""
     settings = Settings(
         deterministic_test_mode=True, chroma_mode="memory", extractor="mock"
     )

@@ -1,4 +1,4 @@
-"""Table renderers and the mandatory scope note (Req 14.1, 14.2).
+"""Table renderers and the mandatory scope note.
 
 Every emitted artifact carries :data:`SCOPE_NOTE` at its top level, and every table
 whose numbers depend on a model rather than a measurement carries a per-table

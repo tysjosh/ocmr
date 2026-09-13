@@ -9,8 +9,6 @@ in-memory SQLite repository + graph, walking the three Task T1 writes:
    accepted and Task T1 reconciled to ``done``.
 3. "Task T1 is not started." (high confidence) → quarantined as a status
    contradiction rather than silently overwriting the accepted ``done`` status.
-
-Requirements: 3.1, 10.1, 10.6, 10.7, 13.5, 16.6, 19.2, 25.1.
 """
 
 from __future__ import annotations
@@ -88,9 +86,9 @@ def test_write1_accepts_owns_and_assigned_to(pipeline):
     assert "OWNS" in preds
     assert "ASSIGNED_TO" in preds
     assert result.rejected == []
-    # Accepted assertions were embedded via the commit-manager hook (Req 13.5).
+    # Accepted assertions were embedded via the commit-manager hook.
     assert pipeline._embedded  # type: ignore[attr-defined]
-    # Claims were embedded via the memory hook (Req 16.6).
+    # Claims were embedded via the memory hook.
     assert any(t == "Claim" for t, _ in pipeline._memory_embedded)  # type: ignore[attr-defined]
 
 
@@ -117,14 +115,14 @@ def test_full_t1_scenario_quarantines_status_contradiction(pipeline):
     assert len(r3.quarantined) == 1
     assert r3.quarantined[0].decision == "quarantined"
     assert r3.summary.num_quarantined == 1
-    # The accepted status is unchanged (no silent overwrite, Req 10.6).
+    # The accepted status is unchanged (no silent overwrite).
     assert graph.get_entity_payload(t1_id)["status"] == TaskStatus.done.value
 
     # The quarantine is durable and surfaced for conflict queries.
     conflicts = pipeline.quarantine_store.list()
     assert any("status contradiction" in q.reason for q in conflicts)
 
-    # Only accepted assertions are edges in the graph (Req 10.5).
+    # Only accepted assertions are edges in the graph.
     for a in pipeline.repo.list_assertions():
         if a.status == AssertionStatus.accepted:
             assert graph.has_assertion(a.subject_id, a.object_id, a.predicate)

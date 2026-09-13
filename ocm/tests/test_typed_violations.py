@@ -202,7 +202,6 @@ def _build_container(kinds: list[str]) -> tuple[_FakeContainer, list[Any]]:
 def test_typed_violation_types_partition(kinds: list[str]) -> None:
     """Property 5.
 
-    Validates: Requirements 7.1, 7.3
     """
     container, accepted = _build_container(kinds)
 
@@ -215,10 +214,10 @@ def test_typed_violation_types_partition(kinds: list[str]) -> None:
         report.illegal_status_state,
     )
 
-    # Req 7.3: the reported total is exactly the sum of the four per-type counts.
+    #: the reported total is exactly the sum of the four per-type counts.
     assert report.total == sum(per_type)
 
-    # Req 7.1: each type is a non-negative count, and every counted
+    #: each type is a non-negative count, and every counted
     # Invalid_Active_State is classified into exactly one type — so the buckets
     # are disjoint and the total can never exceed the number of accepted
     # assertions (no assertion is counted in more than one type).
@@ -250,20 +249,19 @@ def test_metric_generalizes_contradiction_measure(
 ) -> None:
     """Property 6.
 
-    Validates: Requirements 7.4, 7.5
     """
     container, _accepted = _build_container(kinds)
 
     report = typed_violations(container)
 
-    # Req 7.4: the metric generalizes the legacy measure — its
+    #: the metric generalizes the legacy measure — its
     # single_valued_contradictions count is exactly what durable_constraint_violations
     # reports for the same durable store, so the existing single-valued-contradiction
     # measure stays derivable alongside the new typed breakdown.
     expected_svc, _accepted_count = durable_constraint_violations(container)
     assert report.single_valued_contradictions == expected_svc
 
-    # Req 7.5: every count derives solely from the durable ACTIVE (accepted) store.
+    #: every count derives solely from the durable ACTIVE (accepted) store.
     # Layer the *same* kinds of state onto the graph as non-accepted (quarantined)
     # "shadow" assertions — shapes that WOULD be classified as violations (or as
     # contradictions) if the metric read anything other than the accepted store —
@@ -286,24 +284,24 @@ def test_metric_generalizes_contradiction_measure(
 
 
 # --------------------------------------------------------------------------- #
-# Report / tally shape example tests (Req 7.2, 8.1, 8.2)
+# Report / tally shape example tests
 # --------------------------------------------------------------------------- #
 # These are example-based (not property) tests pinning the *shape* of the two
 # data models the metric returns: the four-field typed breakdown on
-# ``TypedViolationReport`` plus its aggregate fields (Req 7.2), and the
+# ``TypedViolationReport`` plus its aggregate fields, and the
 # ``WriteOutcomeTally`` with exactly the four pipeline outcome buckets and no new
-# categories (Req 8.1, 8.2).
+# categories.
 import dataclasses
 
 from ocm.evaluation.typed_violations import TypedViolationReport, WriteOutcomeTally
 
 #: The four write-pipeline outcome buckets (``WriteResult.accepted`` /
 #: ``superseded`` / ``quarantined`` / ``rejected``) — the exact set the tally is
-#: derived from, with no new categories introduced (Req 8.2).
+#: derived from, with no new categories introduced.
 _PIPELINE_OUTCOME_BUCKETS = ("accepted", "superseded", "quarantined", "rejected")
 
 #: The four named per-type violation counts the report breaks the accepted store
-#: into (Req 7.2), in classification order.
+#: into, in classification order.
 _TYPED_VIOLATION_FIELDS = (
     "schema_invalid",
     "unsupported_final_decision",
@@ -315,13 +313,13 @@ _TYPED_VIOLATION_FIELDS = (
 def test_report_exposes_four_typed_fields_plus_aggregates() -> None:
     """The report exposes the four per-type fields plus total / legacy / tally.
 
-    Req 7.2: a per-type count for each of the four violation types, alongside the
+    a per-type count for each of the four violation types, alongside the
     ``total`` aggregate, the derivable ``single_valued_contradictions`` legacy
     measure, and the ``write_outcomes`` tally.
     """
     field_names = [f.name for f in dataclasses.fields(TypedViolationReport)]
 
-    # The four typed per-type breakdown fields are present (Req 7.2).
+    # The four typed per-type breakdown fields are present.
     for name in _TYPED_VIOLATION_FIELDS:
         assert name in field_names
 
@@ -349,7 +347,7 @@ def test_report_exposes_four_typed_fields_plus_aggregates() -> None:
 def test_report_total_is_sum_of_four_typed_fields_on_a_mixed_store() -> None:
     """On a store with one of each poison class, the four fields each read 1.
 
-    Anchors the Req 7.2 per-type breakdown to concrete values: a store holding one
+    Anchors the per-type breakdown to concrete values: a store holding one
     SCHEMA, one TEMPORAL, one EVIDENCE, and one STATUS (C4) case reports exactly one
     Invalid_Active_State per type and a ``total`` equal to their sum.
     """
@@ -377,7 +375,7 @@ def test_report_total_is_sum_of_four_typed_fields_on_a_mixed_store() -> None:
 def test_write_outcome_tally_has_exactly_the_four_pipeline_buckets() -> None:
     """The tally exposes exactly accepted/superseded/quarantined/rejected.
 
-    Req 8.1/8.2: the Write_Outcome_Tally mirrors the four existing write-pipeline
+    /8.2: the Write_Outcome_Tally mirrors the four existing write-pipeline
     outcome buckets and introduces no new outcome categories.
     """
     field_names = {f.name for f in dataclasses.fields(WriteOutcomeTally)}
@@ -390,7 +388,7 @@ def test_write_outcome_tally_has_exactly_the_four_pipeline_buckets() -> None:
 def test_write_outcome_tally_defaults_to_zero_and_accumulates_pipeline_buckets() -> None:
     """The tally defaults to all-zero and holds counts derived from the buckets.
 
-    Req 8.2: the tally is derived from the existing pipeline outcome buckets — a
+    the tally is derived from the existing pipeline outcome buckets — a
     fresh tally is all-zero, and assigning per-bucket counts round-trips exactly,
     with no other category to populate.
     """

@@ -1,10 +1,10 @@
-"""Stress-diagnostic governance arms (Req 9.1-9.5).
+"""Stress-diagnostic governance arms.
 
 The **arm definitions** for the Schema/Provenance stress diagnostic. Each arm is
 a triple of the three *existing* ``Settings`` governance toggles applied via
 ``Settings.model_copy(update=...)`` — the same mechanism
 :class:`~ocm.evaluation.arms.ablations.AblationSpec` already uses — so **no new
-toggle** and **no new pipeline governance code** is introduced (Req 9.5, 12.2).
+toggle** and **no new pipeline governance code** is introduced.
 
 ======================  ======  ======  =====
 Arm                     W5      W6      C7
@@ -25,8 +25,6 @@ live in :mod:`ocm.evaluation.stress_ablation`, which drives these arms. Keeping
 the definitions here (dependency-free w.r.t. the runners) is what lets
 :mod:`ocm.evaluation.arms` register them without importing
 :mod:`ocm.evaluation.experiment`.
-
-Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 12.2.
 """
 
 from __future__ import annotations
@@ -51,7 +49,7 @@ __all__ = [
 #: toggles ``enable_schema_validation`` (W5) / ``enable_constraint_validation``
 #: (W6, containing C1-C10 incl. C9/C2 and the C7 gate) / ``enable_contradiction_gate``
 #: (C7). Applied via ``Settings.model_copy(update=STRESS_ARMS[arm])`` so each arm is
-#: configured *exclusively* through existing toggles (Req 9.5, 12.2).
+#: configured *exclusively* through existing toggles.
 STRESS_ARMS: Dict[str, Dict[str, bool]] = {
     "Ungoverned_Arm": {
         "enable_schema_validation": False,
@@ -83,7 +81,7 @@ STRESS_ARM_DESCRIPTIONS: Dict[str, str] = {
     "Full_Arm": "all write-time governance on (B3-equivalent)",
 }
 
-#: The decisive comparison row (Req 10.4): fed the same inputs as every arm, it
+#: The decisive comparison row: fed the same inputs as every arm, it
 #: still leaves the invalid durable state the Schema_Provenance_Arm removes.
 DECISIVE_ARM: str = "Gate_Only_Arm"
 

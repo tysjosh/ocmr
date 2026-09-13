@@ -1,13 +1,12 @@
 """Unit tests for OCM configuration defaults and deterministic ID generation.
 
-These cover task 1.4:
+These cover:
 
 * ``Settings`` offline-first defaults: the Mock_Extractor and local
-  ``all-MiniLM-L6-v2`` embeddings run with no API key or network (Req 27.2),
+  ``all-MiniLM-L6-v2`` embeddings run with no API key or network,
   and both extractor and embedding implementations are config-selectable
-  (Req 27.3).
 * ``RerankWeights`` defaults match the design's reranker score function.
-* ``IdGenerator`` determinism (Req 27.5): with ``deterministic=True`` two
+* ``IdGenerator`` determinism: with ``deterministic=True`` two
   fresh generators reproduce the same entity_id sequence for the same inputs,
   while differing ``type``/``normalized_name``/``source_ref`` yield distinct
   IDs; with ``deterministic=False`` IDs are unique across calls.
@@ -20,20 +19,20 @@ from ocm.core.ids import IdGenerator
 
 
 # ---------------------------------------------------------------------------
-# Settings defaults (Req 27.2, 27.3)
+# Settings defaults
 # ---------------------------------------------------------------------------
 def test_settings_offline_defaults() -> None:
     """No config supplied -> fully offline Mock_Extractor + local embeddings."""
     settings = Settings()
 
-    # Offline extractor by default (Req 27.2).
+    # Offline extractor by default.
     assert settings.extractor == "mock"
 
-    # Local MiniLM embedding model, run locally (Req 27.2, 27.3).
+    # Local MiniLM embedding model, run locally.
     assert settings.embedding_model == "sentence-transformers/all-MiniLM-L6-v2"
     assert settings.embedding_mode == "local"
 
-    # Determinism is opt-in; production default is random IDs (Req 27.5).
+    # Determinism is opt-in; production default is random IDs.
     assert settings.deterministic_test_mode is False
 
     # Offline implies no API key / base URL required by default.
@@ -42,7 +41,7 @@ def test_settings_offline_defaults() -> None:
 
 
 def test_settings_extractor_and_embedding_are_selectable() -> None:
-    """Both extractor and embedding implementations are config-selectable (Req 27.3)."""
+    """Both extractor and embedding implementations are config-selectable."""
     settings = Settings(extractor="llm")
     assert settings.extractor == "llm"
 
@@ -78,7 +77,7 @@ def test_settings_uses_default_rerank_weights() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Deterministic ID generation (Req 27.5)
+# Deterministic ID generation
 # ---------------------------------------------------------------------------
 ENTITY_INPUTS = [
     ("Person", "ada lovelace", "doc-1#0"),

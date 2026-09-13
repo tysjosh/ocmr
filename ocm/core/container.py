@@ -1,7 +1,7 @@
-"""Dependency container wiring the whole OCM system (Req 19.1, 27.2, 27.3, 11.8).
+"""Dependency container wiring the whole OCM system.
 
 ``CoreContainer`` constructs and holds every wired component the API service
-(``ocm/app/api/``, task 15.2) and the agent (``ocm/agent/``, task 16.x) depend
+(``ocm/app/api/``) and the agent (``ocm/agent/``) depend
 on, so endpoints and tools stay decoupled from construction. A single container
 is built per process (or per test) and FastAPI dependencies resolve from it.
 
@@ -14,7 +14,7 @@ What it wires (in order)
   :class:`~ocm.memory.sqlite_repository.SQLiteRepository`; injectable for tests).
 * **Graph** — rebuilt from the repository **on startup** via
   :func:`~ocm.memory.graph_store.rebuild_graph` so the in-memory accepted-only
-  projection matches durable storage after a restart (Req 11.8).
+  projection matches durable storage after a restart.
 * **Embeddings + vector index** — a swappable
   :class:`~ocm.retrieval.embeddings.EmbeddingProvider` and the Chroma-backed
   :class:`~ocm.retrieval.vector_index.VectorIndex` (graph-aware for assertion
@@ -23,14 +23,14 @@ What it wires (in order)
   and :class:`~ocm.memory.provenance_tracker.ProvenanceTracker`.
 * **Extractor** — :class:`~ocm.extraction.mock_extractor.MockExtractor` by
   default, or :class:`~ocm.extraction.llm_extractor.LLMExtractor` when
-  ``settings.extractor == "llm"`` (Req 27.3).
+  ``settings.extractor == "llm"``.
 * **Write pipeline (W1–W8)** and **retrieval pipeline (R0–R4)**, fully wired.
 
-Offline-first defaults (Req 27.2)
+Offline-first defaults
 ---------------------------------
 With no configuration the container selects the offline ``Mock_Extractor`` and
 local embeddings, requiring no API key or network access. Both the extractor and
-the embedding provider are **selectable** (Req 27.3): ``settings.extractor``
+the embedding provider are **selectable**: ``settings.extractor``
 chooses mock vs LLM, and ``settings.embedding_mode`` / ``deterministic_test_mode``
 choose the embedding provider.
 
@@ -44,8 +44,6 @@ unless a repository is injected — backs storage with an in-memory SQLite
 database. Combined with ``settings.chroma_mode == "memory"`` (and the vector
 index's pure-Python fallback when ``chromadb`` is absent) this makes the whole
 system run fully offline for tests and the research demo.
-
-Requirements: 11.8, 19.1, 27.2, 27.3.
 """
 
 from __future__ import annotations
@@ -84,7 +82,7 @@ from ocm.validation.schema_validator import SchemaValidator
 
 
 class CoreContainer:
-    """Constructs and holds the wired OCM components (Req 19.1)."""
+    """Constructs and holds the wired OCM components."""
 
     def __init__(
         self,
@@ -97,8 +95,8 @@ class CoreContainer:
 
         Args:
             settings: The OCM :class:`Settings`. Offline-first defaults select
-                the mock extractor and local embeddings (Req 27.2); both are
-                selectable via configuration (Req 27.3).
+                the mock extractor and local embeddings; both are
+                selectable via configuration.
             repo: Optional :class:`StorageRepository` to inject (tests pass an
                 in-memory ``SQLiteRepository(":memory:")``). When omitted a
                 default repository is constructed: an in-memory SQLite database
@@ -107,12 +105,12 @@ class CoreContainer:
             extractor: Optional pre-built W1 extractor to inject (e.g. an
                 :class:`LLMExtractor` wired with a fake HTTP client for offline
                 tests). When omitted the extractor is selected from
-                ``settings.extractor`` (Req 27.3).
+                ``settings.extractor``.
             embeddings: Optional pre-built :class:`EmbeddingProvider` to inject.
                 Lets an expensive provider (e.g. a real sentence-transformers
                 model) be **loaded once and shared** across many containers
                 (the multi-seed/ablation experiment harness). When omitted the
-                provider is selected from ``settings`` (Req 27.3).
+                provider is selected from ``settings``.
         """
         self.settings = settings
 
@@ -123,10 +121,10 @@ class CoreContainer:
         # --- storage ------------------------------------------------------
         self.repo: StorageRepository = repo or self._build_default_repo(settings)
 
-        # --- graph: rebuild from durable storage on startup (Req 11.8) ----
+        # --- graph: rebuild from durable storage on startup ----
         self.graph: GraphStore = rebuild_graph(self.repo)
 
-        # --- embeddings + vector index (provider injectable, Req 27.3) ----
+        # --- embeddings + vector index (provider injectable) ----
         self.embeddings: EmbeddingProvider = (
             embeddings if embeddings is not None else self._build_embedding_provider(settings)
         )
@@ -142,7 +140,7 @@ class CoreContainer:
         self.quarantine_store = QuarantineStore(self.repo, self.ids)
         self.provenance_tracker = ProvenanceTracker(self.repo, self.ids)
 
-        # --- extractor (selectable, Req 27.3; injectable for tests) -------
+        # --- extractor (selectable,; injectable for tests) -------
         self.extractor = extractor if extractor is not None else self._build_extractor(settings)
 
         # --- write-pipeline stages (W2–W8) --------------------------------
@@ -159,9 +157,9 @@ class CoreContainer:
             ids=self.ids,
             quarantine_store=self.quarantine_store,
             provenance_tracker=self.provenance_tracker,
-            # Embed accepted assertions into the Vector_Index (Req 13.5).
+            # Embed accepted assertions into the Vector_Index.
             embed_hook=self.vector_index.embed_assertion,
-            # Re-tag superseded assertions in the Vector_Index (Req 10.5, 16.2).
+            # Re-tag superseded assertions in the Vector_Index.
             status_hook=self.vector_index.set_status,
         )
 
@@ -179,7 +177,7 @@ class CoreContainer:
             ids=self.ids,
             provenance_tracker=self.provenance_tracker,
             quarantine_store=self.quarantine_store,
-            # Embed accepted claims / documents / events (Req 16.6).
+            # Embed accepted claims / documents / events.
             memory_embed_hook=self.vector_index.embed_memory,
             research_logger=self.research_logger,
             settings=settings,
@@ -224,7 +222,7 @@ class CoreContainer:
 
     @staticmethod
     def _build_embedding_provider(settings: Settings) -> EmbeddingProvider:
-        """Select the embedding provider (Req 27.3, offline-first Req 27.2).
+        """Select the embedding provider (offline-first).
 
         In ``deterministic_test_mode`` the dependency-free, offline
         :class:`DeterministicEmbeddingProvider` is used so the system runs
@@ -246,7 +244,7 @@ class CoreContainer:
 
     @staticmethod
     def _build_extractor(settings: Settings):
-        """Select the W1 extractor (Req 27.3; offline default Req 27.2)."""
+        """Select the W1 extractor (offline default)."""
         if settings.extractor == "llm":
             return LLMExtractor(settings)
         return MockExtractor()

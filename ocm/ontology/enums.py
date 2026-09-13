@@ -1,8 +1,8 @@
 """Ontology enumerations.
 
 All status/priority/severity/intent/resolution fields are ``str`` enums so that
-out-of-enum values raise a ``ValidationError`` (Req 1.11). Every status enum
-includes ``unknown`` to support default-to-unknown behavior (Req 1.13).
+out-of-enum values raise a ``ValidationError``. Every status enum
+includes ``unknown`` to support default-to-unknown behavior.
 """
 
 from enum import Enum

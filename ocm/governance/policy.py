@@ -17,8 +17,6 @@ irreversible write escalates. Nothing here consults a language model, and the
 score is never surfaced as an unexplained confidence value — every
 :class:`~ocm.governance.router.RoutingDecision` carries the features and the rule
 that fired.
-
-Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4.
 """
 
 from __future__ import annotations
@@ -38,12 +36,12 @@ from ocm.memory.contracts import CandidateAssertion, ValidationResult
 from ocm.ontology.enums import WriteIntent
 
 # --------------------------------------------------------------------------- #
-# Immutable governance constants (Req 4.3, 7.4)
+# Immutable governance constants
 # --------------------------------------------------------------------------- #
 #: Mandatory constraints. A write failing any of these can never be routed to
 #: ``accept``, regardless of its risk score or of any adapted parameter. These
 #: identifiers are module constants that the bounded updater has no handle on, so
-#: no reachable adaptation can disable them (Req 4.3, 7.4).
+#: no reachable adaptation can disable them.
 MANDATORY_CHECKS = frozenset({"C1", "C2", "C3", "C6", "C9"})
 
 #: Checks whose failure means the write is malformed, prohibited, or otherwise
@@ -81,8 +79,8 @@ TIERS: tuple[Tier, ...] = (Tier.reject, Tier.accept, Tier.supersede, Tier.review
 class PolicyParameters:
     """The registered, adaptable parameters of the escalation policy.
 
-    These are the *only* quantities bounded feedback adaptation may change
-    (Req 7.1): the eight coefficients of eq. (3) and the two routing thresholds.
+    These are the *only* quantities bounded feedback adaptation may change:
+    the eight coefficients of eq. (3) and the two routing thresholds.
     Tier semantics, mandatory constraints, feature encodings, and the rejection
     rule are module constants and are immutable.
 
@@ -140,17 +138,17 @@ class PolicyParameters:
         """Return a copy with new thresholds (unprojected)."""
         return replace(self, tau_l=float(tau_l), tau_h=float(tau_h))
 
-    # -- admissible set B (Req 2.3) ---------------------------------------
+    # -- admissible set B ---------------------------------------
     def project(self) -> "PolicyParameters":
         """Project onto the admissible set ``B`` of eq. (4).
 
         Failure, interaction, and consequence coefficients are clamped
         nonnegative, as are the displayed authority and reversibility discounts.
-        Thresholds are clamped into ``[0,1]`` with ``τ_l < τ_h`` enforced
-        (Req 3.2). The intercept is unconstrained.
+        Thresholds are clamped into ``[0,1]`` with ``τ_l < τ_h`` enforced.
+        The intercept is unconstrained.
 
-        Constraining these signs is what makes the fitted policy monotonic
-        (Req 2.5): ``∂r/∂f_i ≥ 0``, ``∂r/∂k ≥ 0``, ``∂r/∂q ≥ 0``,
+        Constraining these signs is what makes the fitted policy monotonic:
+        ``∂r/∂f_i ≥ 0``, ``∂r/∂k ≥ 0``, ``∂r/∂q ≥ 0``,
         ``∂r/∂v ≤ 0``, ``∂r/∂a ≤ 0``.
         """
         tau_l = min(max(self.tau_l, 0.0), 1.0)
@@ -199,7 +197,7 @@ class PolicyParameters:
         }
 
     def coefficient_distance(self, other: "PolicyParameters") -> float:
-        """Euclidean distance ``‖β − β'‖₂`` over the nine coefficients (Req 7.3)."""
+        """Euclidean distance ``‖β − β'‖₂`` over the nine coefficients."""
         return math.sqrt(
             sum(
                 (a - b) ** 2
@@ -217,7 +215,7 @@ class RouteGuards:
 
     Attributes:
         g: ``g(u) = 1`` — the write is malformed, prohibited, or unattributed.
-        m: ``m(u) = 1`` — a mandatory constraint failed. Immutable (Req 4.3).
+        m: ``m(u) = 1`` — a mandatory constraint failed. Immutable.
         h: ``h(u) = 1`` — an authoritative, temporally resolved, reversible
             correction: authority ≥ 0.90, the temporal relation is resolved, and
             the incumbent assertion remains recoverable (§3.3).
@@ -289,7 +287,7 @@ class EscalationPolicy:
     """
 
     def __init__(self, params: PolicyParameters | None = None) -> None:
-        """Create a policy, projecting its parameters onto ``B`` (Req 2.3)."""
+        """Create a policy, projecting its parameters onto ``B``."""
         self.params = (params or PolicyParameters()).project()
 
     # -- eq. (3) -----------------------------------------------------------
@@ -317,7 +315,7 @@ class EscalationPolicy:
         """Apply ``π(u)`` and return ``(tier, rule, risk)``.
 
         The rule string names which clause of eq. (6) fired, so a review item can
-        show the decision path rather than a bare score (Req 4.5).
+        show the decision path rather than a bare score.
         """
         r = self.risk(features)
         p = self.params
@@ -347,7 +345,7 @@ class EscalationPolicy:
             )
         return Tier.review, "otherwise -> review", r
 
-    # -- monotonicity witness (Req 2.5) ------------------------------------
+    # -- monotonicity witness ------------------------------------
     def is_monotonic(self) -> bool:
         """Whether the parameters satisfy the monotonicity sign constraints."""
         p = self.params
@@ -443,9 +441,9 @@ def fit_policy(
     subject to ``β ∈ B``: after every gradient step the coefficient vector is
     projected back onto the admissible set, which clamps the failure,
     interaction, consequence, reversibility, and authority coefficients at zero.
-    The result is an inspectable monotonic policy (Req 2.3, 2.5).
+    The result is an inspectable monotonic policy.
 
-    The optimizer is deterministic (Req 2.4): full-batch gradients, a fixed
+    The optimizer is deterministic: full-batch gradients, a fixed
     iteration count, no shuffling, and no dependency beyond the standard library.
 
     Args:
@@ -622,12 +620,12 @@ def select_thresholds(
 
     Maximizes ``F₂`` of the review decision against gold ``review`` subject to
     ``FN_cons / N_cons ≤ mcr_ceiling``, over the lattice
-    ``0 ≤ τ_l < τ_h ≤ 1`` (Req 3.1, 3.2).
+    ``0 ≤ τ_l < τ_h ≤ 1``.
 
     When no lattice point satisfies the constraint the selection falls back to
     the pair minimizing MCR (breaking ties on ``F₂``) and reports
     ``feasible=False`` so the caller can surface the infeasibility rather than
-    silently shipping a policy that violates its own safety bound (Req 3.3).
+    silently shipping a policy that violates its own safety bound.
     """
     cases = list(cases)
     if not cases:

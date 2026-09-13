@@ -25,15 +25,12 @@ T1?" — and we assert the durable accepted state and that the quarantined
 conflict is surfaced:
 
 * the Task T1 graph node status is ``done`` (the current accepted status, the
-  contradiction gate having blocked the "not started" overwrite, Req 28.5);
+  contradiction gate having blocked the "not started" overwrite);
 * the status query returns a structured ``EvidencePackage`` carrying **both**
   symbolic and semantic results, with supporting assertions (ids + confidence),
-  provenance, and a conflicts field (Req 28.7, 28.8);
+  provenance, and a conflicts field;
 * the quarantined "not started" status contradiction is durably retrievable
   from the Quarantine_Store, and a contradiction_check query surfaces it
-  (Req 28.8).
-
-Requirements: 28.5, 28.7, 28.8.
 """
 
 from __future__ import annotations
@@ -90,7 +87,7 @@ def stack():
         ids=ids,
         quarantine_store=quarantine,
         provenance_tracker=provenance,
-        embed_hook=vector_index.embed_assertion,  # Req 13.5
+        embed_hook=vector_index.embed_assertion, #
     )
     research_logger = ResearchLogger()
     write_pipeline = WritePipeline(
@@ -106,7 +103,7 @@ def stack():
         ids=ids,
         provenance_tracker=provenance,
         quarantine_store=quarantine,
-        memory_embed_hook=vector_index.embed_memory,  # Req 16.6
+        memory_embed_hook=vector_index.embed_memory, #
         research_logger=research_logger,
         settings=settings,
     )
@@ -168,10 +165,10 @@ def test_t1_end_to_end_status_query_and_conflict_surfacing(stack):
     r3 = write.run("Task T1 is not started.", "src-3")
     assert len(r3.quarantined) == 1
     assert r3.quarantined[0].decision == "quarantined"
-    # Req 28.5 — the contradiction gate prevented a silent overwrite: T1 stays done.
+    # — the contradiction gate prevented a silent overwrite: T1 stays done.
     assert graph.get_entity_payload(t1_id)["status"] == TaskStatus.done.value
 
-    # ---- The quarantined contradiction is durably retrievable (Req 28.8) -
+    # ---- The quarantined contradiction is durably retrievable -
     unresolved = quarantine.list(QuarantineStatus.unresolved)
     status_conflicts = [
         q for q in unresolved if "status contradiction" in q.reason and t1_id in q.conflicting_ids
@@ -193,7 +190,7 @@ def test_t1_end_to_end_status_query_and_conflict_surfacing(stack):
     pkg = retrieval.query("What is the current status of Task T1?", top_k=10)
 
     assert isinstance(pkg, EvidencePackage)
-    # Req 28.7 — both symbolic and semantic results feed the ranked candidate
+    # — both symbolic and semantic results feed the ranked candidate
     # set: the ASSIGNED_TO edge (symbolic, exact match) and claims/assertions
     # about T1 (semantic) all surface.
     assert pkg.retrieved_items, "status query returned no retrieved items"
@@ -204,7 +201,7 @@ def test_t1_end_to_end_status_query_and_conflict_surfacing(stack):
         "expected at least one semantic (non-exact) match in the ranked set"
     )
 
-    # Req 28.8 — the package carries supporting assertions (ids + confidence)
+    # — the package carries supporting assertions (ids + confidence)
     # and provenance for what it reports.
     assert pkg.supporting_assertions, "status query produced no supporting assertions"
     for sa in pkg.supporting_assertions:
@@ -241,7 +238,7 @@ def test_t1_end_to_end_status_query_and_conflict_surfacing(stack):
 
 
 def test_t1_only_accepted_assertions_are_graph_edges(stack):
-    """Sanity: every accepted assertion (and only those) is an edge (Req 10.5)."""
+    """Sanity: every accepted assertion (and only those) is an edge."""
     write = stack["write"]
     graph = stack["graph"]
     repo = stack["repo"]

@@ -1,18 +1,18 @@
 """Deterministic, offline Mock_Extractor (default W1 extractor).
 
 The :class:`MockExtractor` is the default extractor used whenever no extractor
-configuration is supplied (Req 3.4). It runs entirely offline with **no API key
-and no network access** (Req 3.7) by applying a fixed set of seeded
+configuration is supplied. It runs entirely offline with **no API key
+and no network access** by applying a fixed set of seeded
 regex/keyword rules to the input text. Because the rules are pure functions of
 the input and carry no clock, randomness, or external state, identical input
-produces **byte-identical** output (Req 3.5): every output list is sorted by a
+produces **byte-identical** output: every output list is sorted by a
 deterministic key and timestamps are derived from a fixed base plus a
 discovery counter.
 
 The assembled candidate payload is validated into an
-:class:`~ocm.memory.contracts.ExtractionResult` (Req 3.1, 3.2); if validation
+:class:`~ocm.memory.contracts.ExtractionResult`; if validation
 fails an :class:`~ocm.extraction.base.ExtractionError` is raised so the write
-pipeline can reject the input and record a validation failure (Req 3.3).
+pipeline can reject the input and record a validation failure.
 
 Recognized rules (case-insensitive keywords; entity names preserve case):
 
@@ -34,9 +34,8 @@ Recognized rules (case-insensitive keywords; entity names preserve case):
 
 The word ``actually``/``correction``/``instead``/``in fact`` in a sentence
 sets ``write_intent="correction"`` for relations from that sentence; otherwise
-``new_fact`` is used (Req 6.3 default is applied downstream too).
+``new_fact`` is used (default is applied downstream too).
 
-Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.7.
 """
 
 from __future__ import annotations
@@ -64,7 +63,7 @@ DEFAULT_CONFIDENCE: float = 0.85
 CORRECTION_CONFIDENCE: float = 0.97
 
 #: Fixed base timestamp; event/decision timestamps derive from this plus a
-#: discovery counter so output never depends on the wall clock (Req 3.5).
+#: discovery counter so output never depends on the wall clock.
 _BASE_TS = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
 
@@ -206,7 +205,7 @@ class MockExtractor:
     version: str = "mock-1"
 
     def extract(self, text: str, source_ref: str) -> ExtractionResult:
-        """Extract candidate memory items from ``text`` (Req 3.1, 3.2)."""
+        """Extract candidate memory items from ``text``."""
         entities: dict[tuple[str, str], dict] = {}
         events: dict[str, dict] = {}
         documents: dict[str, dict] = {}
@@ -380,7 +379,7 @@ class MockExtractor:
 
         try:
             return ExtractionResult.model_validate(payload)
-        except ValidationError as exc:  # pragma: no cover - defensive (Req 3.3)
+        except ValidationError as exc: # pragma: no cover - defensive
             raise ExtractionError(
                 f"MockExtractor produced output that failed validation: {exc}"
             ) from exc

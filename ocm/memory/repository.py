@@ -1,17 +1,15 @@
 """Storage repository interface (``Storage_Repository``).
 
 ``StorageRepository`` is an abstract base class that abstracts **all** durable
-persistence away from callers (Req 11.3). The default :class:`SQLiteRepository`
-(in ``ocm/memory/sqlite_repository.py``) implements it against SQLite (Req 11.2);
+persistence away from callers. The default :class:`SQLiteRepository`
+(in ``ocm/memory/sqlite_repository.py``) implements it against SQLite;
 a future ``PostgresRepository`` is a drop-in replacement because callers depend
-only on this interface, never on a concrete backend (Req 11.4).
+only on this interface, never on a concrete backend.
 
-The interface covers the seven required tables (Req 11.1): entities, assertions,
+The interface covers the seven required tables: entities, assertions,
 claims, documents, quarantine_records, provenance, and embeddings. Ontology
 models are serialized with Pydantic v2 (``model_dump_json`` / ``model_validate``)
 so the round-trip is lossless and backend-independent.
-
-Requirements: 11.1, 11.2, 11.3, 11.4.
 """
 
 from __future__ import annotations

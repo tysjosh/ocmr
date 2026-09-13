@@ -1,24 +1,22 @@
-"""Unit tests for the Entity_Resolver (W3, task 10.6).
+"""Unit tests for the Entity_Resolver (W3).
 
 These tests exercise every branch of the conservative resolution priority order
-(Req 5.8) implemented by ``ocm.resolution.entity_resolver.EntityResolver``,
-against the real :class:`GraphStore` and ontology models (no mocks, Req 26.4):
+ implemented by ``ocm.resolution.entity_resolver.EntityResolver``,
+against the real :class:`GraphStore` and ontology models (no mocks):
 
-* **Exact ID match → resolved_existing (Req 5.1).** A mention carrying a known
+* **Exact ID match → resolved_existing.** A mention carrying a known
   id resolves to that entity directly.
-* **Exact normalized name + type match → resolved_existing (Req 5.2).** Name
+* **Exact normalized name + type match → resolved_existing.** Name
   matching is case-/punctuation-insensitive via ``normalize_name``.
-* **Alias + type match → resolved_existing (Req 5.3).** A mention by an existing
+* **Alias + type match → resolved_existing.** A mention by an existing
   entity's alias resolves to it.
-* **No match → created_new (Req 5.5).** With a deterministic IdGenerator a new
+* **No match → created_new.** With a deterministic IdGenerator a new
   id is minted; without one the outcome is ``unresolved``.
-* **Uncertain match → possible_match (Req 5.6).** Token-overlap ("Bob" vs
+* **Uncertain match → possible_match.** Token-overlap ("Bob" vs
   "Bob Smith") and ambiguous exact-name duplicates both surface candidates;
   ``build_possibly_same_as`` turns the outcome into POSSIBLY_SAME_AS dicts.
-* **Priority ordering (Req 5.8).** Exact id beats name: a mention whose id
+* **Priority ordering.** Exact id beats name: a mention whose id
   points at one entity but whose name matches another resolves by id.
-
-Requirements: 5.1, 5.2, 5.3, 5.5, 5.6, 5.8.
 """
 
 from __future__ import annotations
@@ -41,7 +39,7 @@ from ocm.resolution.entity_resolver import (
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def ids() -> IdGenerator:
-    """A deterministic IdGenerator so minted ids are reproducible (Req 27.5)."""
+    """A deterministic IdGenerator so minted ids are reproducible."""
     return IdGenerator(deterministic=True, seed=0)
 
 
@@ -55,7 +53,7 @@ def _person(person_id: str, name: str, *, aliases: list[str] | None = None) -> P
 
 
 # ---------------------------------------------------------------------------
-# 1. Exact ID match -> resolved_existing (Req 5.1)
+# 1. Exact ID match -> resolved_existing
 # ---------------------------------------------------------------------------
 def test_exact_id_match_resolves_existing(resolver: EntityResolver, ids: IdGenerator):
     graph = GraphStore()
@@ -88,7 +86,7 @@ def test_unknown_id_falls_through_to_name_match(
 
 
 # ---------------------------------------------------------------------------
-# 2. Exact normalized name + type match -> resolved_existing (Req 5.2)
+# 2. Exact normalized name + type match -> resolved_existing
 # ---------------------------------------------------------------------------
 def test_exact_name_and_type_match_resolves_existing(
     resolver: EntityResolver, ids: IdGenerator
@@ -110,7 +108,7 @@ def test_name_match_requires_matching_type(
     resolver: EntityResolver, ids: IdGenerator
 ):
     # A same-name entity of a *different* type is not a match; with no other
-    # candidate a new entity is minted (Req 5.5).
+    # candidate a new entity is minted.
     graph = GraphStore()
     graph.add_entity("Task", Task(id="tas_1", title="Alpha"))
 
@@ -122,7 +120,7 @@ def test_name_match_requires_matching_type(
 
 
 # ---------------------------------------------------------------------------
-# 3. Alias + type match -> resolved_existing (Req 5.3)
+# 3. Alias + type match -> resolved_existing
 # ---------------------------------------------------------------------------
 def test_alias_and_type_match_resolves_existing(
     resolver: EntityResolver, ids: IdGenerator
@@ -130,7 +128,7 @@ def test_alias_and_type_match_resolves_existing(
     graph = GraphStore()
     graph.add_entity("Person", _person("per_1", "Robert Smith", aliases=["Bobby"]))
 
-    # Mention uses the alias as its name; alias step (Req 5.3) resolves it.
+    # Mention uses the alias as its name; alias step resolves it.
     outcome = resolver.resolve({"type": "Person", "name": "Bobby"}, graph, ids)
 
     assert outcome.resolution_status == ResolutionStatus.resolved_existing
@@ -156,7 +154,7 @@ def test_alias_on_mention_matches_existing_name(
 
 
 # ---------------------------------------------------------------------------
-# 5. No match -> created_new (Req 5.5)
+# 5. No match -> created_new
 # ---------------------------------------------------------------------------
 def test_no_match_creates_new_with_minted_id(
     resolver: EntityResolver, ids: IdGenerator
@@ -174,7 +172,7 @@ def test_no_match_creates_new_with_minted_id(
 
 
 def test_no_match_without_id_generator_is_unresolved(resolver: EntityResolver):
-    # Without an IdGenerator a no-match cannot mint an id -> unresolved (Req 5.7).
+    # Without an IdGenerator a no-match cannot mint an id -> unresolved.
     graph = GraphStore()
 
     outcome = resolver.resolve({"type": "Person", "name": "Charlie"}, graph, ids=None)
@@ -200,7 +198,7 @@ def test_created_new_ids_are_deterministic(resolver: EntityResolver):
 
 
 # ---------------------------------------------------------------------------
-# 6. Uncertain match -> possible_match (Req 5.6)
+# 6. Uncertain match -> possible_match
 # ---------------------------------------------------------------------------
 def test_token_overlap_is_possible_match(resolver: EntityResolver, ids: IdGenerator):
     # "Bob" is a token-subset of existing "Bob Smith": uncertain, never merged.
@@ -279,12 +277,12 @@ def test_build_possibly_same_as_empty_for_non_possible_match(
 
 
 # ---------------------------------------------------------------------------
-# 8. Priority ordering: exact id beats name (Req 5.8)
+# 8. Priority ordering: exact id beats name
 # ---------------------------------------------------------------------------
 def test_exact_id_beats_name_match(resolver: EntityResolver, ids: IdGenerator):
     # Seed two entities: per_1 named "Alice", per_2 named "Bob". The mention
     # carries id=per_1 but name "Bob" (which exactly matches per_2). The exact
-    # id step must win, resolving to per_1 (Req 5.8 priority order).
+    # id step must win, resolving to per_1 (priority order).
     graph = GraphStore()
     graph.add_entity("Person", _person("per_1", "Alice"))
     graph.add_entity("Person", _person("per_2", "Bob"))
@@ -311,7 +309,7 @@ def test_exact_name_beats_alias_match(resolver: EntityResolver, ids: IdGenerator
 
 
 # ---------------------------------------------------------------------------
-# Defensive: a typeless mention is unresolved (Req 5.7)
+# Defensive: a typeless mention is unresolved
 # ---------------------------------------------------------------------------
 def test_missing_type_is_unresolved(resolver: EntityResolver, ids: IdGenerator):
     graph = GraphStore()

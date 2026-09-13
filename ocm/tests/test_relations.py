@@ -1,13 +1,13 @@
 """Unit tests for the relation signature registry and task transition map.
 
-Covers task 2.6:
+Covers:
 
 * ``get_relation_signature`` returns the declared source/target types and
-  cardinality for representative predicates (Req 2.14).
+  cardinality for representative predicates.
 * ``get_relation_signature`` raises ``UnknownPredicateError`` for an
-  unregistered predicate (Req 2.14).
-* ``TASK_STATUS_TRANSITIONS`` matches the design map exactly (Req 8.11).
-* All 13 relations are registered (Req 2.1-2.13).
+  unregistered predicate.
+* ``TASK_STATUS_TRANSITIONS`` matches the design map exactly.
+* All 13 relations are registered.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from ocm.ontology.relations import (
 
 
 # ---------------------------------------------------------------------------
-# Registry completeness (Req 2.1-2.13).
+# Registry completeness.
 # ---------------------------------------------------------------------------
 EXPECTED_PREDICATES = {
     "PARTICIPATES_IN",
@@ -48,7 +48,7 @@ EXPECTED_PREDICATES = {
 
 
 def test_all_thirteen_relations_registered() -> None:
-    """The registry declares exactly the 15 relations (Req 2.1-2.13 + HAS_STATUS + HAS_VALUE)."""
+    """The registry declares exactly the 15 relations (+ HAS_STATUS + HAS_VALUE)."""
     assert len(RELATION_SIGNATURES) == 15
     assert set(RELATION_SIGNATURES) == EXPECTED_PREDICATES
 
@@ -61,7 +61,7 @@ def test_every_signature_predicate_matches_its_key() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Lookup returns declared source/target types and cardinality (Req 2.14).
+# Lookup returns declared source/target types and cardinality.
 # ---------------------------------------------------------------------------
 # (predicate, expected source_types, expected target_types, expected cardinality)
 SIGNATURE_CASES = [
@@ -119,7 +119,7 @@ def test_lookup_returns_declared_signature(
     target_types: set[str],
     cardinality: Cardinality,
 ) -> None:
-    """Lookup returns the declared source/target types and cardinality (Req 2.14)."""
+    """Lookup returns the declared source/target types and cardinality."""
     sig = get_relation_signature(predicate)
     assert sig.predicate == predicate
     assert set(sig.source_types) == source_types
@@ -141,10 +141,10 @@ def test_signature_collections_are_frozen() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Unknown predicate raises (Req 2.14).
+# Unknown predicate raises.
 # ---------------------------------------------------------------------------
 def test_lookup_unknown_predicate_raises() -> None:
-    """An unregistered predicate raises ``UnknownPredicateError`` (Req 2.14)."""
+    """An unregistered predicate raises ``UnknownPredicateError``."""
     with pytest.raises(UnknownPredicateError) as exc_info:
         get_relation_signature("NOT_A_REAL_PREDICATE")
     assert exc_info.value.predicate == "NOT_A_REAL_PREDICATE"
@@ -158,7 +158,7 @@ def test_unknown_predicate_error_is_keyerror_subclass() -> None:
 
 
 # ---------------------------------------------------------------------------
-# TASK_STATUS_TRANSITIONS matches the design map exactly (Req 8.11).
+# TASK_STATUS_TRANSITIONS matches the design map exactly.
 # ---------------------------------------------------------------------------
 EXPECTED_TRANSITIONS = {
     TaskStatus.todo: {
@@ -178,7 +178,7 @@ EXPECTED_TRANSITIONS = {
 
 
 def test_task_status_transitions_match_design_map() -> None:
-    """The transition map equals the design map exactly (Req 8.11)."""
+    """The transition map equals the design map exactly."""
     assert TASK_STATUS_TRANSITIONS == EXPECTED_TRANSITIONS
 
 
@@ -188,11 +188,11 @@ def test_task_status_transitions_match_design_map() -> None:
 def test_each_transition_entry(
     current: TaskStatus, allowed: set[TaskStatus]
 ) -> None:
-    """Each source status maps to exactly its allowed target statuses (Req 8.11)."""
+    """Each source status maps to exactly its allowed target statuses."""
     assert TASK_STATUS_TRANSITIONS[current] == allowed
 
 
 def test_terminal_states_have_no_outgoing_transitions() -> None:
-    """``done`` and ``cancelled`` are terminal: no permitted transitions (Req 8.11)."""
+    """``done`` and ``cancelled`` are terminal: no permitted transitions."""
     assert TASK_STATUS_TRANSITIONS[TaskStatus.done] == set()
     assert TASK_STATUS_TRANSITIONS[TaskStatus.cancelled] == set()

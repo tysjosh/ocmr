@@ -1,6 +1,6 @@
 """RAHGM router, review queue, explanation depths, and OCMR non-regression.
 
-Covers Req 4.6 (the commit seam), 5.x (review and release), 6.x (explanation
+Covers (the commit seam), 5.x (review and release), 6.x (explanation
 depth), and 15.2 (byte-identical OCMR behavior when RAHGM is disabled).
 """
 
@@ -80,10 +80,10 @@ def _candidate(slot: str, new: str, **overrides) -> CandidateAssertion:
 
 
 # --------------------------------------------------------------------------- #
-# Non-regression (Req 15.2)
+# Non-regression
 # --------------------------------------------------------------------------- #
 def test_disabled_router_is_a_transparent_passthrough(container: CoreContainer):
-    """With ``router=None`` the governed manager delegates verbatim (Req 15.2)."""
+    """With ``router=None`` the governed manager delegates verbatim."""
     slot, _old, new, _incumbent = _seed_slot(container)
     inner = container.commit_manager
     governed = GovernedCommitManager(inner=inner, router=None, graph=container.graph)
@@ -97,7 +97,7 @@ def test_disabled_router_is_a_transparent_passthrough(container: CoreContainer):
 
 
 def test_ocmr_write_pipeline_is_untouched_by_import():
-    """Importing RAHGM does not alter the OCMR write path (Req 15.1, 15.2)."""
+    """Importing RAHGM does not alter the OCMR write path."""
     import ocm.governance  # noqa: F401
     from ocm.memory.commit_manager import CommitManager
     from ocm.memory.contracts import WriteOutcome
@@ -113,7 +113,7 @@ def test_ocmr_write_pipeline_is_untouched_by_import():
 
 
 # --------------------------------------------------------------------------- #
-# Tier translation (Req 4.6)
+# Tier translation
 # --------------------------------------------------------------------------- #
 def _decision(tier: Tier, **feature_overrides) -> RoutingDecision:
     features = RiskFeatures(**feature_overrides)
@@ -143,7 +143,7 @@ def test_accept_tier_commits_as_accepted(container: CoreContainer):
 
 
 def test_supersede_tier_retains_the_incumbent(container: CoreContainer):
-    """Supersession retires the prior assertion but keeps the row (Req 5.4)."""
+    """Supersession retires the prior assertion but keeps the row."""
     slot, old, new, incumbent = _seed_slot(container)
     verdict = GovernedCommitManager.translate(
         ValidationResult(valid=True, conflicting_ids=[incumbent]),
@@ -167,7 +167,7 @@ def test_supersede_without_an_incumbent_falls_back_to_review(container: CoreCont
 
 
 def test_review_tier_quarantines_and_leaves_memory_intact(container: CoreContainer):
-    """A held write never overwrites accepted memory (Req 5.1)."""
+    """A held write never overwrites accepted memory."""
     slot, old, new, _incumbent = _seed_slot(container)
     verdict = GovernedCommitManager.translate(
         ValidationResult(valid=True), _decision(Tier.review)
@@ -192,7 +192,7 @@ def test_review_verdict_reason_names_the_failed_checks():
 
 
 def test_routing_decision_rationale_lists_inputs_not_just_a_number():
-    """``rationale()`` surfaces the features and the rule (Req 4.5)."""
+    """``rationale`` surfaces the features and the rule."""
     features = RiskFeatures(
         f_c=1.0,
         failed_checks=("C7",),
@@ -219,7 +219,7 @@ def test_routing_decision_rationale_lists_inputs_not_just_a_number():
 
 
 # --------------------------------------------------------------------------- #
-# Review and release (Req 5.3, 5.4)
+# Review and release
 # --------------------------------------------------------------------------- #
 def _escalate(container: CoreContainer) -> tuple[ReviewQueue, str, str, str]:
     """Escalate one write and return ``(queue, item_id, slot, incumbent)``."""
@@ -241,7 +241,7 @@ def _escalate(container: CoreContainer) -> tuple[ReviewQueue, str, str, str]:
 
 
 def test_release_on_accept_retires_a_single_valued_incumbent(container: CoreContainer):
-    """Releasing on ``accept`` must not leave two active values (Req 5.3, 5.4).
+    """Releasing on ``accept`` must not leave two active values.
 
     ``HAS_VALUE`` is single-valued, so releasing the held write is a supersession
     whatever the analyst called the action. Committing it as a bare accept would
@@ -303,7 +303,7 @@ def test_upheld_hold_leaves_the_queue(container: CoreContainer):
 
 
 def test_release_on_supersede_retires_the_incumbent(container: CoreContainer):
-    """A released supersession retires the prior value and keeps it (Req 5.4)."""
+    """A released supersession retires the prior value and keeps it."""
     queue, item_id, slot, incumbent = _escalate(container)
     record = queue.adjudicate(item_id, ReviewAction.supersede, confidence=0.95)
 
@@ -351,10 +351,10 @@ def test_queue_without_a_commit_manager_cannot_release(container: CoreContainer)
 
 
 # --------------------------------------------------------------------------- #
-# Explanation depth (Req 6.1, 6.2, 6.3)
+# Explanation depth
 # --------------------------------------------------------------------------- #
 def test_explanation_depths_are_strictly_nested(container: CoreContainer):
-    """``minimal ⊂ evidence ⊂ full`` (Req 6.1)."""
+    """``minimal ⊂ evidence ⊂ full``."""
     queue, item_id, _slot, _incumbent = _escalate(container)
     item = queue.items[item_id]
 
@@ -388,7 +388,7 @@ def test_minimal_shows_recommendation_and_failed_checks(container: CoreContainer
 
 
 def test_evidence_depth_adds_provenance(container: CoreContainer):
-    """The evidence depth adds snippets with provenance (Req 6.1)."""
+    """The evidence depth adds snippets with provenance."""
     queue, item_id, _slot, _incumbent = _escalate(container)
     payload = render_explanation(queue.items[item_id], ExplanationDepth.evidence)
     assert "supporting_evidence" in payload
@@ -398,7 +398,7 @@ def test_evidence_depth_adds_provenance(container: CoreContainer):
 
 
 def test_full_depth_adds_timeline_alternatives_and_consequence(container: CoreContainer):
-    """The full depth adds the timeline, alternatives, and reversibility (Req 6.1)."""
+    """The full depth adds the timeline, alternatives, and reversibility."""
     queue, item_id, _slot, _incumbent = _escalate(container)
     payload = render_explanation(queue.items[item_id], ExplanationDepth.full)
     for key in (
@@ -413,7 +413,7 @@ def test_full_depth_adds_timeline_alternatives_and_consequence(container: CoreCo
 
 
 def test_depth_does_not_change_the_route(container: CoreContainer):
-    """Rendering at any depth leaves the routed tier untouched (Req 6.2)."""
+    """Rendering at any depth leaves the routed tier untouched."""
     queue, item_id, _slot, _incumbent = _escalate(container)
     item = queue.items[item_id]
     before = item.decision.tier
@@ -423,7 +423,7 @@ def test_depth_does_not_change_the_route(container: CoreContainer):
 
 
 def test_latin_square_is_balanced():
-    """Each level appears equally often across offsets (Req 6.3)."""
+    """Each level appears equally often across offsets."""
     n_levels, n_blocks = 3, 9
     counts = [0] * n_levels
     for offset in range(n_levels):
@@ -433,16 +433,16 @@ def test_latin_square_is_balanced():
 
 
 def test_depth_schedule_covers_every_level():
-    """A participant sees every depth (Req 6.3)."""
+    """A participant sees every depth."""
     schedule = depth_schedule(len(DEPTH_ORDER), offset=1)
     assert set(schedule) == set(DEPTH_ORDER)
 
 
 # --------------------------------------------------------------------------- #
-# Condition wiring (Req 10.1, 10.2)
+# Condition wiring
 # --------------------------------------------------------------------------- #
 def test_build_governance_installs_the_governed_manager(container: CoreContainer):
-    """Installing swaps the commit manager on the container and pipeline (Req 4.6)."""
+    """Installing swaps the commit manager on the container and pipeline."""
     harness = build_governance(Condition.frozen_rahgm, container)
     assert container.commit_manager is harness.governed
     assert container.write_pipeline.commit_manager is harness.governed
@@ -520,7 +520,7 @@ def test_fixed_threshold_escalates_on_high_consequence(container: CoreContainer)
 
 
 def test_all_conditions_share_one_feature_extractor(container: CoreContainer):
-    """Conditions are compared on identical features (Req 10.2)."""
+    """Conditions are compared on identical features."""
     extractor = FeatureExtractor(settings=container.settings)
     harnesses = [
         build_governance(condition, container, feature_extractor=extractor, install=False)

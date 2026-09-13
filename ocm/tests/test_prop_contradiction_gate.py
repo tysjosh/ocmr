@@ -1,6 +1,5 @@
 """Property 6: Contradiction-gate invariant (Feature: ontology-constrained-memory).
 
-Validates Requirements 8.8, 9.1, 9.2, 9.5.
 
 The contradiction gate (C7, delegating to the Contradiction_Checker W7) exists so
 that two mutually-contradictory facts can never both live in accepted memory at
@@ -115,7 +114,7 @@ def _mutually_contradict(a: Assertion, b: Assertion) -> bool:
     when they share the subject but point at *different* objects (and, for 1:1,
     when they share the object but have different subjects). This is the concrete
     realization of "no two accepted high-confidence assertions contradict"
-    (Req 9.5) used by the contradiction gate.
+     used by the contradiction gate.
     """
     if a.predicate != b.predicate:
         return False
@@ -142,7 +141,7 @@ def test_contradiction_gate_invariant(stream: tuple[int, list[tuple[int, float]]
     """No two accepted >0.8 assertions contradict; at most one assignee survives.
 
     Drives the real Constraint_Validator -> Contradiction_Checker -> Commit_Manager
-    stack over the generated stream, then asserts the invariant (Req 8.8, 9.1,
+    stack over the generated stream, then asserts the invariant (
     9.2, 9.5).
     """
     num_persons, steps = stream

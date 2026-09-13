@@ -1,18 +1,18 @@
-"""Schema validation unit tests for the ontology models (task 2.4).
+"""Schema validation unit tests for the ontology models.
 
 These tests pin down four behaviors of ``ocm.ontology.models`` that the
 ontology layer guarantees:
 
 * Confidence is bounded to ``[0, 1]`` on the confidence-bearing models
   (``Claim``, ``Assertion``) — values ``> 1`` or ``< 0`` raise a
-  ``ValidationError`` (Req 1.11; supports C6).
+  ``ValidationError`` (supports C6).
 * Out-of-enum ``status`` / ``priority`` / ``severity`` / ``write_intent``
-  values raise a ``ValidationError`` (Req 1.11, 26.1).
+  values raise a ``ValidationError``.
 * Omitting ``status`` defaults it to ``unknown`` and records
   ``status_defaulted=True``; supplying an explicit status leaves
-  ``status_defaulted=False`` (Req 1.13, 1.15).
+  ``status_defaulted=False``.
 * ``Event`` and ``Document`` have neither a ``status`` nor a
-  ``status_defaulted`` field (Req 1.14).
+  ``status_defaulted`` field.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def _assertion_kwargs(**overrides):
 
 
 # ---------------------------------------------------------------------------
-# Confidence bounds (Req 1.11; supports C6)
+# Confidence bounds (supports C6)
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("bad_confidence", [1.0001, 1.5, 2.0, 42.0])
 def test_claim_rejects_confidence_above_one(bad_confidence):
@@ -101,7 +101,7 @@ def test_confidence_bounds_accept_in_range(good_confidence):
 
 
 # ---------------------------------------------------------------------------
-# Out-of-enum rejection (Req 1.11, 26.1)
+# Out-of-enum rejection
 # ---------------------------------------------------------------------------
 def test_task_rejects_invalid_status():
     with pytest.raises(ValidationError):
@@ -140,7 +140,7 @@ def test_quarantine_record_rejects_invalid_severity():
 
 
 # ---------------------------------------------------------------------------
-# Status defaulting + status_defaulted metadata (Req 1.13, 1.15)
+# Status defaulting + status_defaulted metadata
 # ---------------------------------------------------------------------------
 def test_task_defaults_status_to_unknown_and_flags_defaulted():
     task = Task(id="task-1", title="T1")
@@ -192,7 +192,7 @@ def test_explicit_status_keeps_defaulted_false_across_models(model, kwargs):
 
 
 # ---------------------------------------------------------------------------
-# Event and Document have no status / status_defaulted fields (Req 1.14)
+# Event and Document have no status / status_defaulted fields
 # ---------------------------------------------------------------------------
 def test_event_has_no_status_fields():
     fields = set(Event.model_fields)

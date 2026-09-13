@@ -1,16 +1,16 @@
-"""Retrieval Pipeline — orchestrates R0→R4 (Req 18.x, 25.2).
+"""Retrieval Pipeline — orchestrates R0→R4.
 
 The :class:`RetrievalPipeline` runs the read path end to end:
 
     R0 classify → R1 symbolic → R2 semantic → R3 rerank → R4 package
 
 and returns an :class:`~ocm.retrieval.evidence_packager.EvidencePackage`. It is
-the object behind ``POST /memory/query`` (task 15.2) and the agent's
-``MemoryTool.query`` (task 16.x). The pipeline performs no ranking or packaging
+the object behind ``POST /memory/query`` and the agent's
+``MemoryTool.query``. The pipeline performs no ranking or packaging
 logic itself — it wires the five stages together and records one structured
-research-log record per query (Req 25.2).
+research-log record per query.
 
-Per-query research log (Req 25.2)
+Per-query research log
 ---------------------------------
 On every :meth:`query`, when a :class:`~ocm.core.logging.ResearchLogger` is
 configured, the pipeline emits a ``query`` record with ``query_id``,
@@ -22,10 +22,8 @@ Contradiction signal
 ---------------------
 When a :class:`~ocm.memory.quarantine_store.QuarantineStore` is wired, the ids
 that unresolved quarantine records conflict with are passed to the Reranker as
-``contradicted_ids`` so accepted items in an open conflict are penalized
-(Req 17.3), and quarantined items surface as conflicts in the package (Req 18.4).
-
-Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 25.2.
+``contradicted_ids`` so accepted items in an open conflict are penalized,
+and quarantined items surface as conflicts in the package.
 """
 
 from __future__ import annotations
@@ -67,7 +65,7 @@ class RetrievalPipeline:
             provenance_tracker: The ``Provenance_Tracker`` R4 reads sources from.
             quarantine_store: Optional ``Quarantine_Store`` used to derive
                 contradiction signals and augment conflicts.
-            research_logger: Optional ``ResearchLogger`` for per-query logs (Req 25.2).
+            research_logger: Optional ``ResearchLogger`` for per-query logs.
             settings: Optional ``Settings`` supplying ``rerank_weights``.
             ids: Optional ``IdGenerator`` for deterministic ``query_id``s.
         """
@@ -99,7 +97,7 @@ class RetrievalPipeline:
                 for a non-conflict query.
 
         Returns:
-            The assembled :class:`EvidencePackage` (Req 18.1).
+            The assembled :class:`EvidencePackage`.
         """
         start = time.perf_counter()
 
@@ -118,7 +116,7 @@ class RetrievalPipeline:
         )
 
         # Contradiction signal: ids that unresolved quarantine records conflict
-        # with (so accepted items in an open conflict are penalized, Req 17.3).
+        # with (so accepted items in an open conflict are penalized).
         contradicted_ids = self._contradicted_ids()
 
         # R3 — rerank into a single, ordered candidate set.
@@ -142,7 +140,7 @@ class RetrievalPipeline:
 
         latency_ms = (time.perf_counter() - start) * 1000.0
 
-        # Per-query research log (Req 25.2).
+        # Per-query research log.
         self._log_query(
             query_text=query_text,
             classification=classification,
@@ -197,7 +195,7 @@ class RetrievalPipeline:
         conflicts_returned: int,
         latency_ms: float,
     ) -> None:
-        """Emit the per-query research-log record (Req 25.2)."""
+        """Emit the per-query research-log record."""
         if self.research_logger is None:
             return
         top_k_ids = [item.memory_id for item in ranked[: max(0, top_k)]]

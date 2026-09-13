@@ -17,7 +17,6 @@ into an in-memory ``VectorIndex`` (deterministic, offline embeddings) via the
 commit-manager / write-pipeline embed hooks, then read back through the
 ``RetrievalPipeline`` (R0–R4).
 
-Validates: Requirements 10.3, 10.4, 10.5, 16.2, 16.5.
 """
 
 from __future__ import annotations
@@ -170,7 +169,7 @@ def test_accepted_only_default_retrieval(write_stream: list[str], query: str) ->
         a.id for a in repo.list_assertions() if a.status != AssertionStatus.accepted
     }
 
-    # Req 16.2 / 16.5: a default query never surfaces quarantined (or any
+    # / 16.5: a default query never surfaces quarantined (or any
     # non-accepted) items — every retrieved candidate is accepted-status.
     for item in pkg.retrieved_items:
         assert item.status == AssertionStatus.accepted.value, (
@@ -178,7 +177,7 @@ def test_accepted_only_default_retrieval(write_stream: list[str], query: str) ->
             f"{item.memory_id} (status={item.status!r})"
         )
 
-    # Req 10.3 / 10.4 / 10.5: every supporting assertion is genuinely accepted.
+    # / 10.4 / 10.5: every supporting assertion is genuinely accepted.
     supporting_ids = [sa.id for sa in pkg.supporting_assertions]
     for sid in supporting_ids:
         assertion = repo.get_assertion(sid)

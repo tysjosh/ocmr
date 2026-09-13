@@ -1,4 +1,4 @@
-"""FastAPI application factory for the OCM ``API_Service`` (Req 19.1).
+"""FastAPI application factory for the OCM ``API_Service``.
 
 :func:`create_app` builds the FastAPI application, wiring a single
 :class:`~ocm.core.container.CoreContainer` onto ``app.state.container`` so the
@@ -8,14 +8,12 @@ calls :func:`create_app` with no arguments and a default container is
 constructed from :class:`~ocm.core.config.Settings`.
 
 The five production endpoints live on the :data:`ocm.app.api.routes.router`. A
-non-production ``routes_debug`` router (task 15.3) is mounted **only** when
+non-production ``routes_debug`` router is mounted **only** when
 ``settings.deterministic_test_mode`` is set (or an explicit debug flag is
 passed). It is imported defensively so the service still starts before that
 router exists.
 
 A module-level ``app = create_app()`` is exposed for ``uvicorn ocm.app.main:app``.
-
-Requirements: 19.1, 28.1, 28.2.
 """
 
 from __future__ import annotations
@@ -32,12 +30,12 @@ def create_app(
     *,
     enable_debug_routes: bool | None = None,
 ) -> FastAPI:
-    """Build and return the OCM FastAPI application (Req 19.1).
+    """Build and return the OCM FastAPI application.
 
     Args:
         container: A pre-wired :class:`CoreContainer` (tests inject a
             deterministic, in-memory one). When omitted a default container is
-            constructed from ``Settings()`` (offline-first defaults, Req 27.2).
+            constructed from ``Settings`` (offline-first defaults).
         enable_debug_routes: Force-enable/disable the ``routes_debug`` router.
             When ``None`` (default) the debug router is mounted whenever
             ``settings.deterministic_test_mode`` is set.
@@ -59,10 +57,10 @@ def create_app(
     )
     app.state.container = container
 
-    # Five production endpoints (Req 19.2–19.6).
+    # Five production endpoints.
     app.include_router(memory_router)
 
-    # Non-production inspection endpoints (task 15.3), mounted only in debug /
+    # Non-production inspection endpoints, mounted only in debug /
     # deterministic-test mode. Imported defensively so the service still starts
     # if routes_debug has not landed yet.
     if enable_debug_routes is None:
@@ -76,10 +74,10 @@ def create_app(
 
 
 def _include_debug_routes(app: FastAPI) -> None:
-    """Include the ``routes_debug`` router when it is available (task 15.3)."""
+    """Include the ``routes_debug`` router when it is available."""
     try:
         from ocm.app.api.routes_debug import router as debug_router
-    except Exception:  # pragma: no cover - router not implemented yet (task 15.3)
+    except Exception: # pragma: no cover - router not implemented yet
         return
     app.include_router(debug_router)
 

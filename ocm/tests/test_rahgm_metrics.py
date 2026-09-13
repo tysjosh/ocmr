@@ -1,6 +1,6 @@
 """RAHGM measures: eq. (10), eq. (11), risk–coverage AUC, and statistics.
 
-Covers Req 11.x (measures) and 12.x (statistical models and Holm correction),
+Covers (measures) and 12.x (statistical models and Holm correction),
 checked against hand-computed fixtures rather than against the implementation.
 """
 
@@ -72,7 +72,7 @@ def test_error_compares_the_final_transition_to_gold():
 
 
 def test_false_quarantine_is_a_valid_update_that_never_landed():
-    """The OCMR failure this work targets (Req 11.2)."""
+    """The OCMR failure this work targets."""
     assert _record(Tier.supersede, Tier.review, Tier.review).false_quarantine
     assert _record(Tier.accept, Tier.review, Tier.reject).false_quarantine
     assert not _record(Tier.supersede, Tier.review, Tier.supersede).false_quarantine
@@ -120,7 +120,7 @@ def test_dvr_is_violations_over_writes():
 
 
 def test_queue_precision_and_recall():
-    """Precision is review-worthy among escalated; recall the converse (Req 11.2)."""
+    """Precision is review-worthy among escalated; recall the converse."""
     records = [
         _record(Tier.review, Tier.review, escalated=True),   # true positive
         _record(Tier.review, Tier.review, escalated=True),   # true positive
@@ -241,7 +241,7 @@ def test_calibration_of_empty_input_is_nan():
 
 
 # --------------------------------------------------------------------------- #
-# Review-cost model (Req 11.4)
+# Review-cost model
 # --------------------------------------------------------------------------- #
 def test_review_cost_grows_with_case_difficulty():
     """The cost model is monotone in the quantities the router uses."""
@@ -263,14 +263,14 @@ def test_review_cost_grows_with_explanation_depth():
 
 
 def test_review_cost_model_discloses_that_it_is_a_model():
-    """Every artifact using ``R100`` must carry the disclosure (Req 11.4, 14.1)."""
+    """Every artifact using ``R100`` must carry the disclosure."""
     payload = ReviewCostModel().as_dict()
     assert payload["modelled"] is True
     assert "not" in payload["note"].lower()
 
 
 # --------------------------------------------------------------------------- #
-# Success criteria (Req 12.5)
+# Success criteria
 # --------------------------------------------------------------------------- #
 def _metrics(*, mcr: float, r100: float, dvr: float) -> ReplayMetrics:
     return compute_metrics(
@@ -290,7 +290,7 @@ def _metrics(*, mcr: float, r100: float, dvr: float) -> ReplayMetrics:
 
 
 def test_success_criteria_are_evaluated_explicitly():
-    """All three §3.7 criteria are reported with their inputs (Req 12.5)."""
+    """All three §3.7 criteria are reported with their inputs."""
     table = {
         "adaptive_rahgm": compute_metrics(
             [_record(Tier.accept, Tier.accept, minutes=0.5, consequential=True)]
@@ -338,10 +338,10 @@ def test_mcr_tie_at_zero_is_reported_as_a_floor_effect():
 
 
 # --------------------------------------------------------------------------- #
-# Statistics (Req 12.x)
+# Statistics
 # --------------------------------------------------------------------------- #
 def test_holm_controls_familywise_error():
-    """Holm adjustment is monotone and bounded by 1 (Req 12.3)."""
+    """Holm adjustment is monotone and bounded by 1."""
     results = holm([("a", 0.001), ("b", 0.02), ("c", 0.4)])
     adjusted = [r.adjusted_p for r in results]
     assert all(0.0 <= p <= 1.0 for p in adjusted)
@@ -363,7 +363,7 @@ def test_holm_handles_nan_p_values():
 
 
 def test_random_intercept_logit_recovers_a_known_effect():
-    """The primary model detects a strong fixed effect (Req 12.1)."""
+    """The primary model detects a strong fixed effect."""
     y: list[float] = []
     X: list[list[float]] = []
     participants: list[str] = []
@@ -391,7 +391,7 @@ def test_random_intercept_logit_recovers_a_known_effect():
 
 
 def test_random_intercept_gaussian_recovers_a_known_slope():
-    """The decision-time model recovers a planted slope (Req 12.2)."""
+    """The decision-time model recovers a planted slope."""
     y: list[float] = []
     X: list[list[float]] = []
     participants: list[str] = []
@@ -414,7 +414,7 @@ def test_random_intercept_gaussian_recovers_a_known_slope():
 
 
 def test_cumulative_logit_fits_an_ordinal_outcome():
-    """The workload model returns slope estimates with cluster-robust SEs (Req 12.2)."""
+    """The workload model returns slope estimates with cluster-robust SEs."""
     y: list[int] = []
     X: list[list[float]] = []
     clusters: list[str] = []

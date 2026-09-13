@@ -21,13 +21,11 @@ its own incumbent assertion. Because no two writes contend for the same
 directly from the state the generator installed — a correction always has exactly
 one recoverable incumbent to displace, and a routine write never displaces
 anything. No model or annotator is needed to know the right answer, which is what
-makes the routing metrics objective (Req 9.7).
+makes the routing metrics objective.
 
 Scenarios — not individual writes — are partitioned into training (25),
 development (10), canary (5), and test (10). Entity ids are namespaced by
-scenario, so no fact or alias can appear in more than one partition (Req 9.5).
-
-Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7.
+scenario, so no fact or alias can appear in more than one partition.
 """
 
 from __future__ import annotations
@@ -79,7 +77,7 @@ class Partition(str, Enum):
     test = "test"
 
 
-#: The eight case-variation axes of §3.2 (Req 9.3).
+#: The eight case-variation axes of §3.2.
 PERTURBATION_AXES: tuple[str, ...] = (
     "entity_alias_ambiguity",
     "schema_cardinality",
@@ -348,7 +346,7 @@ class RahgmCorpus:
         return dict(sorted(counts.items()))
 
     def perturbation_coverage(self) -> dict[str, int]:
-        """How many writes exercise each of the eight variation axes (Req 9.3)."""
+        """How many writes exercise each of the eight variation axes."""
         counts = {axis: 0 for axis in PERTURBATION_AXES}
         for write in self.writes:
             for axis in write.perturbations:
@@ -402,8 +400,8 @@ class EntityPool:
     Templates request exactly the entities they need, so each write gets its own
     target and its own incumbent. Nothing is shared between writes, which is what
     makes the gold transition a property of the template rather than of write
-    ordering (Req 9.7). Ids are namespaced by scenario, guaranteeing partition
-    disjointness (Req 9.5).
+    ordering. Ids are namespaced by scenario, guaranteeing partition
+    disjointness.
     """
 
     def __init__(self, scenario_id: str) -> None:
@@ -596,7 +594,7 @@ class CorpusGenerator:
     # -- partitioning ------------------------------------------------------
     @staticmethod
     def _assign_partitions(n_scenarios: int) -> list[Partition]:
-        """Assign scenarios to partitions by contiguous index blocks (Req 9.5).
+        """Assign scenarios to partitions by contiguous index blocks.
 
         Contiguous blocks keep the mapping trivially auditable, and because entity
         ids are namespaced by scenario there is no leakage a shuffle would prevent.
@@ -1675,7 +1673,7 @@ class ScenarioBuilder:
         stamp = None if undated else self.pool.base + timedelta(days=1, hours=index + 1)
 
         # Consequential: a high-consequence assertion, or one that is costly or
-        # impossible to undo (Req 9.6).
+        # impossible to undo.
         consequential = consequence >= 0.60 or reversibility <= 0.30
 
         axes = set(perturbations)

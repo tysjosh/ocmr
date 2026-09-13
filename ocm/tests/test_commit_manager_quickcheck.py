@@ -1,6 +1,5 @@
-"""Quick verification checks for the Commit Manager (W8 routing, task 8.2).
+"""Quick verification checks for the Commit Manager (W8 routing).
 
-Validates: Requirements 10.1, 10.2, 10.3, 10.4, 10.5, 12.3, 2.13
 
 Exercises each routing leg against an in-memory SQLite repository + graph:
 accept persists/graphs/embeds/provenances; supersede marks old superseded,

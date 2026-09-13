@@ -1,18 +1,17 @@
-"""Unit tests for the Assertion_Builder (W4) and the manual write path (task 4.3).
+"""Unit tests for the Assertion_Builder (W4) and the manual write path.
 
-Validates: Requirements 6.1, 6.2, 6.3, 11.6
 
 Two clusters of example-based tests:
 
 * :class:`AssertionBuilder` turns a normalized relation plus its resolved
   subject/object into a :class:`CandidateAssertion`: the operation is always
-  ``upsert_assertion`` (Req 6.1); ``subject_id``, ``predicate``, ``object_id``,
-  ``confidence``, ``source_ref``, and ``write_intent`` are populated (Req 6.2);
+  ``upsert_assertion``; ``subject_id``, ``predicate``, ``object_id``,
+  ``confidence``, ``source_ref``, and ``write_intent`` are populated;
   and ``write_intent`` defaults to ``new_fact`` when the relation omits it
-  (Req 6.3) while an explicit intent (e.g. ``correction``) is honored.
+   while an explicit intent (e.g. ``correction``) is honored.
 * :func:`manual_write` persists pre-resolved entities and one **accepted**
   assertion through :class:`SQLiteRepository` (``":memory:"``) and reflects the
-  accepted assertion as an edge in the :class:`GraphStore` (Req 11.6), with the
+  accepted assertion as an edge in the :class:`GraphStore`, with the
   returned assertion round-tripping back out of the repository.
 """
 
@@ -83,10 +82,10 @@ def _project(pid: str = "project:1", owner: str = "person:1") -> Project:
 
 
 # ---------------------------------------------------------------------------
-# 1. AssertionBuilder.build (Req 6.1, 6.2, 6.3)
+# 1. AssertionBuilder.build
 # ---------------------------------------------------------------------------
 def test_build_populates_all_fields_and_upsert_operation() -> None:
-    """build sets operation=upsert_assertion and all Req 6.2 fields (Req 6.1, 6.2)."""
+    """build sets operation=upsert_assertion and all fields."""
     builder = AssertionBuilder()
     relation = {
         "subject": "Ada",
@@ -108,12 +107,12 @@ def test_build_populates_all_fields_and_upsert_operation() -> None:
     assert candidate.object_id == "project:1"
     assert candidate.confidence == 0.83
     assert candidate.source_ref == "doc:42"
-    # write_intent populated (Req 6.2) — defaulted here (Req 6.3).
+    # write_intent populated — defaulted here.
     assert candidate.write_intent == WriteIntent.new_fact
 
 
 def test_build_defaults_write_intent_to_new_fact() -> None:
-    """When the relation omits write_intent, it defaults to new_fact (Req 6.3)."""
+    """When the relation omits write_intent, it defaults to new_fact."""
     builder = AssertionBuilder()
     relation = {"subject": "s", "predicate": "OWNS", "object": "o", "confidence": 0.5}
     resolved = {"s": _resolved("person:1"), "o": _resolved("project:1")}
@@ -124,7 +123,7 @@ def test_build_defaults_write_intent_to_new_fact() -> None:
 
 
 def test_build_uses_provided_write_intent() -> None:
-    """An explicit write_intent (e.g. correction) is honored (Req 6.2)."""
+    """An explicit write_intent (e.g. correction) is honored."""
     builder = AssertionBuilder()
     relation = {
         "subject": "s",
@@ -141,7 +140,7 @@ def test_build_uses_provided_write_intent() -> None:
 
 
 def test_build_accepts_write_intent_enum_value() -> None:
-    """A WriteIntent enum passed through the relation is preserved (Req 6.2)."""
+    """A WriteIntent enum passed through the relation is preserved."""
     builder = AssertionBuilder()
     relation = {
         "subject": "s",
@@ -158,7 +157,7 @@ def test_build_accepts_write_intent_enum_value() -> None:
 
 
 def test_build_uses_relation_source_ref_when_argument_absent() -> None:
-    """source_ref carried in the relation is used when no argument is given (Req 6.2)."""
+    """source_ref carried in the relation is used when no argument is given."""
     builder = AssertionBuilder()
     relation = {
         "subject": "s",
@@ -175,7 +174,7 @@ def test_build_uses_relation_source_ref_when_argument_absent() -> None:
 
 
 def test_build_raises_when_no_source_ref_available() -> None:
-    """A missing source_ref (neither arg nor relation) is a ValueError (Req 6.2)."""
+    """A missing source_ref (neither arg nor relation) is a ValueError."""
     builder = AssertionBuilder()
     relation = {"subject": "s", "predicate": "OWNS", "object": "o", "confidence": 0.6}
     resolved = {"s": _resolved("person:1"), "o": _resolved("project:1")}
@@ -200,7 +199,7 @@ def test_build_raises_on_unresolved_end() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. manual_write persists + graph-reflects an accepted assertion (Req 11.6)
+# 2. manual_write persists + graph-reflects an accepted assertion
 # ---------------------------------------------------------------------------
 def _candidate() -> CandidateAssertion:
     return CandidateAssertion(
@@ -232,7 +231,7 @@ def test_manual_write_persists_and_reflects_accepted_assertion(
     repo: SQLiteRepository, graph: GraphStore, ids: IdGenerator
 ) -> None:
     """manual_write persists entities + an accepted assertion and reflects it
-    as an accepted edge in the graph; the assertion round-trips (Req 11.6)."""
+    as an accepted edge in the graph; the assertion round-trips."""
     entities = [
         ResolvedEntity(entity_type="Person", entity=_person()),
         ("Project", _project()),  # tuple form is also accepted
@@ -270,7 +269,7 @@ def test_manual_write_persists_and_reflects_accepted_assertion(
 def test_manual_write_graph_edge_matches_repo_accepted_invariant(
     repo: SQLiteRepository, graph: GraphStore, ids: IdGenerator
 ) -> None:
-    """The graph's edges equal the repo's accepted assertion rows (Req 11.6)."""
+    """The graph's edges equal the repo's accepted assertion rows."""
     entities = [("Person", _person()), ("Project", _project())]
     manual_write(entities, _candidate(), repo, graph, ids, created_at=TS)
 

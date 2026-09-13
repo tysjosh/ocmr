@@ -1,4 +1,4 @@
-"""Simulated analyst for Experiment 2 (Req 13.3, 14.1, 14.2).
+"""Simulated analyst for Experiment 2.
 
 **This is a simulation, not the paper's human study.** Paper §3.6 preregisters 80
 participants with analytic experience. No human participants are available here,

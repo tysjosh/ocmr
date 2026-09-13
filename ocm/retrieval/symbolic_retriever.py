@@ -1,20 +1,20 @@
 """R1 — Symbolic Retriever.
 
 Answers precise *structural* questions directly from the ``Graph_Store`` over
-**accepted** assertions (the graph only ever holds accepted edges, Req 11.5),
+**accepted** assertions (the graph only ever holds accepted edges),
 without touching the vector index:
 
 - **Project owner** — for an owner query, return the subject(s) of ``OWNS``
-  edges *into* the target Project (Req 15.1).
+  edges *into* the target Project.
 - **Task assignee** — for an assignee query, return the object of the
-  ``ASSIGNED_TO`` edge *out of* the target Task (Req 15.2).
+  ``ASSIGNED_TO`` edge *out of* the target Task.
 - **Preceding events** — for a temporal query, return the Events that point at
-  the target Event via incoming ``PRECEDES`` edges (Req 15.3).
+  the target Event via incoming ``PRECEDES`` edges.
 
 Each :class:`SymbolicHit` carries the backing assertion id, the matched
 subject/predicate/object, and ``exact_match=True``. The exact-match flag is the
 signal the :class:`~ocm.retrieval.reranker.Reranker` uses to force the hit's
-``semantic_similarity`` to ``1.0`` (Req 15.4).
+``semantic_similarity`` to ``1.0``.
 
 Entity *names* extracted by the Query Classifier (R0) are resolved to graph
 node ids by scanning node payloads for a matching ``name`` / ``title`` (and a
@@ -24,8 +24,6 @@ The classifier dependency is imported defensively: this module only needs an
 object exposing ``entities`` / ``predicates`` / ``query_type`` (duck typed via
 :class:`ClassificationLike`), so it works whether or not
 ``ocm.retrieval.query_classifier`` has landed yet.
-
-Requirements: 15.1, 15.2, 15.3, 15.4.
 """
 
 from __future__ import annotations
@@ -82,7 +80,7 @@ class SymbolicHit(BaseModel):
     candidates by a generic ``memory_id`` can consume symbolic and semantic
     hits uniformly. ``exact_match`` defaults to ``True`` because every symbolic
     hit is, by construction, an exact structural match — the Reranker reads this
-    flag and forces ``semantic_similarity = 1.0`` (Req 15.4).
+    flag and forces ``semantic_similarity = 1.0``.
     """
 
     assertion_id: str
@@ -216,17 +214,17 @@ class SymbolicRetriever:
         for node_id in node_ids:
             node_type = graph.get_entity_type(node_id)
 
-            # Req 15.1 — project owner via incoming OWNS edges.
+            # — project owner via incoming OWNS edges.
             if OWNS in wanted and node_type == "Project":
                 for s, o, _k, d in graph.in_edges(node_id, OWNS):
                     _add(_hit_from_edge(s, o, OWNS, d))
 
-            # Req 15.2 — task assignee via outgoing ASSIGNED_TO edge.
+            # — task assignee via outgoing ASSIGNED_TO edge.
             if ASSIGNED_TO in wanted and node_type == "Task":
                 for s, o, _k, d in graph.out_edges(node_id, ASSIGNED_TO):
                     _add(_hit_from_edge(s, o, ASSIGNED_TO, d))
 
-            # Req 15.3 — preceding events via incoming PRECEDES edges.
+            # — preceding events via incoming PRECEDES edges.
             if PRECEDES in wanted and node_type == "Event":
                 for s, o, _k, d in graph.in_edges(node_id, PRECEDES):
                     _add(_hit_from_edge(s, o, PRECEDES, d))

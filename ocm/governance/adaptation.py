@@ -5,7 +5,7 @@ eq. (3) and the two routing thresholds — and nothing else. Tier definitions,
 mandatory constraints, feature encodings, and the rejection rule are module
 constants in :mod:`ocm.governance.policy` and :mod:`ocm.governance.features` that
 this module has no handle on, so no reachable update can disable a mandatory
-control (Req 7.4).
+control.
 
 Three layers of restriction, mirroring safe policy improvement:
 
@@ -18,9 +18,7 @@ Three layers of restriction, mirroring safe policy improvement:
    are unchanged.
 
 Every accepted version records its parent, the training cases behind it, the
-parameter delta, the canary result, and a rollback target (Req 8.3, 8.4).
-
-Requirements: 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5.
+parameter delta, the canary result, and a rollback target.
 """
 
 from __future__ import annotations
@@ -50,11 +48,11 @@ logger = logging.getLogger(__name__)
 #: Block size: parameters are reconsidered after this many adjudicated writes.
 BLOCK_SIZE = 20
 
-#: Trust-region radii of eq. (8) (Req 7.3).
+#: Trust-region radii of eq. (8).
 BETA_TRUST_RADIUS = 0.05
 TAU_TRUST_RADIUS = 0.02
 
-#: Canary-gate tolerances of eq. (9) (Req 8.1).
+#: Canary-gate tolerances of eq. (9).
 DVR_TOLERANCE = 0.0
 MCR_TOLERANCE = 0.01
 RR_TOLERANCE = 0.05
@@ -143,7 +141,6 @@ class BoundedUpdater:
     The updater can only ever return a :class:`PolicyParameters`. It has no access
     to tier semantics, the mandatory-check set, the feature encodings, or the
     rejection rule, so structural self-modification is unreachable by construction
-    (Req 7.4).
     """
 
     def __init__(
@@ -408,7 +405,7 @@ class CanaryGate:
 
 
 # --------------------------------------------------------------------------- #
-# Policy versioning (Req 8.3, 8.4)
+# Policy versioning
 # --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class PolicyVersion:
@@ -465,9 +462,9 @@ class PolicyRegistry:
 
     ``current`` is the deployed parameter set. :meth:`submit_block` runs the
     bounded update, applies the canary gate, and either deploys or discards-and-
-    logs the candidate (Req 8.2). Every version — accepted or rejected — is
+    logs the candidate. Every version — accepted or rejected — is
     retained with its parent, delta, canary result, and rollback target, so the
-    lineage is fully auditable (Req 8.3).
+    lineage is fully auditable.
     """
 
     def __init__(
@@ -488,7 +485,7 @@ class PolicyRegistry:
                 only by the Experiment 3 ``bounded_no_canary`` arm.
             frozen: When ``True`` the registry never changes parameters, which is
                 exactly the frozen-RAHGM condition running the identical pipeline
-                with adaptation disabled (Req 8.5).
+                with adaptation disabled.
             block_size: Adjudicated writes per feedback block.
         """
         self.initial = initial.project()
@@ -548,7 +545,7 @@ class PolicyRegistry:
 
     @property
     def cumulative_drift(self) -> float:
-        """``‖θ_j − θ₀‖₂`` over the coefficients (Req 8.3 telemetry)."""
+        """``‖θ_j − θ₀‖₂`` over the coefficients (telemetry)."""
         return self.initial.coefficient_distance(self.current)
 
     def policy(self) -> EscalationPolicy:
@@ -636,7 +633,7 @@ class PolicyRegistry:
         self.outcomes.append(outcome)
         return outcome
 
-    # -- rollback (Req 8.4) ------------------------------------------------
+    # -- rollback ------------------------------------------------
     def rollback(self, version_id: str | None = None) -> PolicyParameters:
         """Roll back to a recorded version (default: the current version's parent)."""
         if version_id is None:
@@ -703,7 +700,7 @@ class PolicyRegistry:
 
 
 # --------------------------------------------------------------------------- #
-# Structural-immutability witness (Req 7.4)
+# Structural-immutability witness
 # --------------------------------------------------------------------------- #
 def tier_disablement_detected(
     registry: PolicyRegistry, probes: Iterable[RoutingCase]
@@ -773,5 +770,5 @@ def _lattice_within(centre: float, radius: float, grid: float) -> list[float]:
 
 
 def _case_ids(block: Sequence[FeedbackRecord]) -> tuple[str, ...]:
-    """Stable ids of the training cases behind a version (Req 8.3)."""
+    """Stable ids of the training cases behind a version."""
     return tuple(r.write_id for r in block if r.write_id)

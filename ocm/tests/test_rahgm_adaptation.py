@@ -1,6 +1,6 @@
 """RAHGM bounded adaptation, trust regions, canary gate, and versioning.
 
-Covers Req 7.x (bounded updates) and 8.x (canary gate, versioning, rollback), and
+Covers (bounded updates) and 8.x (canary gate, versioning, rollback), and
 the structural-immutability guarantee that no reachable update can disable a
 mandatory control.
 """
@@ -57,10 +57,10 @@ def _accepting_gate() -> CanaryGate:
 
 
 # --------------------------------------------------------------------------- #
-# Trust region (Req 7.2, 7.3)
+# Trust region
 # --------------------------------------------------------------------------- #
 def test_coefficient_delta_respects_the_trust_region():
-    """``‖β̃ − β‖₂ ≤ 0.05`` (eq. 8, Req 7.3)."""
+    """``‖β̃ − β‖₂ ≤ 0.05`` (eq. 8)."""
     updater = BoundedUpdater(learning_rate=10.0)  # a deliberately huge step
     start = PolicyParameters()
     candidate = updater.propose(start, _block())
@@ -69,7 +69,7 @@ def test_coefficient_delta_respects_the_trust_region():
 
 
 def test_threshold_deltas_respect_the_trust_region():
-    """``|τ̃_x − τ_x| ≤ 0.02`` (eq. 8, Req 7.3)."""
+    """``|τ̃_x − τ_x| ≤ 0.02`` (eq. 8)."""
     updater = BoundedUpdater(learning_rate=10.0)
     candidate = updater.propose(PolicyParameters(), _block())
     assert candidate.tau_l_delta <= TAU_TRUST_RADIUS + 1e-9
@@ -77,7 +77,7 @@ def test_threshold_deltas_respect_the_trust_region():
 
 
 def test_updates_stay_in_the_admissible_set():
-    """Every proposal is monotone: projection is applied after the step (Req 7.2)."""
+    """Every proposal is monotone: projection is applied after the step."""
     updater = BoundedUpdater(learning_rate=5.0)
     params = PolicyParameters()
     for _ in range(10):
@@ -102,7 +102,7 @@ def test_empty_block_proposes_no_change():
 
 
 # --------------------------------------------------------------------------- #
-# Canary gate (Req 8.1, 8.2)
+# Canary gate
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
     ("dvr", "mcr", "rr", "accepted"),
@@ -116,7 +116,7 @@ def test_empty_block_proposes_no_change():
     ],
 )
 def test_gate_applies_equation_nine(dvr: float, mcr: float, rr: float, accepted: bool):
-    """``A(θ̃,θ) = 1[ΔDVR = 0 ∧ ΔMCR ≤ 0.01 ∧ ΔRR ≤ 0.05]`` (Req 8.1)."""
+    """``A(θ̃,θ) = 1[ΔDVR = 0 ∧ ΔMCR ≤ 0.01 ∧ ΔRR ≤ 0.05]``."""
     baseline = CanaryMeasurement(dvr=0.10, mcr=0.05, review_rate=0.30)
     current = PolicyParameters()
     candidate = PolicyParameters(beta_0=-1.0)
@@ -137,7 +137,7 @@ def test_gate_applies_equation_nine(dvr: float, mcr: float, rr: float, accepted:
 
 
 def test_failed_candidate_is_discarded_and_logged(caplog):
-    """A blocked candidate leaves the deployed parameters unchanged (Req 8.2)."""
+    """A blocked candidate leaves the deployed parameters unchanged."""
     gate = CanaryGate(
         lambda p: CanaryMeasurement(
             dvr=0.0 if p == PolicyParameters() else 0.5, mcr=0.0, review_rate=0.2
@@ -181,10 +181,10 @@ def test_gate_is_memoized_by_parameter_value():
 
 
 # --------------------------------------------------------------------------- #
-# Frozen policy (Req 8.5)
+# Frozen policy
 # --------------------------------------------------------------------------- #
 def test_frozen_registry_never_changes_parameters():
-    """Frozen RAHGM runs the identical pipeline with updates disabled (Req 8.5)."""
+    """Frozen RAHGM runs the identical pipeline with updates disabled."""
     registry = PolicyRegistry(PolicyParameters(), updater=BoundedUpdater(), frozen=True)
     before = registry.current
     for _ in range(5):
@@ -211,10 +211,10 @@ def test_frozen_observe_is_a_noop():
 
 
 # --------------------------------------------------------------------------- #
-# Blocking and versioning (Req 7.1, 8.3, 8.4)
+# Blocking and versioning
 # --------------------------------------------------------------------------- #
 def test_blocks_are_processed_every_twenty_adjudications():
-    """Adaptation reconsiders parameters per 20-write block (Req 7.1)."""
+    """Adaptation reconsiders parameters per 20-write block."""
     registry = PolicyRegistry(
         PolicyParameters(), updater=BoundedUpdater(), gate=_accepting_gate(), block_size=20
     )
@@ -224,7 +224,7 @@ def test_blocks_are_processed_every_twenty_adjudications():
 
 
 def test_versions_record_full_lineage():
-    """Each version records parent, delta, canary result, and rollback target (Req 8.3)."""
+    """Each version records parent, delta, canary result, and rollback target."""
     registry = PolicyRegistry(
         PolicyParameters(), updater=BoundedUpdater(), gate=_accepting_gate()
     )
@@ -238,7 +238,7 @@ def test_versions_record_full_lineage():
 
 
 def test_rollback_restores_a_recorded_version():
-    """Rollback to a prior version is supported (Req 8.4)."""
+    """Rollback to a prior version is supported."""
     registry = PolicyRegistry(
         PolicyParameters(), updater=BoundedUpdater(), gate=_accepting_gate()
     )
@@ -287,10 +287,10 @@ def test_cumulative_drift_is_tracked():
 
 
 # --------------------------------------------------------------------------- #
-# Structural immutability (Req 7.4)
+# Structural immutability
 # --------------------------------------------------------------------------- #
 def test_adaptation_cannot_disable_a_mandatory_control():
-    """No reachable parameter set routes a mandatory failure to ``accept`` (Req 7.4).
+    """No reachable parameter set routes a mandatory failure to ``accept``.
 
     Uses an adversarial feedback stream that asserts, with maximum confidence, that
     mandatory-failure writes need no review — the strongest available attempt to
@@ -323,7 +323,7 @@ def test_adaptation_cannot_disable_a_mandatory_control():
 
 
 def test_updater_can_only_return_parameters():
-    """The updater has no handle on tier semantics or the mandatory set (Req 7.4)."""
+    """The updater has no handle on tier semantics or the mandatory set."""
     candidate = BoundedUpdater().propose(PolicyParameters(), _block())
     assert isinstance(candidate.params, PolicyParameters)
     # The registered, adaptable surface is the ten coefficients plus two
@@ -343,7 +343,7 @@ def test_updater_can_only_return_parameters():
 
 
 def test_adaptation_preserves_structural_configuration():
-    """A bounded update never changes a structural field (Req 7.4)."""
+    """A bounded update never changes a structural field."""
     start = PolicyParameters(reversibility_center=0.5)
     candidate = BoundedUpdater(learning_rate=5.0).propose(start, _block())
     assert candidate.params.reversibility_center == 0.5

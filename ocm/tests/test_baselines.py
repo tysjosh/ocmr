@@ -1,4 +1,4 @@
-"""Baseline strategy + B0–B4 construction/run tests (Req 22.1–22.5).
+"""Baseline strategy + B0–B4 construction/run tests.
 
 Drives every baseline (B0–B4) over a single deterministic, offline
 ``CoreContainer`` to confirm each one constructs from the registry and runs a
@@ -11,8 +11,6 @@ write + query with the ablation its toggles imply:
   the T1 status conflict.
 * **B3** (full governance) surfaces the quarantined T1 status conflict.
 * **B4** (B3 + Answer_Policy) renders an answer string onto the package.
-
-Requirements: 22.1, 22.2, 22.3, 22.4, 22.5.
 """
 
 from __future__ import annotations

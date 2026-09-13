@@ -5,11 +5,11 @@
 accepted assertions are **directed edges** keyed by predicate (a multigraph lets
 several predicates connect the same pair of nodes). Only ``accepted`` assertions
 ever become edges — superseded, quarantined, and rejected assertions are
-excluded (Req 11.5). The graph is a fast, rebuildable view over the durable
+excluded. The graph is a fast, rebuildable view over the durable
 ``Storage_Repository``; the repository is the source of truth on disk.
 
 The Commit Manager keeps the graph and SQLite consistent by *write-through on
-commit* (Req 11.6): an accept calls :meth:`GraphStore.add_assertion` while
+commit*: an accept calls :meth:`GraphStore.add_assertion` while
 persisting the row, a supersede calls :meth:`GraphStore.remove_assertion` while
 flipping the old row to ``superseded``. The standing invariant is therefore:
 
@@ -18,15 +18,13 @@ flipping the old row to ``superseded``. The standing invariant is therefore:
 
 On restart :func:`rebuild_graph` reconstructs the graph deterministically from
 the persisted entities + accepted assertions, so the rebuilt graph is identical
-to the pre-restart accepted state (Req 11.8).
+to the pre-restart accepted state.
 
 The query surface is intentionally general so it serves both the
 ``Symbolic_Retriever`` (OWNS / ASSIGNED_TO / PRECEDES traversals) and the
 ``Constraint_Validator`` (C9 graph-level domain/range via
 :meth:`get_entity_type`, C3 acyclic PRECEDES via :meth:`has_path` /
 :meth:`simple_cycles` / :meth:`would_create_cycle`).
-
-Requirements: 11.5, 11.6, 11.8.
 """
 
 from __future__ import annotations
@@ -93,7 +91,7 @@ class GraphStore:
         """Return the ``entity_type`` of a node, or ``None`` if absent.
 
         Used by C9 to resolve the actual types of an assertion's subject and
-        object for graph-level domain/range validation (Req 8.10).
+        object for graph-level domain/range validation.
         """
         if not self.g.has_node(entity_id):
             return None
@@ -112,7 +110,7 @@ class GraphStore:
     def add_assertion(self, a: Assertion) -> None:
         """Add an **accepted** assertion as a directed edge keyed by predicate.
 
-        Enforces the accepted-only invariant (Req 11.5, 10.5): a non-accepted
+        Enforces the accepted-only invariant: a non-accepted
         assertion raises :class:`ValueError` so quarantined/rejected/superseded
         candidates can never enter the graph as accepted memory.
         """
@@ -142,7 +140,7 @@ class GraphStore:
         """Remove the edge for ``(subject, predicate, object)`` if present.
 
         Idempotent: a missing edge is a no-op. Used on supersession to drop the
-        superseded edge while the new assertion is accepted (Req 11.6).
+        superseded edge while the new assertion is accepted.
         """
         if self.g.has_edge(subject_id, object_id, key=predicate):
             self.g.remove_edge(subject_id, object_id, key=predicate)
@@ -258,7 +256,7 @@ class GraphStore:
 
         A new edge creates a cycle when it is a self-loop or when a path already
         leads from ``object`` back to ``subject`` along ``predicate`` edges.
-        Supports C3 (acyclic PRECEDES, Req 8.4) before an edge is accepted.
+        Supports C3 (acyclic PRECEDES) before an edge is accepted.
         """
         if subject_id == object_id:
             return True
@@ -296,7 +294,7 @@ class GraphStore:
 
 
 def rebuild_graph(repo: StorageRepository) -> GraphStore:
-    """Reconstruct a :class:`GraphStore` from durable storage (Req 11.8).
+    """Reconstruct a :class:`GraphStore` from durable storage.
 
     The rebuild is deterministic and accepted-only:
 

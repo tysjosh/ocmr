@@ -4,7 +4,7 @@
 
 * **Random (default).** ``f"{prefix}_{uuid4().hex}"`` — globally unique,
   suitable for production/demo.
-* **Deterministic test mode (Req 27.5).** IDs are derived from
+* **Deterministic test mode.** IDs are derived from
   ``entity_type + normalized_name + source_ref`` plus a seeded per-run counter
   for tie-breaking, hashed to a stable suffix. Identical input across runs
   yields identical IDs, which makes benchmarks, ablations, and property tests
@@ -12,7 +12,7 @@
 
 The seeded counter is reset per ``IdGenerator`` construction (i.e. per run /
 per process initialization) so a fresh run over identical inputs reproduces the
-same ID sequence (Req 27.5).
+same ID sequence.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ class IdGenerator:
         """Return an ID for an entity.
 
         In deterministic mode the ID is derived from
-        ``entity_type|normalized_name|source_ref|counter`` (Req 27.5).
+        ``entity_type|normalized_name|source_ref|counter``.
         """
         prefix = _prefix(entity_type)
         if self.deterministic:

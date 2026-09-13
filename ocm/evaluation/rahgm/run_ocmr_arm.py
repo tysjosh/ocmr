@@ -196,7 +196,7 @@ def _preflight(extractor: Any) -> None:
     plausible-looking arm table computed over an empty memory store:
 
     1. Every ``generate`` call raises (broken Triton/CUDA, OOM). The write
-       pipeline absorbs each one as a recorded validation failure (Req 3.3).
+       pipeline absorbs each one as a recorded validation failure.
     2. Every call returns schema-valid but *empty* JSON. Nothing raises at all,
        so no warning is logged anywhere.
 

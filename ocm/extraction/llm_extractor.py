@@ -2,22 +2,19 @@
 
 ``LLMExtractor`` is the optional, configuration-gated counterpart to the default
 offline ``Mock_Extractor``. It is selected when ``settings.extractor == "llm"``
-(Req 3.6) and calls an OpenAI-compatible chat-completions endpoint in JSON mode
+ and calls an OpenAI-compatible chat-completions endpoint in JSON mode
 using the extraction prompt from the design ("W1 — Extractor").
 
-The returned JSON is validated into an :class:`ExtractionResult` Pydantic model
-(Req 3.2). Any failure — request timeout, a non-JSON / malformed response body,
+The returned JSON is validated into an :class:`ExtractionResult` Pydantic model.
+Any failure — request timeout, a non-JSON / malformed response body,
 or Pydantic validation failure — is surfaced as an :class:`ExtractionError` so
 the Write_Pipeline can reject the input and record a validation failure
-(Req 3.3, 3.6).
 
 The HTTP layer is intentionally injectable: a ``client`` callable (taking the
 request payload dict and returning the parsed response dict) can be supplied at
 construction time, or :meth:`_post` can be overridden. This keeps the class
 fully offline-testable — no network call happens until :meth:`extract` is
 invoked, and tests can inject a fake client.
-
-Requirements: 3.2, 3.3, 3.6.
 """
 
 from __future__ import annotations
@@ -31,7 +28,7 @@ from ocm.core.config import Settings
 from ocm.memory.contracts import ExtractionResult
 
 # Prefer importing the shared Extractor protocol + ExtractionError from the
-# extraction base module (task 10.1). If it is not present yet, fall back to a
+# extraction base module. If it is not present yet, fall back to a
 # locally-defined ExtractionError so this module is independently importable.
 try:  # pragma: no cover - exercised by whichever ordering tasks run in
     from ocm.extraction.base import ExtractionError
@@ -120,7 +117,7 @@ SYSTEM_PROMPT = (
 
 
 class LLMExtractor:
-    """Optional OpenAI-compatible extractor enabled via configuration (Req 3.6).
+    """Optional OpenAI-compatible extractor enabled via configuration.
 
     Parameters
     ----------
@@ -154,7 +151,7 @@ class LLMExtractor:
         """Extract candidate memory items from ``text`` via the LLM endpoint.
 
         Raises :class:`ExtractionError` on timeout, a non-JSON response, or
-        Pydantic validation failure (Req 3.3, 3.6).
+        Pydantic validation failure.
         """
         payload = self._build_payload(text, source_ref)
 

@@ -1,9 +1,9 @@
 """SQLite implementation of :class:`StorageRepository`.
 
 ``SQLiteRepository`` provisions the seven required tables on construction
-(Req 11.1) and implements every persistence operation behind the
+ and implements every persistence operation behind the
 :class:`~ocm.memory.repository.StorageRepository` interface so a Postgres
-adapter is a drop-in (Req 11.2, 11.3, 11.4). It supports ``:memory:`` mode for
+adapter is a drop-in. It supports ``:memory:`` mode for
 hermetic tests (the ``in_memory_repository`` fixture uses
 ``SQLiteRepository(":memory:")``); because an in-memory SQLite database lives
 only as long as its connection, a single long-lived connection is held for the
@@ -35,7 +35,7 @@ from ocm.ontology.models import (
     QuarantineRecord,
 )
 
-# --- DDL: the seven required tables (Req 11.1) ----------------------------
+# --- DDL: the seven required tables ----------------------------
 _SCHEMA = """
 -- 1. entities: one row per resolved entity, payload holds the full typed model
 CREATE TABLE IF NOT EXISTS entities (
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS documents (
     tags        TEXT NOT NULL DEFAULT '[]'
 );
 
--- 5. quarantine_records (persist across restarts, Req 11.7)
+-- 5. quarantine_records (persist across restarts)
 CREATE TABLE IF NOT EXISTS quarantine_records (
     id                TEXT PRIMARY KEY,
     candidate_payload TEXT NOT NULL,
@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS quarantine_records (
 );
 CREATE INDEX IF NOT EXISTS idx_quarantine_status ON quarantine_records(status);
 
--- 6. provenance (Req 12.4)
+-- 6. provenance
 CREATE TABLE IF NOT EXISTS provenance (
     id                      TEXT PRIMARY KEY,
     subject_id              TEXT NOT NULL,

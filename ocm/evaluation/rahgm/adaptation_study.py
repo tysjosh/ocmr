@@ -21,8 +21,6 @@ Feedback streams
 The headline questions are whether the gate accepts useful clean updates, blocks
 adversarial ones, bounds the worst post-update ``DVR`` increase, keeps cumulative
 drift small, and never permits effective tier disablement.
-
-Requirements: 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5, 13.4.
 """
 
 from __future__ import annotations

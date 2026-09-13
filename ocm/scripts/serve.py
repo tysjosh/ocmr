@@ -1,4 +1,4 @@
-"""Entry-point script: start the OCM API_Service (Req 28.1).
+"""Entry-point script: start the OCM API_Service.
 
 Thin ``argparse`` wrapper around ``uvicorn`` that serves the FastAPI app
 exposed at ``ocm.app.main:app``. ``uvicorn`` is imported **lazily** inside
@@ -10,8 +10,6 @@ Usage::
     python -m ocm.scripts.serve                       # 127.0.0.1:8000
     python -m ocm.scripts.serve --host 0.0.0.0 --port 8080
     python -m ocm.scripts.serve --reload              # dev auto-reload
-
-Requirements: 28.1.
 """
 
 from __future__ import annotations

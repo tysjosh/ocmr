@@ -1,6 +1,5 @@
-"""Governance integration tests for the write path (task 8.9).
+"""Governance integration tests for the write path.
 
-Validates: Requirements 10.2, 10.3, 26.4, 28.5, 28.6
 
 Unlike ``test_commit_manager_quickcheck`` (which drives the Commit Manager's
 routing legs with hand-built :class:`ValidationResult` verdicts), these tests
@@ -16,11 +15,9 @@ two contradiction outcomes the governance layer must distinguish and confirm the
   ``ASSIGNED_TO`` is detected by C7 (delegating to W7), routed to
   ``quarantine``, and the candidate never enters accepted memory; the resulting
   record is retrievable from ``Quarantine_Store.list(status=unresolved)``
-  (Req 10.3, 26.4, 28.6).
 * The same conflict carried as a ``correction`` is routed to ``supersede``: the
   prior assertion flips to ``superseded``, the correction is accepted, exactly
   one accepted ``ASSIGNED_TO`` remains, and a ``SUPERSEDES`` edge links new->old
-  (Req 10.2, 28.5).
 """
 
 from __future__ import annotations
@@ -137,12 +134,11 @@ def test_high_confidence_contradiction_is_quarantined(
 ):
     """new_fact conflicting with an accepted single-valued edge -> quarantine.
 
-    Validates: Requirements 10.3, 26.4, 28.6
     """
     candidate = _candidate_to_b(write_intent="new_fact")
 
     # C7 (via W7) detects the single-valued ASSIGNED_TO conflict and, because
-    # both sides are high-confidence new facts, recommends quarantine (Req 26.4).
+    # both sides are high-confidence new facts, recommends quarantine.
     vr = validator.validate(candidate, graph, settings=settings)
     assert vr.valid is False
     assert vr.failed_check == "C7"
@@ -152,7 +148,7 @@ def test_high_confidence_contradiction_is_quarantined(
     before_edges = graph.num_edges()
     outcome = manager.commit(candidate, vr, created_at=TS)
 
-    # The candidate is quarantined and never enters accepted memory (Req 10.3).
+    # The candidate is quarantined and never enters accepted memory.
     assert outcome.decision == "quarantined"
     assert outcome.quarantine_id is not None
     assert graph.num_edges() == before_edges
@@ -166,13 +162,12 @@ def test_quarantine_store_lists_unresolved_conflict(
 ):
     """The quarantined contradiction is retrievable as an unresolved conflict.
 
-    Validates: Requirements 10.3, 28.6
     """
     candidate = _candidate_to_b(write_intent="new_fact")
     vr = validator.validate(candidate, graph, settings=settings)
     outcome = manager.commit(candidate, vr, created_at=TS)
 
-    # Retrieving unresolved conflicts from the Quarantine_Store works (Req 28.6).
+    # Retrieving unresolved conflicts from the Quarantine_Store works.
     unresolved = manager.quarantine_store.list(status=QuarantineStatus.unresolved)
     assert len(unresolved) == 1
     record = unresolved[0]
@@ -184,18 +179,17 @@ def test_quarantine_store_lists_unresolved_conflict(
 
 
 # --------------------------------------------------------------------------- #
-# Scenario 2 — a correction supersedes the prior assertion (Req 10.2, 28.5).
+# Scenario 2 — a correction supersedes the prior assertion.
 # --------------------------------------------------------------------------- #
 def test_correction_supersedes_prior_assignment(
     seeded_assignment, validator, manager, repo, graph, settings
 ):
     """A high-confidence correction supersedes the accepted assignment.
 
-    Validates: Requirements 10.2, 28.5
     """
     correction = _candidate_to_b(write_intent="correction", confidence=0.99)
 
-    # The same conflict, carried as a correction, is routed to supersede (Req 10.2).
+    # The same conflict, carried as a correction, is routed to supersede.
     vr = validator.validate(correction, graph, settings=settings)
     assert vr.valid is False
     assert vr.failed_check == "C7"
@@ -217,7 +211,7 @@ def test_correction_supersedes_prior_assignment(
     assert assigned_edges[0][1] == "per_b"
     assert not graph.has_assertion("t1", "per_a", "ASSIGNED_TO")
 
-    # A SUPERSEDES edge links the new assertion to the old one (Req 28.5).
+    # A SUPERSEDES edge links the new assertion to the old one.
     assert graph.has_assertion(new_id, seeded_assignment, SUPERSEDES)
 
     # Provenance is preserved for both sides of the supersession.
@@ -230,7 +224,6 @@ def test_correction_then_unresolved_conflicts_remain_empty(
 ):
     """A clean supersession leaves no unresolved quarantine conflicts.
 
-    Validates: Requirements 10.2, 28.6
     """
     correction = _candidate_to_b(write_intent="correction", confidence=0.99)
     vr = validator.validate(correction, graph, settings=settings)

@@ -1,17 +1,17 @@
-"""Temporal constraint unit tests for C2 and C3 (task 6.4).
+"""Temporal constraint unit tests for C2 and C3.
 
 These tests pin down the two temporal graph-level constraints in
 ``ocm.validation.constraints``:
 
-* **C2 — temporal sanity (Req 8.3):** an Event whose ``timestamp_end`` precedes
+* **C2 — temporal sanity:** an Event whose ``timestamp_end`` precedes
   its ``timestamp_start`` is rejected; a missing ``timestamp_end`` passes; an
   end equal to or after the start passes.
-* **C3 — acyclic PRECEDES (Req 8.4):** a ``PRECEDES`` candidate that would close
+* **C3 — acyclic PRECEDES:** a ``PRECEDES`` candidate that would close
   a cycle over the accepted PRECEDES projection is rejected; a candidate that
   merely extends a chain is accepted.
 
 Both constraints surface invalid-input behavior that the schema-bounded enums
-and bounds can't catch on their own (Req 26.2): C2 compares two timestamps and
+and bounds can't catch on their own: C2 compares two timestamps and
 C3 reasons over the accepted graph, so they are exercised here against the real
 ``Event`` model and a real ``GraphStore`` (no mocks).
 """
@@ -79,7 +79,7 @@ def _precedes_chain_graph(event_ids: list[str]) -> GraphStore:
 
 
 # ---------------------------------------------------------------------------
-# C2 — temporal sanity (Req 8.3, 26.2)
+# C2 — temporal sanity
 # ---------------------------------------------------------------------------
 def test_c2_rejects_end_before_start():
     event = _event("e-1", start=_T1, end=_T0)
@@ -117,7 +117,7 @@ def test_c2_accepts_payload_dict():
 
 
 # ---------------------------------------------------------------------------
-# C3 — acyclic PRECEDES (Req 8.4, 26.2)
+# C3 — acyclic PRECEDES
 # ---------------------------------------------------------------------------
 def test_c3_rejects_cycle_closing_edge():
     # Accepted chain e1 -> e2 -> e3; candidate e3 -> e1 would close a cycle.

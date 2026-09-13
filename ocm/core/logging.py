@@ -1,11 +1,11 @@
-"""Structured research logging for OCM (Req 25).
+"""Structured research logging for OCM.
 
 `ResearchLogger` writes **append-only JSONL** records at three granularities so
 experiments are traceable and reproducible:
 
-* :meth:`log_write` — one record per write operation (Req 25.1).
-* :meth:`log_query` — one record per query operation (Req 25.2).
-* :meth:`log_benchmark` — one record per benchmark example evaluation (Req 25.3).
+* :meth:`log_write` — one record per write operation.
+* :meth:`log_query` — one record per query operation.
+* :meth:`log_benchmark` — one record per benchmark example evaluation.
 
 Records are keyed by ids (``input_id`` / ``query_id`` / ``baseline_name``) so
 writes, queries, and benchmark evaluations can be joined for analysis. The
@@ -48,7 +48,7 @@ class ResearchLogger:
                 fh.write(json.dumps(enriched, default=str) + "\n")
         return enriched
 
-    # -- per-write (Req 25.1) ----------------------------------------------
+    # -- per-write ----------------------------------------------
     def log_write(
         self,
         *,
@@ -63,7 +63,7 @@ class ResearchLogger:
         latency_ms: float,
         token_count_if_llm_used: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Record a completed write operation (Req 25.1)."""
+        """Record a completed write operation."""
         return self._emit(
             "write",
             {
@@ -80,7 +80,7 @@ class ResearchLogger:
             },
         )
 
-    # -- per-query (Req 25.2) ----------------------------------------------
+    # -- per-query ----------------------------------------------
     def log_query(
         self,
         *,
@@ -93,7 +93,7 @@ class ResearchLogger:
         latency_ms: float,
         token_count_if_llm_used: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """Record a completed query operation (Req 25.2)."""
+        """Record a completed query operation."""
         return self._emit(
             "query",
             {
@@ -108,7 +108,7 @@ class ResearchLogger:
             },
         )
 
-    # -- per-benchmark-example (Req 25.3) ----------------------------------
+    # -- per-benchmark-example ----------------------------------
     def log_benchmark(
         self,
         *,
@@ -120,7 +120,7 @@ class ResearchLogger:
         score: float,
         latency_ms: float,
     ) -> Dict[str, Any]:
-        """Record a single benchmark example evaluation (Req 25.3)."""
+        """Record a single benchmark example evaluation."""
         return self._emit(
             "benchmark",
             {

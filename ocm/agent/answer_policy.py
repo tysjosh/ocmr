@@ -1,33 +1,31 @@
-"""Agent Answer Policy — P1–P5 (Req 21.1, 21.2, 21.3, 21.4, 21.5).
+"""Agent Answer Policy — P1–P5.
 
 `Answer_Policy` (`ocm/agent/answer_policy.py`) shapes the agent's final,
 human-readable answer from an :class:`EvidencePackage` (the R4 retrieval
-contract). It is the last hop in the agent loop (task 16.1) and the toggled
-feature that distinguishes baseline B4 from B3 (task 17.x).
+contract). It is the last hop in the agent loop and the toggled
+feature that distinguishes baseline B4 from B3.
 
 The policy is a deterministic, pure transform — same package in, same string
-out — so its output can be asserted directly in tests (task 16.3) and compared
+out — so its output can be asserted directly in tests and compared
 across baselines.
 
 Policies
 --------
-- **P1 — Prefer typed assertions (Req 21.1).** Lead with the accepted,
+- **P1 — Prefer typed assertions.** Lead with the accepted,
   high-confidence answer: ``pkg.answer`` when retrieval derived one, otherwise
   the text of the top supporting assertion(s). Raw, unsupported text is never
   promoted ahead of accepted assertions.
-- **P2 — Surface conflicts (Req 21.2).** When ``pkg.conflicts`` is non-empty the
+- **P2 — Surface conflicts.** When ``pkg.conflicts`` is non-empty the
   rendered answer calls them out explicitly under a dedicated heading; conflicts
   are never silently dropped.
-- **P3 — Keep conflicts separate (Req 21.3).** Each conflicting claim is printed
+- **P3 — Keep conflicts separate.** Each conflicting claim is printed
   as its own labeled line; they are never merged into a single statement.
-- **P4 — Include provenance when high-stakes (Req 21.4).** When
+- **P4 — Include provenance when high-stakes.** When
   ``high_stakes=True`` (or the output is decision-support) the supporting
   ``source_ref`` provenance is attached to the answer.
-- **P5 — State missing evidence (Req 21.5).** When ``pkg.missing_information`` is
+- **P5 — State missing evidence.** When ``pkg.missing_information`` is
   set — or nothing supports the query — the gaps are enumerated rather than
   fabricating an answer.
-
-Requirements: 21.1, 21.2, 21.3, 21.4, 21.5.
 """
 
 from __future__ import annotations
@@ -87,7 +85,7 @@ class AnswerPolicy:
         return "\n\n".join(section for section in sections if section).strip()
 
     # ------------------------------------------------------------------ #
-    # P1 — Prefer typed assertions (Req 21.1)
+    # P1 — Prefer typed assertions
     # ------------------------------------------------------------------ #
     def _render_answer(
         self, pkg: EvidencePackage, items_by_id: dict[str, RankedItem]
@@ -116,7 +114,7 @@ class AnswerPolicy:
         return "Answer: No accepted assertions support this query."
 
     # ------------------------------------------------------------------ #
-    # P2 / P3 — Surface conflicts, kept separate (Req 21.2, 21.3)
+    # P2 / P3 — Surface conflicts, kept separate
     # ------------------------------------------------------------------ #
     @staticmethod
     def _render_conflicts(pkg: EvidencePackage) -> str:
@@ -140,7 +138,7 @@ class AnswerPolicy:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------ #
-    # P4 — Include provenance when high-stakes (Req 21.4)
+    # P4 — Include provenance when high-stakes
     # ------------------------------------------------------------------ #
     @staticmethod
     def _render_provenance(pkg: EvidencePackage) -> str:
@@ -160,7 +158,7 @@ class AnswerPolicy:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------ #
-    # P5 — State missing evidence (Req 21.5)
+    # P5 — State missing evidence
     # ------------------------------------------------------------------ #
     @staticmethod
     def _render_missing(pkg: EvidencePackage) -> str:

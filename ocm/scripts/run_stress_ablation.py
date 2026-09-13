@@ -4,13 +4,13 @@ Mirrors :mod:`ocm.scripts.run_experiments`: a thin ``main()`` that runs the
 targeted stress-workload diagnostic across the four governance arms
 (Ungoverned, Gate_Only, Schema_Provenance, Full), prints a plain-text
 arm x violation-type table, and writes the same content to a results file
-under ``local_results/`` (Req 14.1, 14.3, 8.1, 10.4).
+under ``local_results/``.
 
 The workload is a **targeted diagnostic, not a real-benchmark result** — the
 ``Diagnostic_Scope_Note`` is therefore printed as the **first and last** lines
-of output so no reader mistakes the table for an emergent real-data finding
-(Req 14.1, 14.3). The ``Gate_Only_Arm`` row is flagged as the decisive
-comparison (Req 10.4): fed the same inputs as every other arm, it still leaves
+of output so no reader mistakes the table for an emergent real-data finding.
+The ``Gate_Only_Arm`` row is flagged as the decisive
+comparison: fed the same inputs as every other arm, it still leaves
 the invalid durable state the Schema_Provenance_Arm removes.
 
 Usage::
@@ -58,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
 # Rendering
 # --------------------------------------------------------------------------- #
 #: Columns of the table: the four typed-violation types, the total, then the
-#: four write-outcome tally buckets (no new outcome categories — Req 8.1, 8.2).
+#: four write-outcome tally buckets (no new outcome categories).
 _COLUMNS: list[tuple[str, str]] = [
     ("schema_invalid", "schema_invalid"),
     ("unsupported_final_decision", "unsupported_final"),
@@ -88,9 +88,9 @@ def render_report(result: StressAblationResult) -> str:
     """Render the full plain-text output (note first, table, note last).
 
     The ``Diagnostic_Scope_Note`` is emitted as the **first and last** lines of
-    output (Req 14.1, 14.3); the ``Gate_Only_Arm`` row is flagged decisive
-    (Req 10.4). The table columns are the four typed-violation types, the total,
-    and the four write-outcome tally buckets (Req 8.1).
+    output; the ``Gate_Only_Arm`` row is flagged decisive.
+    The table columns are the four typed-violation types, the total,
+    and the four write-outcome tally buckets.
     """
     note_block = _wrap_note(result.diagnostic_scope_note)
 

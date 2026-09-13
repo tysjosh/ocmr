@@ -12,9 +12,7 @@ stages exchange these typed Pydantic v2 contracts. They make the
 - :class:`WriteOutcome` / :class:`WriteSummary` — commit-manager results (W8).
 
 Confidence uses ``confloat(ge=0.0, le=1.0)`` so the [0, 1] bound is enforced
-structurally (Req 8.7, supports constraint C6).
-
-Requirements: 6.1, 6.2, 8.1, 9.7, 10.1, 19.2.
+structurally (supports constraint C6).
 """
 
 from datetime import datetime

@@ -1,4 +1,4 @@
-"""Unit tests for the Semantic Retriever (R2, Req 16.1–16.5).
+"""Unit tests for the Semantic Retriever (R2,–16.5).
 
 Exercised hermetically with the :class:`DeterministicEmbeddingProvider` and an
 in-memory :class:`VectorIndex` (Chroma fallback), so no model download or
@@ -46,7 +46,7 @@ def populated_index() -> VectorIndex:
 
 
 def test_retrieve_returns_semantic_hits(populated_index: VectorIndex) -> None:
-    """Req 16.1: embeds the query and returns ranked SemanticHit results."""
+    """: embeds the query and returns ranked SemanticHit results."""
     retriever = SemanticRetriever(populated_index)
     hits = retriever.retrieve("who owns Project Orion", _classification("direct_fact"), top_k=10)
 
@@ -63,7 +63,7 @@ def test_retrieve_returns_semantic_hits(populated_index: VectorIndex) -> None:
 
 
 def test_normal_query_excludes_quarantined(populated_index: VectorIndex) -> None:
-    """Req 16.2 + 16.5: a non-conflict query returns only accepted items."""
+    """ + 16.5: a non-conflict query returns only accepted items."""
     retriever = SemanticRetriever(populated_index)
     hits = retriever.retrieve("who owns Project Orion", _classification("direct_fact"), top_k=10)
 
@@ -75,7 +75,7 @@ def test_normal_query_excludes_quarantined(populated_index: VectorIndex) -> None
 
 
 def test_conflict_query_includes_quarantined(populated_index: VectorIndex) -> None:
-    """Req 16.3 + 16.4: a contradiction_check query also surfaces quarantined items."""
+    """ + 16.4: a contradiction_check query also surfaces quarantined items."""
     retriever = SemanticRetriever(populated_index)
     hits = retriever.retrieve(
         "is there a conflict about who owns Project Orion",
@@ -91,7 +91,7 @@ def test_conflict_query_includes_quarantined(populated_index: VectorIndex) -> No
 
 
 def test_include_conflicts_flag_overrides_query_type(populated_index: VectorIndex) -> None:
-    """Req 16.3: include_conflicts=True surfaces quarantined items even for a
+    """: include_conflicts=True surfaces quarantined items even for a
     non-conflict query type."""
     retriever = SemanticRetriever(populated_index)
     hits = retriever.retrieve(

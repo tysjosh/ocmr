@@ -1,9 +1,9 @@
-"""Query Classifier (R0) for the retrieval pipeline (Req 14.1, 14.2).
+"""Query Classifier (R0) for the retrieval pipeline.
 
 The :class:`QueryClassifier` is the first stage (R0) of the read pipeline. It
 inspects an incoming natural-language query and classifies it into exactly one
 of six :data:`QueryType` values, extracts candidate entity mentions and relation
-predicates, and decides whether semantic fallback is needed (Req 14.1, 14.2).
+predicates, and decides whether semantic fallback is needed.
 
 Classification is deterministic and dependency-free: it relies on keyword and
 light regex heuristics rather than an LLM, so it is fast, reproducible, and
@@ -24,9 +24,7 @@ open_ended           fallback when no structural cue matches
 ``needs_semantic_fallback`` is ``True`` unless the query is a pure structural
 lookup with a confidently extracted entity *and* predicate (then the symbolic
 retriever's results may suffice). ``contradiction_check`` is the downstream
-"conflict query" signal used to include quarantined items (Req 16.3).
-
-Requirements: 14.1, 14.2.
+"conflict query" signal used to include quarantined items.
 """
 
 from __future__ import annotations
@@ -51,7 +49,7 @@ QueryType = Literal[
 
 
 class QueryClassification(BaseModel):
-    """Structured result of classifying a query (Req 14.2).
+    """Structured result of classifying a query.
 
     Carries the chosen ``query_type``, candidate entity mentions, candidate
     relation predicates (registry keys such as ``OWNS``/``ASSIGNED_TO``), and
@@ -187,10 +185,10 @@ _GENERIC_TYPE_PREFIXES = frozenset({"Project", "Task", "Event", "Document"})
 
 
 class QueryClassifier:
-    """Deterministic, heuristic query classifier (R0) (Req 14.1, 14.2)."""
+    """Deterministic, heuristic query classifier (R0)."""
 
     def classify(self, query: str) -> QueryClassification:
-        """Classify ``query`` and extract entities/predicates (Req 14.1, 14.2).
+        """Classify ``query`` and extract entities/predicates.
 
         Returns a :class:`QueryClassification`. The query is assigned exactly
         one ``query_type``; ``needs_semantic_fallback`` is ``False`` only for a

@@ -1,4 +1,4 @@
-"""Smoke tests for the property-based test harness itself (task 1.1).
+"""Smoke tests for the property-based test harness itself.
 
 These verify the tagging convention, the Hypothesis 100-iteration floor, and
 the deterministic/offline settings fixture without depending on any module

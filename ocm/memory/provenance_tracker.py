@@ -1,21 +1,19 @@
 """Provenance Tracker (``Provenance_Tracker``).
 
 ``ProvenanceTracker`` writes to the ``provenance`` table through the
-:class:`~ocm.memory.repository.StorageRepository` interface (Req 12.4). When any
+:class:`~ocm.memory.repository.StorageRepository` interface. When any
 assertion, claim, document, or quarantine record is created, it records the
 item's ``source_ref``, ``created_at``, ``extractor_version`` where available, and
-``supporting_evidence_ids`` where available (Req 12.1).
+``supporting_evidence_ids`` where available.
 
 Provenance is keyed by ``subject_id`` (the id of the assertion/claim/document/
 quarantine record it describes). A single subject can accrue multiple provenance
 records — for example, supersession preserves provenance for both the old
-superseded assertion and the new accepted one (Req 12.3) — so :meth:`record`
+superseded assertion and the new accepted one — so :meth:`record`
 always inserts a new row and :meth:`for_subject` returns every row for a subject.
 
 At retrieval, the Evidence Packager calls :meth:`for_subject` to populate
-``supporting_sources`` (Req 12.2).
-
-Requirements: 12.1, 12.4.
+``supporting_sources``.
 """
 
 from __future__ import annotations
@@ -35,7 +33,7 @@ class ProvenanceTracker:
 
         Args:
             repo: The durable :class:`StorageRepository` whose ``provenance``
-                table holds the records (Req 12.4).
+                table holds the records.
             ids: Optional :class:`IdGenerator`. When omitted a non-deterministic
                 generator is used so each provenance record gets a unique id.
         """
@@ -53,8 +51,8 @@ class ProvenanceTracker:
         """Build and persist a :class:`Provenance` record, returning it.
 
         Records ``source_ref`` and ``created_at`` always, and
-        ``extractor_version`` / ``supporting_evidence_ids`` where available
-        (Req 12.1). The record is written to the ``provenance`` table (Req 12.4).
+        ``extractor_version`` / ``supporting_evidence_ids`` where available.
+        The record is written to the ``provenance`` table.
 
         Args:
             subject_id: Id of the assertion/claim/document/quarantine record
@@ -81,7 +79,7 @@ class ProvenanceTracker:
     def for_subject(self, subject_id: str) -> list[Provenance]:
         """Return every provenance record for ``subject_id``.
 
-        Delegates to ``repo.get_provenance_for`` (Req 12.4). Returning all rows
-        preserves provenance for both sides of a supersession (Req 12.3).
+        Delegates to ``repo.get_provenance_for``. Returning all rows
+        preserves provenance for both sides of a supersession.
         """
         return list(self.repo.get_provenance_for(subject_id))

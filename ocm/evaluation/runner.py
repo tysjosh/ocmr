@@ -1,7 +1,7 @@
-"""Baseline_Runner: execute B0–B3 against the benchmark (Req 22.6, 25.3, 28.9).
+"""Baseline_Runner: execute B0–B3 against the benchmark.
 
 The :class:`BaselineRunner` drives the evaluation harness end to end. For each
-baseline (B0–B3 by default, per Req 22.6 / 28.9) it builds a **fresh**
+baseline (B0–B3 by default, per / 28.9) it builds a **fresh**
 :class:`~ocm.core.container.CoreContainer` and
 :class:`~ocm.evaluation.arms.strategies.MemoryStrategy` so the baselines never share
 governed-memory state, then replays every
@@ -16,19 +16,16 @@ governed-memory state, then replays every
 
 For every (baseline, example, question) the runner:
 
-* appends a structured **result record** (the shape the Metrics_Reporter, task
-  17.4, consumes) to the list returned by :meth:`run`, and
+* appends a structured **result record** (the shape the Metrics_Reporter consumes) to the list returned by :meth:`run`, and
 * emits a **benchmark research log** via
   :meth:`~ocm.core.logging.ResearchLogger.log_benchmark`
   (``baseline_name``, ``answer``, ``retrieved_ids``, ``conflicts``,
-  ``expected_conflict``, ``score``, ``latency_ms``) (Req 25.3).
+  ``expected_conflict``, ``score``, ``latency_ms``).
 
 Scoring here is intentionally lightweight: the formal evaluation metrics
 (hit@k, factual precision/recall, conflict-surfacing rate, …) are computed by
 the Metrics_Reporter from these records; the runner only needs to produce
 records carrying the required fields.
-
-Requirements: 22.6, 25.3, 28.9.
 """
 
 from __future__ import annotations
@@ -85,7 +82,7 @@ class BaselineRunner:
     """Executes baselines against the benchmark, scoring and logging each run.
 
     A single :class:`ResearchLogger` accumulates the per-benchmark-example
-    benchmark logs across every baseline (Req 25.3); access it via
+    benchmark logs across every baseline; access it via
     :attr:`logger` or :meth:`benchmark_records`.
     """
 
@@ -131,8 +128,8 @@ class BaselineRunner:
         memory state leaks between baselines), every example's sessions are
         ingested, and every question is queried and scored. Returns one result
         record per (baseline, example, question) — the records the
-        Metrics_Reporter (task 17.4) consumes — and emits a benchmark research
-        log per record (Req 25.3).
+        Metrics_Reporter consumes — and emits a benchmark research
+        log per record.
         """
         records: list[dict] = []
         for baseline_name in baselines:
@@ -247,7 +244,7 @@ class BaselineRunner:
         # was fully correct (all expected tokens present).
         answer_correct = answer_score >= 1.0
 
-        # Per-benchmark-example research log (Req 25.3).
+        # Per-benchmark-example research log.
         self.logger.log_benchmark(
             baseline_name=baseline_name,
             answer=answer,

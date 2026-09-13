@@ -1,4 +1,4 @@
-"""Chroma-backed semantic ``Vector_Index`` (Req 13.4, 13.5, 13.6, 16.6).
+"""Chroma-backed semantic ``Vector_Index``.
 
 The :class:`VectorIndex` is the semantic half of retrieval: it stores a dense
 embedding per memory item together with the metadata the retrieval pipeline
@@ -8,9 +8,9 @@ queries ranked by cosine similarity.
 Storage backends
 ----------------
 - **persistent** (default) — a local on-disk Chroma collection that survives
-  process restarts (Req 13.4, 13.6): ``chromadb.PersistentClient(path=...)``.
+  process restarts: ``chromadb.PersistentClient(path=...)``.
 - **memory** — an ephemeral, in-process Chroma collection for hermetic tests
-  (``settings.chroma_mode == "memory"``, Req 13.6):
+  (``settings.chroma_mode == "memory"``):
   ``chromadb.EphemeralClient()``.
 
 Offline / hermetic fallback
@@ -23,23 +23,21 @@ index (:class:`_FallbackCollection`) implementing the same ``add`` / ``upsert``
 hermetically without Chroma installed. The fallback uses the same cosine space
 and the same metadata filtering semantics as Chroma.
 
-What gets embedded (Req 13.5, 16.6)
+What gets embedded
 -----------------------------------
 When a Claim, Document, accepted Assertion, or Event is accepted, the write path
 embeds it via one of the connect hooks:
 
 - :meth:`embed_assertion` — the ``Commit_Manager`` ``embed_hook`` for accepted
-  assertions (Req 13.5).
+  assertions.
 - :meth:`embed_memory` — the ``WritePipeline`` ``memory_embed_hook`` for accepted
-  claims / documents / events (Req 16.6).
+  claims / documents / events.
 
 The embedding text is a compact natural-language rendering of the item (see the
 ``build_*_text`` helpers). For an assertion the subject/object **names** are
 resolved from the ``Graph_Store`` (when wired) so the embedded text is
 semantically meaningful — ``Assertion(subject=per_x, OWNS, object=prj_y)``
 embeds as ``"Alice OWNS Project Orion"`` rather than raw ids.
-
-Requirements: 13.4, 13.5, 13.6, 16.6.
 """
 
 from __future__ import annotations
@@ -56,7 +54,7 @@ from ocm.retrieval.embeddings import EmbeddingProvider
 #: Default Chroma collection name (matches the design snippet).
 DEFAULT_COLLECTION = "ocm_memory"
 
-#: Memory-type tags carried in each vector's metadata (Req 13.5).
+#: Memory-type tags carried in each vector's metadata.
 MEMORY_TYPE_ASSERTION = "assertion"
 MEMORY_TYPE_CLAIM = "claim"
 MEMORY_TYPE_DOCUMENT = "document"
@@ -82,7 +80,7 @@ class VectorHit(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Embedding-text construction helpers (Req 13.5, 16.6)
+# Embedding-text construction helpers
 # ---------------------------------------------------------------------------
 def build_assertion_text(assertion: Assertion, graph: Any | None = None) -> str:
     """Render an assertion as ``"<subject_name> <PREDICATE> <object_name>"``.
@@ -153,10 +151,10 @@ class VectorIndex:
 
         Args:
             provider: The swappable :class:`EmbeddingProvider` used to embed
-                documents and queries (Req 13.1).
+                documents and queries.
             chroma_mode: ``"persistent"`` for an on-disk collection that survives
-                restarts (Req 13.4, 13.6) or ``"memory"`` for an ephemeral,
-                in-process collection for hermetic tests (Req 13.6).
+                restarts or ``"memory"`` for an ephemeral,
+                in-process collection for hermetic tests.
             chroma_path: On-disk directory for ``persistent`` mode.
             collection_name: Chroma collection name.
             graph: Optional ``Graph_Store`` used to resolve assertion
@@ -179,7 +177,7 @@ class VectorIndex:
         self.graph = graph
         self._using_fallback = False
         self.col = self._open_collection()
-        # Write-side batching (Req 13.5, 16.6): ``add`` is called once per
+        # Write-side batching: ``add`` is called once per
         # accepted item on the governed write path (one assertion/claim/
         # document/event at a time). Embedding and upserting each item
         # individually means one Python round-trip into SentenceTransformer
@@ -229,7 +227,7 @@ class VectorIndex:
             metadata={"hnsw:space": "cosine"},
         )
 
-    # -- write surface (Req 13.5) -----------------------------------------
+    # -- write surface -----------------------------------------
     def add(
         self,
         memory_id: str,
@@ -237,7 +235,7 @@ class VectorIndex:
         memory_type: str,
         status: str = STATUS_ACCEPTED,
     ) -> None:
-        """Queue ``text`` for embedding and upsert under ``memory_id`` (Req 13.5).
+        """Queue ``text`` for embedding and upsert under ``memory_id``.
 
         The actual embed + upsert is deferred and batched (see :meth:`flush`)
         so many back-to-back writes (e.g. ingesting a benchmark example's
@@ -303,7 +301,7 @@ class VectorIndex:
         Used by the Commit_Manager when an assertion is superseded so the
         vector index stays consistent with durable storage: the superseded
         assertion is re-tagged ``status="superseded"`` and therefore drops out
-        of the default accepted-only semantic results (Req 10.3, 10.5, 16.2),
+        of the default accepted-only semantic results,
         while remaining retrievable for conflict/provenance queries.
 
         A no-op when ``memory_id`` was never embedded (e.g. embeddings disabled).
@@ -354,7 +352,7 @@ class VectorIndex:
         documents = (res or {}).get("documents") or []
         return documents[0] if documents else None
 
-    # -- read surface (Req 16.6) ------------------------------------------
+    # -- read surface ------------------------------------------
     def query(
         self,
         query_text: str,
@@ -410,9 +408,9 @@ class VectorIndex:
             )
         return hits
 
-    # -- Commit_Manager / WritePipeline hooks (Req 13.5, 16.6) ------------
+    # -- Commit_Manager / WritePipeline hooks ------------
     def embed_assertion(self, assertion: Assertion) -> None:
-        """``Commit_Manager`` embed hook for an accepted assertion (Req 13.5).
+        """``Commit_Manager`` embed hook for an accepted assertion.
 
         Embeds ``build_assertion_text`` with ``memory_type="assertion"`` and the
         assertion's own status (accepted assertions are the only ones the commit
@@ -432,7 +430,7 @@ class VectorIndex:
         self.add(assertion.id, text, MEMORY_TYPE_ASSERTION, str(status))
 
     def embed_memory(self, memory_type: str, model: BaseModel) -> None:
-        """``WritePipeline`` memory embed hook for claim / document / event (Req 16.6).
+        """``WritePipeline`` memory embed hook for claim / document / event.
 
         ``memory_type`` is the extraction-side label ("Claim" / "Document" /
         "Event", case-insensitive); the stored metadata tag is normalized to the

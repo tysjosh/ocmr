@@ -1,10 +1,10 @@
-"""Endpoint-shape tests for the five memory routes (task 15.2).
+"""Endpoint-shape tests for the five memory routes.
 
 These exercise :func:`ocm.app.main.create_app` end to end against a
 deterministic, in-memory :class:`~ocm.core.container.CoreContainer` using
 FastAPI's :class:`~starlette.testclient.TestClient`. They assert each endpoint
-returns ``200`` with the expected response shape (Req 19.2–19.6, 28.1, 28.2,
-28.7); deeper behavioral coverage belongs to task 15.4.
+returns ``200`` with the expected response shape; deeper behavioral
+coverage belongs to the service-level tests.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def client_and_container() -> tuple[TestClient, CoreContainer]:
 
 
 def test_write_endpoint_returns_outcome_lists_and_summary(client_and_container):
-    """POST /memory/write returns the four outcome lists plus the summary (Req 19.2)."""
+    """POST /memory/write returns the four outcome lists plus the summary."""
     client, _ = client_and_container
     resp = client.post(
         "/memory/write",
@@ -53,7 +53,7 @@ def test_write_endpoint_returns_outcome_lists_and_summary(client_and_container):
 
 
 def test_query_endpoint_returns_query_type_and_evidence_fields(client_and_container):
-    """POST /memory/query returns query_type plus evidence fields (Req 19.3, 28.7)."""
+    """POST /memory/query returns query_type plus evidence fields."""
     client, _ = client_and_container
     client.post(
         "/memory/write",
@@ -76,7 +76,7 @@ def test_query_endpoint_returns_query_type_and_evidence_fields(client_and_contai
 
 
 def test_validate_endpoint_does_not_commit(client_and_container):
-    """POST /memory/validate returns a verdict without writing (Req 19.4)."""
+    """POST /memory/validate returns a verdict without writing."""
     client, container = client_and_container
     client.post(
         "/memory/write",
@@ -117,7 +117,7 @@ def test_validate_endpoint_does_not_commit(client_and_container):
 
 
 def test_entity_endpoint_returns_entity_and_assertions(client_and_container):
-    """GET /memory/entity/{id} returns the entity, type, and assertions (Req 19.5)."""
+    """GET /memory/entity/{id} returns the entity, type, and assertions."""
     client, container = client_and_container
     client.post(
         "/memory/write",
@@ -137,14 +137,14 @@ def test_entity_endpoint_returns_entity_and_assertions(client_and_container):
 
 
 def test_entity_endpoint_404_for_missing_entity(client_and_container):
-    """GET /memory/entity/{id} returns 404 for an unknown entity (Req 19.5)."""
+    """GET /memory/entity/{id} returns 404 for an unknown entity."""
     client, _ = client_and_container
     resp = client.get("/memory/entity/does-not-exist")
     assert resp.status_code == 404
 
 
 def test_conflicts_endpoint_returns_conflict_lists(client_and_container):
-    """GET /memory/conflicts returns unresolved conflicts + quarantines (Req 19.6)."""
+    """GET /memory/conflicts returns unresolved conflicts + quarantines."""
     client, _ = client_and_container
     resp = client.get("/memory/conflicts")
     assert resp.status_code == 200

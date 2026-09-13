@@ -1,11 +1,11 @@
 """Pydantic v2 ontology entity and assertion models.
 
-This module is the single source of truth for memory item structure (Req 1.12).
+This module is the single source of truth for memory item structure.
 Confidence fields use ``confloat(ge=0.0, le=1.0)`` so the [0, 1] bound is enforced
-structurally (Req 1.6, 1.9; supports constraint C6). Status defaulting and the
-``status_defaulted`` metadata flag are provided by :class:`StatusDefaultMixin`
-(Req 1.13, 1.15). ``Event`` and ``Document`` deliberately omit a status field and
-do not use the mixin (Req 1.14).
+structurally (supports constraint C6). Status defaulting and the
+``status_defaulted`` metadata flag are provided by :class:`StatusDefaultMixin`.
+``Event`` and ``Document`` deliberately omit a status field and
+do not use the mixin.
 """
 
 from datetime import datetime
@@ -30,8 +30,8 @@ from ocm.ontology.enums import (
 class StatusDefaultMixin(BaseModel):
     """Default a missing/None ``status`` to ``unknown`` and record that it was defaulted.
 
-    Implements default-to-``unknown`` (Req 1.13) and records the defaulting in
-    ``status_defaulted`` as the "WHERE metadata is available" record (Req 1.15).
+    Implements default-to-``unknown`` and records the defaulting in
+    ``status_defaulted`` as the "WHERE metadata is available" record.
     """
 
     status_defaulted: bool = Field(default=False, exclude=False)
@@ -77,7 +77,7 @@ class Task(StatusDefaultMixin):
     due_at: datetime | None = None
 
 
-class Event(BaseModel):  # no status field (Req 1.14)
+class Event(BaseModel): # no status field
     id: str
     type: str
     timestamp_start: datetime
@@ -94,7 +94,7 @@ class Claim(StatusDefaultMixin):
     created_at: datetime
 
 
-class Document(BaseModel):  # no status field (Req 1.14)
+class Document(BaseModel): # no status field
     id: str
     title: str
     path_or_url: str

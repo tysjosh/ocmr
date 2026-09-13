@@ -1,35 +1,33 @@
-"""Semantic Retriever — retrieval stage R2 (Req 16.1, 16.2, 16.3, 16.4, 16.5).
+"""Semantic Retriever — retrieval stage R2.
 
 The :class:`SemanticRetriever` is the dense / vector half of retrieval. It
 embeds the natural-language query and asks the :class:`~ocm.retrieval.vector_index.VectorIndex`
 for the ``top_k`` nearest memory items — claims, assertions, documents, and
-events (Req 16.1) — ranked by cosine similarity.
+events — ranked by cosine similarity.
 
 Accepted-by-default with conflict-aware quarantine inclusion
 ------------------------------------------------------------
-The status visibility rules from Requirement 16 are implemented entirely
+The status visibility rules from are implemented entirely
 through the vector index's ``where`` metadata filter plus a light post-filter:
 
-- **Accepted by default (Req 16.2):** ordinary queries search with
+- **Accepted by default:** ordinary queries search with
   ``where={"status": "accepted"}`` so only accepted assertions / items surface.
-- **Conflict queries (Req 16.3):** when the query is a conflict query
+- **Conflict queries:** when the query is a conflict query
   (``classification.query_type == "contradiction_check"``) — or the caller
   passes ``include_conflicts=True`` — the filter widens to
   ``{"status": {"$in": ["accepted", "quarantined"]}}`` so quarantined items can
   appear alongside accepted ones.
-- **Conflict-relevance (Req 16.4):** a quarantined item is kept when it is
+- **Conflict-relevance:** a quarantined item is kept when it is
   relevant to a conflict involving accepted memory. With only vector hits to
   reason over, the available signal is that the item surfaced in the top-k for
   a conflict query; such items are treated as conflict-relevant. The
   :meth:`SemanticRetriever._conflict_relevant` hook isolates this judgement so a
   richer (graph-aware) relevance test can be substituted later without changing
   the public surface.
-- **Exclusion (Req 16.5):** for non-conflict queries the accepted-only filter
+- **Exclusion:** for non-conflict queries the accepted-only filter
   already excludes quarantined items; the post-filter additionally drops any
   quarantined hit that is not conflict-relevant, so a quarantined item never
   leaks into a non-conflict result set.
-
-Requirements: 16.1, 16.2, 16.3, 16.4, 16.5.
 """
 
 from __future__ import annotations
@@ -44,14 +42,14 @@ if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a hard import cycle
     from ocm.retrieval.query_classifier import QueryClassification
 
 #: The ``query_type`` value that marks a query as a "conflict query" — the
-#: signal that quarantined items should be included (Req 16.3).
+#: signal that quarantined items should be included.
 CONFLICT_QUERY_TYPE = "contradiction_check"
 
 STATUS_ACCEPTED = "accepted"
 STATUS_QUARANTINED = "quarantined"
 
 #: Memory types the Semantic Retriever ranks: claims, assertions, documents,
-#: and events (Req 16.1).
+#: and events.
 SEMANTIC_MEMORY_TYPES = ("claim", "assertion", "document", "event")
 
 
@@ -99,7 +97,7 @@ def status_filter(
     classification: "_ClassificationLike | QueryClassification",
     include_conflicts: bool = False,
 ) -> dict:
-    """Build the vector-index ``where`` status filter for a query (Req 16.2, 16.3).
+    """Build the vector-index ``where`` status filter for a query.
 
     Returns ``{"status": {"$in": ["accepted", "quarantined"]}}`` for conflict
     queries (or when ``include_conflicts`` is set) so quarantined items can be
@@ -112,7 +110,7 @@ def status_filter(
 
 
 def _is_conflict_query(classification: "_ClassificationLike | QueryClassification") -> bool:
-    """Whether ``classification`` marks a conflict query (Req 16.3)."""
+    """Whether ``classification`` marks a conflict query."""
     return getattr(classification, "query_type", None) == CONFLICT_QUERY_TYPE
 
 
@@ -137,18 +135,17 @@ class SemanticRetriever:
     ) -> list[SemanticHit]:
         """Embed ``query`` and return the ``top_k`` nearest memory items.
 
-        Behaviour follows Requirement 16:
+        Behaviour follows:
 
         - Embeds the query and searches the Vector_Index for the top-k claims,
-          assertions, documents, and events (Req 16.1).
+          assertions, documents, and events.
         - Includes accepted assertions / items by default via a
-          ``status == accepted`` filter (Req 16.2).
+          ``status == accepted`` filter.
         - For a conflict query (``query_type == "contradiction_check"``) — or
           when ``include_conflicts`` is set — widens the filter to also include
-          quarantined items (Req 16.3) and keeps the conflict-relevant ones
-          (Req 16.4).
+          quarantined items and keeps the conflict-relevant ones
         - For a non-conflict query, excludes quarantined items that are not
-          relevant to an accepted-memory conflict (Req 16.5).
+          relevant to an accepted-memory conflict.
 
         Args:
             query: The natural-language query text to embed and search.
@@ -172,7 +169,7 @@ class SemanticRetriever:
 
         hits: list[SemanticHit] = []
         for hit in raw_hits:
-            # Req 16.1: restrict to claims / assertions / documents / events.
+            #: restrict to claims / assertions / documents / events.
             if hit.memory_type not in SEMANTIC_MEMORY_TYPES:
                 continue
             if hit.status == STATUS_QUARANTINED and not self._keep_quarantined(
@@ -190,9 +187,9 @@ class SemanticRetriever:
     ) -> bool:
         """Decide whether a quarantined ``hit`` stays in the result set.
 
-        Implements the Req 16.4 / 16.5 split: a quarantined item is kept only
+        Implements the / 16.5 split: a quarantined item is kept only
         when the query is a conflict query *and* the item is conflict-relevant.
-        For a non-conflict query a quarantined hit is always dropped (Req 16.5);
+        For a non-conflict query a quarantined hit is always dropped;
         in practice the accepted-only ``where`` filter means such hits never even
         reach here, but the guard keeps the rule explicit and robust.
         """
@@ -205,7 +202,7 @@ class SemanticRetriever:
         hit: VectorHit,
         classification: "_ClassificationLike | QueryClassification",
     ) -> bool:
-        """Whether a quarantined ``hit`` is relevant to the query's entities (Req 16.4).
+        """Whether a quarantined ``hit`` is relevant to the query's entities.
 
         A quarantined item is kept only when it is actually *about* what the
         query asked: one of the query's extracted entity names must appear in

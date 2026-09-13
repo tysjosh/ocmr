@@ -4,15 +4,15 @@ Each test pins a previously-identified inconsistency so it cannot silently
 regress:
 
 1. Superseded assertions are re-tagged in the Vector_Index and drop out of
-   accepted-only semantic retrieval (Req 10.3, 10.5, 16.2).
+   accepted-only semantic retrieval.
 2. The agent loop does not write *question* turns back as memory (no spurious
-   facts mined from interrogative phrasing) (Req 20.3).
+   facts mined from interrogative phrasing).
 3. The Mock_Extractor parses "X is inactive" so an ASSIGNED_TO to an inactive
-   person is quarantined by C5 (Req 8.6).
+   person is quarantined by C5.
 4. The Mock_Extractor marks finalized decisions ``final`` and the write pipeline
-   quarantines a final decision lacking evidence via C8 (Req 8.9).
+   quarantines a final decision lacking evidence via C8.
 5. The Mock_Extractor parses "X precedes Y" so a PRECEDES cycle is rejected by
-   C3 (Req 8.4).
+   C3.
 """
 
 from __future__ import annotations

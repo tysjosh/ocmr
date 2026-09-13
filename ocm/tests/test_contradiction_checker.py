@@ -1,20 +1,20 @@
-"""Contradiction-detection unit tests for the Contradiction_Checker (W7, task 7.2).
+"""Contradiction-detection unit tests for the Contradiction_Checker (W7).
 
 These tests pin down the contradiction categories that
 ``ocm.validation.contradiction_checker.ContradictionChecker`` is the single
-source of truth for (Req 9.1-9.7), exercised against the real ``GraphStore``
-and ontology models (no mocks, Req 26.4):
+source of truth for, exercised against the real ``GraphStore``
+and ontology models (no mocks):
 
-* **Single-valued / exact-predicate conflict (Req 9.2, 9.5).** ``ASSIGNED_TO``
+* **Single-valued / exact-predicate conflict.** ``ASSIGNED_TO``
   is ``m:1``, so a Task may point at only one assignee. A high-confidence
   candidate naming a *different* assignee than the accepted edge is a **hard**
   contradiction (``severity=high``) and surfaces the accepted assertion id.
-* **Explicit ``CONTRADICTS`` link (Req 9.4).** An accepted ``CONTRADICTS`` edge
+* **Explicit ``CONTRADICTS`` link.** An accepted ``CONTRADICTS`` edge
   incident to the candidate's subject/object is a curated conflict.
-* **Temporal overlap (Req 9.6).** Two single-valued assignments whose validity
+* **Temporal overlap.** Two single-valued assignments whose validity
   windows overlap are classified ``temporal``; non-overlapping windows are a
   valid historical succession and are **not** a contradiction.
-* **Low-confidence contradiction (Req 9.1).** When neither side exceeds the
+* **Low-confidence contradiction.** When neither side exceeds the
   high-confidence threshold (0.8) the conflict is only a **soft** warning
   (``severity=low``, ``recommended_action=accept``).
 * **Idempotent re-assertion.** Re-asserting the identical triple is a no-op.
@@ -119,7 +119,7 @@ def _assignment_graph(task_id: str, person_ids: list[str]) -> GraphStore:
 
 
 # ---------------------------------------------------------------------------
-# Single-valued / exact-predicate conflict (Req 9.2, 9.5)
+# Single-valued / exact-predicate conflict
 # ---------------------------------------------------------------------------
 def test_high_confidence_assigned_to_conflict_is_hard():
     # t1 already ASSIGNED_TO person A (accepted); candidate assigns a different B.
@@ -132,9 +132,9 @@ def test_high_confidence_assigned_to_conflict_is_hard():
     assert result.has_conflict is True
     assert result.kind == "hard"
     assert result.severity == Severity.high
-    # The accepted (conflicting) assertion id is surfaced (Req 9.7).
+    # The accepted (conflicting) assertion id is surfaced.
     assert result.conflicting_assertion_ids == ["a-A"]
-    # A high-confidence new_fact conflict recommends quarantine (Req 9.7).
+    # A high-confidence new_fact conflict recommends quarantine.
     assert result.recommended_action == "quarantine"
 
 
@@ -165,7 +165,7 @@ def test_idempotent_reassert_same_triple_has_no_conflict():
 
 
 # ---------------------------------------------------------------------------
-# Explicit CONTRADICTS link (Req 9.4)
+# Explicit CONTRADICTS link
 # ---------------------------------------------------------------------------
 def test_explicit_contradicts_link_is_detected():
     # An accepted CONTRADICTS edge incident to the candidate's subject is a conflict.
@@ -210,7 +210,7 @@ def test_candidate_asserting_contradicts_is_not_a_conflict():
 
 
 # ---------------------------------------------------------------------------
-# Temporal overlap (Req 9.6)
+# Temporal overlap
 # ---------------------------------------------------------------------------
 def test_overlapping_validity_windows_is_temporal():
     # Accepted A valid [T0, T2]; candidate B valid [T1, T3] -> windows overlap.
@@ -249,7 +249,7 @@ def test_non_overlapping_validity_windows_has_no_conflict():
 
 
 # ---------------------------------------------------------------------------
-# Low-confidence contradiction -> soft warning only (Req 9.1)
+# Low-confidence contradiction -> soft warning only
 # ---------------------------------------------------------------------------
 def test_low_confidence_conflict_is_soft_warning():
     # Both sides at or below the 0.8 threshold -> soft warning, not a hard block.

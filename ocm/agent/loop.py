@@ -1,11 +1,11 @@
-"""Agent_Loop — a lightweight, LangGraph-style memory loop (Req 20.1, 20.4).
+"""Agent_Loop — a lightweight, LangGraph-style memory loop.
 
 The :class:`AgentLoop` exercises the OCM memory layer end to end **without
-requiring LangGraph** as a dependency (Req 20.4). It is a plain Python state
+requiring LangGraph** as a dependency. It is a plain Python state
 machine whose node/edge structure mirrors LangGraph so a LangGraph port is
 mechanical, but the default implementation imports nothing beyond OCM itself.
 
-Node graph (Req 20.1)
+Node graph
 ---------------------
 On each turn the loop walks six nodes::
 
@@ -14,18 +14,18 @@ On each turn the loop walks six nodes::
        └──────────────── next turn ◀───────────────────────┘
 
 * **receive** — take the user message and assign a per-turn ``source_ref``.
-* **retrieve** — call ``memory.query`` with the user input (Req 20.2).
+* **retrieve** — call ``memory.query`` with the user input.
 * **answer** — shape a response from the :class:`EvidencePackage`, preferring
-  the P1–P5 :class:`~ocm.agent.answer_policy.AnswerPolicy` (task 16.2) when it
+  the P1–P5 :class:`~ocm.agent.answer_policy.AnswerPolicy` when it
   is available and falling back to a simple, deterministic renderer otherwise.
 * **extract** — treat the turn content as candidate new memory.
 * **validate** — decide whether the turn yielded memory worth persisting.
 * **commit** — when it did, call ``memory.write`` with the turn content and the
-  ``source_ref`` (Req 20.3); governance (validate/quarantine) runs inside the
+  ``source_ref``; governance (validate/quarantine) runs inside the
   write pipeline.
 
 The loop talks to memory **only** through the :class:`~ocm.agent.memory_tool.MemoryTool`
-seam, so OCM stays pluggable (Req 20.1). Everything is deterministic given a
+seam, so OCM stays pluggable. Everything is deterministic given a
 deterministic container, which makes the loop friendly to reproducible research
 runs and tests.
 """
@@ -43,10 +43,10 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 
 # --------------------------------------------------------------------------- #
-# Answer rendering — prefer the P1–P5 AnswerPolicy (task 16.2) when present.
+# Answer rendering — prefer the P1–P5 AnswerPolicy when present.
 # --------------------------------------------------------------------------- #
 def _load_answer_policy() -> Optional[Any]:
-    """Return an :class:`AnswerPolicy` instance if task 16.2 has landed, else ``None``.
+    """Return an :class:`AnswerPolicy` instance when the module is importable, else ``None``.
 
     The import is defensive so the loop works before (and independently of) the
     Answer Policy module; when the module is present the loop prefers it.
@@ -64,7 +64,7 @@ def _load_answer_policy() -> Optional[Any]:
 class _SimpleAnswerRenderer:
     """A minimal, deterministic fallback renderer for an :class:`EvidencePackage`.
 
-    Used only when the P1–P5 :class:`AnswerPolicy` (task 16.2) is unavailable.
+    Used only when the P1–P5 :class:`AnswerPolicy` is unavailable.
     It still honors the spirit of the policy at a basic level: lead with a
     derived answer or supporting assertions, surface conflicts separately, and
     state missing evidence.
@@ -111,7 +111,7 @@ class _SimpleAnswerRenderer:
 # --------------------------------------------------------------------------- #
 @dataclass
 class TurnResult:
-    """The outcome of a single :meth:`AgentLoop.run_turn` (Req 20.1).
+    """The outcome of a single :meth:`AgentLoop.run_turn`.
 
     Carries the agent's ``answer``, the ``evidence`` that produced it, and the
     ``write_result`` from persisting any new memory (``None`` when the turn
@@ -191,14 +191,14 @@ def _default_extract(user_message: str, evidence: EvidencePackage) -> Optional[s
 
 
 class AgentLoop:
-    """A dependency-free, LangGraph-style loop over the :class:`MemoryTool` (Req 20.4).
+    """A dependency-free, LangGraph-style loop over the :class:`MemoryTool`.
 
     The loop's node names and edges mirror a LangGraph graph so a port is
     mechanical, but the default runtime is a plain Python state machine with no
-    LangGraph import (Req 20.4).
+    LangGraph import.
     """
 
-    #: The ordered node sequence (Req 20.1).
+    #: The ordered node sequence.
     NODES: tuple[str, ...] = (
         "receive",
         "retrieve",
@@ -233,11 +233,11 @@ class AgentLoop:
         """Build the loop.
 
         Args:
-            memory: The :class:`MemoryTool` seam (Req 20.1). For convenience a
+            memory: The :class:`MemoryTool` seam. For convenience a
                 :class:`CoreContainer` may be passed instead; it is wrapped in a
                 :class:`MemoryTool` automatically.
             answer_policy: Optional object with ``render(pkg, high_stakes) -> str``.
-                When omitted, the P1–P5 :class:`AnswerPolicy` (task 16.2) is used
+                When omitted, the P1–P5 :class:`AnswerPolicy` is used
                 if available; otherwise a simple deterministic renderer.
             extract_fn: Optional hook mapping ``(user_message, evidence)`` to the
                 new memory text to write (or ``None`` to skip the write). Defaults
@@ -245,7 +245,7 @@ class AgentLoop:
             high_stakes: When ``True``, the answer node requests provenance in the
                 rendered answer (P4 behavior when the Answer Policy is present).
             top_k: ``top_k`` forwarded to ``memory.query`` each turn.
-            source_prefix: Prefix for the per-turn ``source_ref`` (Req 20.3).
+            source_prefix: Prefix for the per-turn ``source_ref``.
         """
         self.memory = self._coerce_memory(memory)
         self.answer_policy = answer_policy or _load_answer_policy() or _SimpleAnswerRenderer()
@@ -275,13 +275,13 @@ class AgentLoop:
         """Execute one turn through the node sequence and return its outcome.
 
         Walks receive → retrieve → answer → extract → validate → commit, calling
-        ``memory.query`` (Req 20.2) and, when the turn yields new memory,
-        ``memory.write`` (Req 20.3).
+        ``memory.query`` and, when the turn yields new memory,
+        ``memory.write``.
 
         Args:
             user_message: The incoming user message for this turn.
             source_ref: Optional explicit provenance ref; a per-turn default
-                (``"{source_prefix}-{n}"``) is assigned when omitted (Req 20.3).
+                (``"{source_prefix}-{n}"``) is assigned when omitted.
 
         Returns:
             A :class:`TurnResult` with the answer, the evidence, and the write
@@ -290,7 +290,7 @@ class AgentLoop:
         state: Dict[str, Any] = {"user_message": user_message, "source_ref": source_ref}
 
         # The node sequence mirrors the LangGraph graph (NODES/EDGES) but runs
-        # as a plain, ordered state machine (Req 20.1, 20.4).
+        # as a plain, ordered state machine.
         state = self._receive(state)
         state = self._retrieve(state)
         state = self._answer(state)
@@ -310,7 +310,7 @@ class AgentLoop:
         )
 
     def run_session(self, messages: List[str]) -> List[TurnResult]:
-        """Run a sequence of user messages as successive turns (Req 20.1).
+        """Run a sequence of user messages as successive turns.
 
         Demonstrates the ``commit → receive`` next-turn edge: each message is a
         full turn, and memory written on earlier turns is retrievable on later
@@ -322,7 +322,7 @@ class AgentLoop:
     # Nodes
     # ------------------------------------------------------------------ #
     def _receive(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """receive — accept input and assign a per-turn ``source_ref`` (Req 20.1)."""
+        """receive — accept input and assign a per-turn ``source_ref``."""
         self._turn += 1
         state["turn"] = self._turn
         if not state.get("source_ref"):
@@ -330,7 +330,7 @@ class AgentLoop:
         return state
 
     def _retrieve(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """retrieve — query memory with the user input (Req 20.2)."""
+        """retrieve — query memory with the user input."""
         state["evidence"] = self.memory.query(state["user_message"], top_k=self.top_k)
         return state
 
@@ -352,14 +352,14 @@ class AgentLoop:
         """validate — decide whether the turn yielded memory worth persisting.
 
         This is a cheap pre-check; the authoritative validation/quarantine
-        decision happens inside the write pipeline at commit (Req 20.1).
+        decision happens inside the write pipeline at commit.
         """
         memory_text = state.get("extracted_memory")
         state["should_commit"] = bool(memory_text and memory_text.strip())
         return state
 
     def _commit(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """commit — write new memory with the turn's ``source_ref`` (Req 20.3)."""
+        """commit — write new memory with the turn's ``source_ref``."""
         if state.get("should_commit"):
             state["write_result"] = self.memory.write(
                 state["extracted_memory"], state["source_ref"]

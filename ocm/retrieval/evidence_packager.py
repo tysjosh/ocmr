@@ -1,37 +1,35 @@
-"""R4 — Evidence Packager (Req 18.1, 18.2, 18.3, 18.4, 18.5).
+"""R4 — Evidence Packager.
 
 The :class:`EvidencePackager` is the final stage of the retrieval pipeline
 (R0→R1→R2→R3→**R4**). It turns the reranked candidate list (R3) into a single,
-structured :class:`EvidencePackage` — the object the API (`POST /memory/query`,
-task 15.2) serializes and the agent (`Answer_Policy`, task 16.x) consumes.
+structured :class:`EvidencePackage` — the object the API (`POST /memory/query`)
+serializes and the agent (`Answer_Policy`) consumes.
 
-What the package carries (Req 18.1)
+What the package carries
 -----------------------------------
 ``answer``, ``confidence``, ``supporting_assertions``, ``supporting_sources``,
 ``conflicts``, ``missing_information``, and ``retrieved_items``.
 
 How each field is assembled
 ---------------------------
-- **answer (optional, Req 18.5).** Retrieval is *not required* to produce a
+- **answer (optional).** Retrieval is *not required* to produce a
   natural-language answer. For a structural ``direct_fact`` query whose top
   supporting item is an exact symbolic match, a concise answer is derived from
   the graph (the owner for an ``OWNS`` hit, the assignee for an ``ASSIGNED_TO``
   hit); otherwise ``answer`` is left ``None`` and the caller works from
   ``retrieved_items`` / ``supporting_assertions``.
-- **supporting_assertions (Req 18.2).** The accepted, non-contradicted ranked
+- **supporting_assertions.** The accepted, non-contradicted ranked
   items (highest score first), each carrying its ``id`` and ``confidence``.
-- **supporting_sources (Req 18.3, 12.2).** Provenance for every supporting
+- **supporting_sources.** Provenance for every supporting
   assertion, fetched via ``Provenance_Tracker.for_subject`` and de-duplicated.
-- **conflicts (Req 18.4).** Contradicted / quarantined items that surfaced for
+- **conflicts.** Contradicted / quarantined items that surfaced for
   the query, plus — for a conflict query — any unresolved quarantine records
   whose ``conflicting_ids`` intersect the retrieved set.
-- **missing_information (Req 18.5).** Plain-language notes when nothing relevant
+- **missing_information.** Plain-language notes when nothing relevant
   was found, when only conflicting/quarantined items matched, when confidence is
   low, or when provenance is absent.
 - **confidence.** Derived from the top supporting assertion (its ``confidence``,
   falling back to its rerank ``score``); ``0.0`` when nothing is supported.
-
-Requirements: 18.1, 18.2, 18.3, 18.4, 18.5 (and 12.2 for provenance).
 """
 
 from __future__ import annotations
@@ -44,7 +42,7 @@ from pydantic import BaseModel, Field
 from ocm.ontology.models import Provenance
 from ocm.retrieval.reranker import RankedItem
 
-# Structural predicates we can phrase a direct answer for (Req 18.5 / 15.x).
+# Structural predicates we can phrase a direct answer for (/ 15.x).
 OWNS = "OWNS"
 ASSIGNED_TO = "ASSIGNED_TO"
 PRECEDES = "PRECEDES"
@@ -65,14 +63,14 @@ _LABEL_FIELDS: tuple[str, ...] = ("name", "title", "summary", "description", "te
 
 
 class SupportingAssertion(BaseModel):
-    """A supporting assertion: its id and confidence (Req 18.2)."""
+    """A supporting assertion: its id and confidence."""
 
     id: str
     confidence: float
 
 
 class ConflictItem(BaseModel):
-    """An unresolved conflict relevant to the query (Req 18.4).
+    """An unresolved conflict relevant to the query.
 
     Surfaces either a contradicted / quarantined retrieved item or an
     unresolved ``Quarantine_Store`` record. ``conflicting_ids`` records the
@@ -95,9 +93,9 @@ class ConflictItem(BaseModel):
 
 
 class EvidencePackage(BaseModel):
-    """Structured retrieval result returned by R4 (Req 18.1).
+    """Structured retrieval result returned by R4.
 
-    ``answer`` is optional (Req 18.5); the package is the contract the API and
+    ``answer`` is optional; the package is the contract the API and
     agent consume — ``confidence`` plus ``supporting_assertions`` (ids +
     confidence), ``supporting_sources`` (provenance), ``conflicts``,
     ``missing_information``, and the full ranked ``retrieved_items``.
@@ -169,7 +167,7 @@ def _name_variants(raw: str) -> set[str]:
 
 
 def _resolve_entity_ids(graph: Any | None, names: list[str]) -> set[str]:
-    """Resolve query entity *names* to graph node ids (Req 18.4 relevance).
+    """Resolve query entity *names* to graph node ids (relevance).
 
     A name matches a node when it equals the node id or any of the node's
     label-ish payload fields (``name`` / ``title`` / ``summary`` /
@@ -227,17 +225,17 @@ class EvidencePackager:
             graph: Optional ``Graph_Store`` used to resolve entity ids to names
                 when deriving an ``answer``.
             provenance_tracker: Optional ``Provenance_Tracker``; when supplied,
-                its ``for_subject`` populates ``supporting_sources`` (Req 18.3).
+                its ``for_subject`` populates ``supporting_sources``.
             quarantine_store: Optional ``Quarantine_Store``; for a conflict query
-                its unresolved records augment ``conflicts`` (Req 18.4).
+                its unresolved records augment ``conflicts``.
             max_supporting: Optional cap on the number of supporting assertions.
 
         Returns:
-            A populated :class:`EvidencePackage` (Req 18.1).
+            A populated :class:`EvidencePackage`.
         """
         ranked = list(ranked or [])
 
-        # --- supporting assertions: accepted, non-contradicted (Req 18.2) ---
+        # --- supporting assertions: accepted, non-contradicted ---
         accepted = [
             item
             for item in ranked
@@ -257,18 +255,18 @@ class EvidencePackager:
         # --- confidence from the top supporting item ------------------------
         confidence = supporting_assertions[0].confidence if supporting_assertions else 0.0
 
-        # --- supporting sources via provenance (Req 18.3, 12.2) -------------
+        # --- supporting sources via provenance -------------
         supporting_sources = self._collect_provenance(accepted, provenance_tracker)
 
-        # --- conflicts relevant to the query (Req 18.4) ---------------------
+        # --- conflicts relevant to the query ---------------------
         conflicts = self._collect_conflicts(
             classification, ranked, accepted, graph, quarantine_store
         )
 
-        # --- optional answer (Req 18.5) -------------------------------------
+        # --- optional answer -------------------------------------
         answer = self._derive_answer(query, classification, ranked, accepted, graph)
 
-        # --- missing information (Req 18.5) ---------------------------------
+        # --- missing information ---------------------------------
         missing_information = self._missing_information(
             ranked, supporting_assertions, supporting_sources, confidence
         )
@@ -297,7 +295,7 @@ class EvidencePackager:
     def _collect_provenance(
         accepted: list[RankedItem], provenance_tracker: Any | None
     ) -> list[Provenance]:
-        """Gather de-duplicated provenance for the supporting assertions (Req 18.3)."""
+        """Gather de-duplicated provenance for the supporting assertions."""
         if provenance_tracker is None:
             return []
         sources: list[Provenance] = []
@@ -323,7 +321,7 @@ class EvidencePackager:
         graph: Any | None,
         quarantine_store: Any | None,
     ) -> list[ConflictItem]:
-        """Surface conflicts relevant to the query (Req 18.4).
+        """Surface conflicts relevant to the query.
 
         Two sources are merged:
 
@@ -334,7 +332,7 @@ class EvidencePackager:
            the query (resolved to graph ids). This is what lets a plain status
            query about ``task_t1`` surface the quarantined "not started"
            contradiction whose ``conflicting_ids`` reference ``task_t1``
-           (Req 18.4) — not just explicit ``contradiction_check`` queries — while
+            — not just explicit ``contradiction_check`` queries — while
            the relevance gate keeps unrelated quarantines out (precision).
         """
         conflicts: list[ConflictItem] = []
@@ -358,7 +356,7 @@ class EvidencePackager:
             )
 
         # Augment with unresolved quarantine records that are relevant to what
-        # the query is about, for ANY query type (Req 18.4). Relevance = the
+        # the query is about, for ANY query type. Relevance = the
         # record's conflicting_ids overlap the retrieved set or the query's
         # entities; this surfaces conflicts on the exact entity being queried
         # without flooding unrelated ones.
@@ -392,7 +390,7 @@ class EvidencePackager:
 
     @staticmethod
     def _render_accepted_status(graph: Any | None, conflicting_ids: list[str]) -> Optional[str]:
-        """Render the accepted side of a paired status conflict (Req 18.4).
+        """Render the accepted side of a paired status conflict.
 
         Looks for a ``HAS_STATUS`` assertion among ``conflicting_ids`` (the
         accepted status the quarantined flip contradicts) and renders it as
@@ -432,7 +430,7 @@ class EvidencePackager:
 
     @staticmethod
     def _conflict_relevant(conflicting_ids: list[str], relevant_ids: set[str]) -> bool:
-        """Whether a quarantine record is relevant to this query (Req 18.4).
+        """Whether a quarantine record is relevant to this query.
 
         Relevant iff any of its ``conflicting_ids`` overlaps the query-relevant
         id set (retrieved item / subject / object ids plus resolved query entity
@@ -444,7 +442,7 @@ class EvidencePackager:
     def _relevant_ids(
         self, classification: Any, ranked: list[RankedItem], graph: Any | None
     ) -> set[str]:
-        """The set of ids this query is "about" (Req 18.4 relevance).
+        """The set of ids this query is "about" (relevance).
 
         Combines the reranked items' ids and their subject/object endpoints with
         the graph ids of the entities named in the query, so conflict relevance
@@ -471,7 +469,7 @@ class EvidencePackager:
     ) -> Optional[str]:
         """Derive a concise, deterministic answer for the common query types.
 
-        Retrieval is still evidence-first (Req 18.5) — the agent's Answer_Policy
+        Retrieval is still evidence-first — the agent's Answer_Policy
         produces the user-facing text — but for the structural query types the
         benchmark exercises we return a short factual string so end-to-end QA
         can be scored without a generator. Handled (in intent order):
@@ -631,7 +629,7 @@ class EvidencePackager:
         supporting_sources: list[Provenance],
         confidence: float,
     ) -> list[str]:
-        """State what evidence is absent or weak (Req 18.5)."""
+        """State what evidence is absent or weak."""
         missing: list[str] = []
         if not ranked:
             missing.append("No memory items matched the query.")

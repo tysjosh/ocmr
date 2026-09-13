@@ -1,4 +1,4 @@
-"""Entry-point script: run baselines B0–B3 over the benchmark (Req 28.9).
+"""Entry-point script: run baselines B0–B3 over the benchmark.
 
 Loads (or generates) the JSONL benchmark, runs the requested baselines through
 the :class:`~ocm.evaluation.runner.BaselineRunner`, optionally writes a
@@ -6,7 +6,7 @@ the :class:`~ocm.evaluation.runner.BaselineRunner`, optionally writes a
 records, and prints a short summary (record count + per-baseline counts).
 
 The result records written via ``--out`` are exactly the input the
-``report_metrics`` script (Req 28.10) consumes.
+``report_metrics`` script consumes.
 
 Usage::
 
@@ -16,8 +16,6 @@ Usage::
     # run against an existing benchmark, log research records too
     python -m ocm.scripts.run_benchmark --benchmark benchmark.jsonl \\
         --baselines B0,B2 --log research_log.jsonl --out results.jsonl
-
-Requirements: 22.6, 25.3, 28.9.
 """
 
 from __future__ import annotations
