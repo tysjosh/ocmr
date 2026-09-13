@@ -19,8 +19,6 @@ a :class:`CandidateAssertion` before constraint checks (W6) run:
 Out-of-enum rejection is covered for the ontology models in
 ``test_schema_validation.py``; here we anchor the structural schema
 boundary the validator enforces at write time.
-
-Requirements: 7.2, 7.6, 26.1.
 """
 
 from __future__ import annotations

@@ -20,8 +20,6 @@ Endpoints
 The router resolves the wired container from ``request.app.state.container``
 (the same pattern the production routers use), so it stays decoupled from
 construction.
-
-Requirements: 19.1.
 """
 
 from __future__ import annotations

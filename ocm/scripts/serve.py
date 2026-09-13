@@ -10,8 +10,6 @@ Usage::
     python -m ocm.scripts.serve                       # 127.0.0.1:8000
     python -m ocm.scripts.serve --host 0.0.0.0 --port 8080
     python -m ocm.scripts.serve --reload              # dev auto-reload
-
-Requirements: 28.1.
 """
 
 from __future__ import annotations

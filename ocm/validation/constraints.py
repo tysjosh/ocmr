@@ -18,8 +18,6 @@ it **delegates** to the Contradiction_Checker (W7) which is injected as
 ``contradiction_checker``. W7 is implemented in a later task, so this
 module never hard-imports it: when no checker is supplied, C7 is a pass-through
 no-op and the WritePipeline wiring injects the real checker once available.
-
-Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.9, 8.10, 8.11, 8.12, 8.13.
 """
 
 from __future__ import annotations

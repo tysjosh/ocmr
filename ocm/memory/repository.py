@@ -10,8 +10,6 @@ The interface covers the seven required tables: entities, assertions,
 claims, documents, quarantine_records, provenance, and embeddings. Ontology
 models are serialized with Pydantic v2 (``model_dump_json`` / ``model_validate``)
 so the round-trip is lossless and backend-independent.
-
-Requirements: 11.1, 11.2, 11.3, 11.4.
 """
 
 from __future__ import annotations

@@ -9,8 +9,6 @@ in-memory SQLite repository + graph, walking the three Task T1 writes:
    accepted and Task T1 reconciled to ``done``.
 3. "Task T1 is not started." (high confidence) → quarantined as a status
    contradiction rather than silently overwriting the accepted ``done`` status.
-
-Requirements: 3.1, 10.1, 10.6, 10.7, 13.5, 16.6, 19.2, 25.1.
 """
 
 from __future__ import annotations

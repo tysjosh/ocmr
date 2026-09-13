@@ -18,8 +18,6 @@ Two halves, matching the two units under test:
     ``high_stakes=True``.
   - P5: ``missing_information`` renders a missing-evidence section,
     and an empty package states no accepted assertions support the query.
-
-Requirements: 20.2, 20.3, 21.2, 21.3, 21.4, 21.5.
 """
 
 from __future__ import annotations

@@ -50,8 +50,6 @@ The hit inputs are duck-typed (the Symbolic/Semantic retrievers, R1/R2, are
 built alongside this module): any object or mapping exposing the relevant
 attributes works, so the reranker has no import-time dependency on those
 modules.
-
-Requirements: 17.1, 17.2, 17.3 (and 15.4 for the exact-match rule).
 """
 
 from __future__ import annotations

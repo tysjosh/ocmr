@@ -14,8 +14,6 @@ always inserts a new row and :meth:`for_subject` returns every row for a subject
 
 At retrieval, the Evidence Packager calls :meth:`for_subject` to populate
 ``supporting_sources``.
-
-Requirements: 12.1, 12.4.
 """
 
 from __future__ import annotations

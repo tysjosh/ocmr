@@ -17,8 +17,6 @@ against the real :class:`GraphStore` and ontology models (no mocks):
   ``build_possibly_same_as`` turns the outcome into POSSIBLY_SAME_AS dicts.
 * **Priority ordering.** Exact id beats name: a mention whose id
   points at one entity but whose name matches another resolves by id.
-
-Requirements: 5.1, 5.2, 5.3, 5.5, 5.6, 5.8.
 """
 
 from __future__ import annotations

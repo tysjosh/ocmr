@@ -30,8 +30,6 @@ How each field is assembled
   low, or when provenance is absent.
 - **confidence.** Derived from the top supporting assertion (its ``confidence``,
   falling back to its rerank ``score``); ``0.0`` when nothing is supported.
-
-Requirements: 18.1, 18.2, 18.3, 18.4, 18.5 (and 12.2 for provenance).
 """
 
 from __future__ import annotations

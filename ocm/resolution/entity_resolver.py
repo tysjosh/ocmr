@@ -24,8 +24,6 @@ The result is a :class:`ResolutionOutcome` carrying ``resolution_status``,
 mint an id (no :class:`IdGenerator` supplied) and cannot confidently resolve, it
 returns ``unresolved`` so the dependent candidate assertion is quarantined
 rather than committed against a guessed identity.
-
-Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8.
 """
 
 from __future__ import annotations

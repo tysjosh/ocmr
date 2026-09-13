@@ -12,8 +12,6 @@ component-level suites (``test_symbolic_retriever.py``,
 * A conflict query retrieves a quarantined contradiction.
 * The reranker penalizes a contradicted assertion.
 * An evidence package includes provenance sources.
-
-Requirements: 15.1, 16.1, 16.3, 17.3, 18.3, 26.5.
 """
 
 from __future__ import annotations

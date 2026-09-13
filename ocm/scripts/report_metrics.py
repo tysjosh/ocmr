@@ -17,8 +17,6 @@ Usage::
     # run inline over a benchmark, then report
     python -m ocm.scripts.report_metrics --benchmark benchmark.jsonl
     python -m ocm.scripts.report_metrics --benchmark benchmark.jsonl --json metrics.json
-
-Requirements: 24.1–24.5, 28.10.
 """
 
 from __future__ import annotations

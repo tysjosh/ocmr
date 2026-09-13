@@ -24,8 +24,6 @@ When a :class:`~ocm.memory.quarantine_store.QuarantineStore` is wired, the ids
 that unresolved quarantine records conflict with are passed to the Reranker as
 ``contradicted_ids`` so accepted items in an open conflict are penalized,
 and quarantined items surface as conflicts in the package.
-
-Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 25.2.
 """
 
 from __future__ import annotations

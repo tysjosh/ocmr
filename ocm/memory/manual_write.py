@@ -16,8 +16,6 @@ in isolation. Given a set of pre-resolved entities and a single
 It deliberately performs **no validation, contradiction checking, or
 supersession** — those land with the real Commit Manager. It mirrors only the
 *accept* leg of the design's write-through-on-commit contract.
-
-Requirements: 6.1, 11.5, 11.6.
 """
 
 from __future__ import annotations

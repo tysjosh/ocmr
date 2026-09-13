@@ -24,8 +24,6 @@ Realizing ``review`` as an OCMR quarantine plus a linked review item is
 deliberate: the review tier inherits OCMR's integrity guarantee, and the queue
 supplies the *review-and-release* mechanism OCMR lacked — the mechanism the
 false-quarantine audit identified as the missing piece.
-
-Requirements: 4.1, 4.5, 4.6, 5.1, 5.2, 15.2.
 """
 
 from __future__ import annotations

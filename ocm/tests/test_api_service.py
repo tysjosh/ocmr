@@ -23,8 +23,6 @@ index, so the stateful tests never touch disk. Importing :mod:`ocm.app.main`
 does run its module-level ``app = create_app()`` (default settings), which can
 create ``ocm.db`` / ``.chroma`` on disk; the module-scoped cleanup fixture
 removes any such artifacts after the tests run.
-
-Requirements: 28.1, 28.2, 28.7, 28.8, 19.4, 19.5, 19.6.
 """
 
 from __future__ import annotations

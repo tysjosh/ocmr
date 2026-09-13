@@ -24,8 +24,6 @@ The classifier dependency is imported defensively: this module only needs an
 object exposing ``entities`` / ``predicates`` / ``query_type`` (duck typed via
 :class:`ClassificationLike`), so it works whether or not
 ``ocm.retrieval.query_classifier`` has landed yet.
-
-Requirements: 15.1, 15.2, 15.3, 15.4.
 """
 
 from __future__ import annotations

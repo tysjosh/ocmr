@@ -28,8 +28,6 @@ contradiction (``severity=high``); otherwise it is a **soft** warning
 (``severity=low``) that downstream gates may permit. The recommended action is
 ``supersede`` for a high-confidence ``correction``, ``quarantine`` for any other
 high-confidence conflict, and ``accept`` for a soft warning.
-
-Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 8.8.
 """
 
 from __future__ import annotations

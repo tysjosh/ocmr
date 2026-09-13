@@ -19,8 +19,6 @@ Modules:
 * :mod:`ocm.governance.adaptation` — bounded feedback adaptation, the canary
   gate, and policy versioning.
 * :mod:`ocm.governance.conditions` — the five experimental governance conditions.
-
-Requirements: 1.x, 2.x, 3.x, 4.x, 5.x, 6.x, 7.x, 8.x, 10.x.
 """
 
 from __future__ import annotations

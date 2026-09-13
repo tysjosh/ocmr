@@ -30,8 +30,6 @@ failed check, with ``severity=high`` and ``recommended_action="reject"`` because
 a structural failure means the candidate is malformed/unusable (design
 "Reject" routing). When every check passes it returns
 ``ValidationResult(valid=True)``.
-
-Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7.
 """
 
 from __future__ import annotations

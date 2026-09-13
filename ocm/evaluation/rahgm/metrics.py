@@ -16,8 +16,6 @@ risk–coverage AUC.
 
 Calibration, eq. (11): ``BS = (1/N)Σ(pᵢ − yᵢ)²`` and
 ``ECE = Σ_b (|I_b|/N)·|acc(I_b) − conf(I_b)|``.
-
-Requirements: 11.1, 11.2, 11.3.
 """
 
 from __future__ import annotations

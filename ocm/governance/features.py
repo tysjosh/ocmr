@@ -27,8 +27,6 @@ Nothing here re-implements a constraint: the extractor reads the
 :class:`~ocm.memory.contracts.ValidationResult` OCMR already produced and queries
 the graph for the incumbent state the encoding needs. Extraction is fully
 deterministic and never calls a language model.
-
-Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10.
 """
 
 from __future__ import annotations

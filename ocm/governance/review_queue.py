@@ -13,8 +13,6 @@ strictly nested:
 * ``evidence`` — adds supporting and conflicting evidence snippets with provenance;
 * ``full`` — adds the memory timeline, alternative actions, reversibility, and the
   predicted downstream consequence.
-
-Requirements: 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3.
 """
 
 from __future__ import annotations

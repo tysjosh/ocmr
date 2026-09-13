@@ -21,8 +21,6 @@ The store exposes three operations matching the design contract
 The repository surface intentionally offers only ``upsert_quarantine`` and
 ``list_quarantine`` (no targeted get/update), so :meth:`set_status` loads the
 record via :meth:`list`, mutates its status, and re-upserts it.
-
-Requirements: 11.7.
 """
 
 from __future__ import annotations

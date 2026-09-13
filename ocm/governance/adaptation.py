@@ -19,8 +19,6 @@ Three layers of restriction, mirroring safe policy improvement:
 
 Every accepted version records its parent, the training cases behind it, the
 parameter delta, the canary result, and a rollback target.
-
-Requirements: 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5.
 """
 
 from __future__ import annotations

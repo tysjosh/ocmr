@@ -17,8 +17,6 @@ The expected inputs follow the W3 -> W4 contract: a ``relation`` dict shaped lik
 ``{subject, predicate, object, confidence, write_intent?, source_ref?}`` and a
 ``resolved`` mapping from each entity reference (the relation's ``subject`` and
 ``object`` values) to its :class:`ResolutionOutcome` produced by W3.
-
-Requirements: 6.1, 6.2, 6.3.
 """
 
 from __future__ import annotations

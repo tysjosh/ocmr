@@ -25,8 +25,6 @@ The query surface is intentionally general so it serves both the
 ``Constraint_Validator`` (C9 graph-level domain/range via
 :meth:`get_entity_type`, C3 acyclic PRECEDES via :meth:`has_path` /
 :meth:`simple_cycles` / :meth:`would_create_cycle`).
-
-Requirements: 11.5, 11.6, 11.8.
 """
 
 from __future__ import annotations

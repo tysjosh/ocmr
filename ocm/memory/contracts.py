@@ -13,8 +13,6 @@ stages exchange these typed Pydantic v2 contracts. They make the
 
 Confidence uses ``confloat(ge=0.0, le=1.0)`` so the [0, 1] bound is enforced
 structurally (supports constraint C6).
-
-Requirements: 6.1, 6.2, 8.1, 9.7, 10.1, 19.2.
 """
 
 from datetime import datetime

@@ -31,8 +31,6 @@ conflict is surfaced:
   provenance, and a conflicts field;
 * the quarantined "not started" status contradiction is durably retrievable
   from the Quarantine_Store, and a contradiction_check query surfaces it
-
-Requirements: 28.5, 28.7, 28.8.
 """
 
 from __future__ import annotations

@@ -28,8 +28,6 @@ through the vector index's ``where`` metadata filter plus a light post-filter:
   already excludes quarantined items; the post-filter additionally drops any
   quarantined hit that is not conflict-relevant, so a quarantined item never
   leaks into a non-conflict result set.
-
-Requirements: 16.1, 16.2, 16.3, 16.4, 16.5.
 """
 
 from __future__ import annotations

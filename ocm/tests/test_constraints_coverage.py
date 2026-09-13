@@ -18,8 +18,6 @@ Coverage here:
   transition map; ``correction`` bypasses it.
 * **ConstraintValidator.validate**: runs the applicable constraints and
   returns the first failure.
-
-Requirements: 8.2, 8.7, 8.9, 8.10, 8.11, 8.12, 26.6, 28.4.
 """
 
 from __future__ import annotations

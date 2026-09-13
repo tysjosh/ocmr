@@ -34,8 +34,6 @@ a Task set to ``done`` is accepted only when a completion Event exists (C4); any
 other transition is checked against the permitted task-status map (C10). An
 illegal transition (e.g. ``done`` → ``todo`` under ``new_fact``) is quarantined
 as a status contradiction rather than silently overwriting accepted memory
-
-Requirements: 3.1, 10.1, 10.6, 10.7, 13.5, 16.6, 19.2, 25.1.
 """
 
 from __future__ import annotations

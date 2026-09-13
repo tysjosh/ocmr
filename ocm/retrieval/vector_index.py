@@ -38,8 +38,6 @@ The embedding text is a compact natural-language rendering of the item (see the
 resolved from the ``Graph_Store`` (when wired) so the embedded text is
 semantically meaningful — ``Assertion(subject=per_x, OWNS, object=prj_y)``
 embeds as ``"Alice OWNS Project Orion"`` rather than raw ids.
-
-Requirements: 13.4, 13.5, 13.6, 16.6.
 """
 
 from __future__ import annotations

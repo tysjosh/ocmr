@@ -25,8 +25,6 @@ open_ended           fallback when no structural cue matches
 lookup with a confidently extracted entity *and* predicate (then the symbolic
 retriever's results may suffice). ``contradiction_check`` is the downstream
 "conflict query" signal used to include quarantined items.
-
-Requirements: 14.1, 14.2.
 """
 
 from __future__ import annotations

@@ -23,8 +23,6 @@ The :class:`CoreContainer` selects :class:`LocalEmbeddingProvider`
 by default (matching ``Settings.embedding_mode == "local"`` and
 ``embedding_model == "sentence-transformers/all-MiniLM-L6-v2"``); tests can wire
 the deterministic provider instead.
-
-Requirements: 13.1, 13.2, 13.3.
 """
 
 from __future__ import annotations

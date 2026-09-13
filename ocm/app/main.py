@@ -14,8 +14,6 @@ passed). It is imported defensively so the service still starts before that
 router exists.
 
 A module-level ``app = create_app()`` is exposed for ``uvicorn ocm.app.main:app``.
-
-Requirements: 19.1, 28.1, 28.2.
 """
 
 from __future__ import annotations

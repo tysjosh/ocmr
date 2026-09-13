@@ -18,8 +18,6 @@ Endpoints:
 The container is stored on ``app.state.container`` by the application factory
 (:func:`ocm.app.main.create_app`); :func:`get_container` is the FastAPI
 dependency that reads it back, keeping endpoints decoupled from construction.
-
-Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6, 28.1, 28.2, 28.7.
 """
 
 from __future__ import annotations
