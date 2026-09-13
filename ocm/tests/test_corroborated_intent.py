@@ -30,6 +30,8 @@ What these tests pin
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from ocm.core.config import Settings
@@ -53,10 +55,21 @@ def _relations(oracle):
     return out
 
 
+#: Full-haystack LongMemEval corpus. Gitignored (~277 MB), so it is absent from a
+#: fresh clone and from the anonymous submission bundle.
+_LME_PATH = "data/longmemeval_s.json"
+
+
 def _instances(n: int = 2):
-    return load_longmemeval(
-        "data/longmemeval_s.json", question_type="knowledge-update", limit=n
-    )
+    # Skip rather than fail when the corpus is missing: these tests assert on the
+    # corroboration write path, not on data availability, and a hard failure here
+    # makes the whole suite look broken to anyone who has only cloned the repo.
+    if not os.path.exists(_LME_PATH):
+        pytest.skip(
+            f"{_LME_PATH} is not present (gitignored, ~277 MB). Fetch the "
+            "LongMemEval full-haystack corpus to run the corroborated-intent tests."
+        )
+    return load_longmemeval(_LME_PATH, question_type="knowledge-update", limit=n)
 
 
 # --------------------------------------------------------------------------- #

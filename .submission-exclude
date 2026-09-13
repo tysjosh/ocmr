@@ -1,0 +1,43 @@
+# Paths excluded from the anonymous submission bundle.
+#
+# Nothing here is deleted from the repository. This file drives
+# tools/make_submission_bundle.py, which materialises a filtered copy for
+# double-blind review. One glob per line; '#' starts a comment.
+#
+# The bar for exclusion is: a reviewer cannot reproduce any reported number
+# with it, and removing it does not change any number they can reproduce.
+# Anything ambiguous is KEPT -- a bundle that is slightly too large costs
+# nothing, whereas a bundle missing a dependency is unreproducible.
+
+# --- Considered and deliberately KEPT: ocm/evaluation/rahgm/ -----------------
+# The RAHGM suite looks like separate work -- its own 1,500-write corpus,
+# reviewer-minutes model, simulated analyst, and four experiments its __init__
+# calls "§3-§4" -- and docs/discriminating_metric_design.md defers reviewer
+# modelling "to the RAHGM paper where the reviewer models already exist".
+#
+# It is nonetheless NOT excluded, because it is not separable. Four of its
+# modules are about OCMR, i.e. *this* paper's system: ocmr_arm, run_ocmr_arm,
+# summarize_ocmr_arm, and audit (the OCMR quarantine audit, which
+# docs/evaluation_methodology.md relies on for quarantine reconciliation).
+# Their transitive closure pulls in replay -> corpus, metrics, review_cost, and
+# audit -> annotate. That leaves only 10 of 20 modules droppable while corpus,
+# metrics and review_cost would still ship, so excluding half the subsystem
+# buys nothing and risks breaking the OCMR arm a reviewer may want to run.
+#
+# ocm/governance/{conditions,router}.py likewise keep their frozen_rahgm /
+# adaptive_rahgm conditions (C4/C5): they live in a shared condition registry
+# that this paper's gate also uses.
+
+# --- Deployment infrastructure, not evaluation -------------------------------
+# The FastAPI service exposes the memory layer over HTTP. No reported number
+# depends on it; every table is produced by the run_*/ocm.scripts entry points
+# calling the library directly.
+ocm/app/
+ocm/tests/test_api_endpoints.py
+ocm/tests/test_api_service.py
+ocm/scripts/serve.py
+
+# --- Local hardware diagnostics ----------------------------------------------
+# Checks CUDA/driver state on a specific machine. Useful during development,
+# irrelevant to review, and it names an internal run command.
+ocm/scripts/gpu_doctor.py
