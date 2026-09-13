@@ -145,6 +145,23 @@ def main() -> int:
                              "far faster. Use local only to also compare task_success.")
     parser.add_argument("--fixture", action="store_true",
                         help="Use the built-in offline fixture instead of real data.")
+    # Write-policy stress axes. Both hold the gold current_value fixed and change
+    # only how the trajectory is presented, so an arm that ends up wrong was wrong
+    # on policy rather than on evidence.
+    parser.add_argument("--order", choices=("aligned", "permuted"), default="aligned",
+                        help="'permuted' writes a STALE value last, so a "
+                             "last-writer-wins policy keeps the stale value.")
+    parser.add_argument("--confidence", choices=("aligned", "inverted"),
+                        default="aligned",
+                        help="'inverted' gives the current value low confidence and "
+                             "stale values high confidence, so a "
+                             "confidence-weighted policy keeps the stale value.")
+    parser.add_argument("--no-authoritative-supersede", action="store_true",
+                        help="Set authoritative_update_supersede=False. That flag "
+                             "bypasses Algorithm 1's margin test, so with it on an "
+                             "update supersedes unconditionally and the gate can "
+                             "never refuse. Turn it off to exercise the refusal "
+                             "path (quarantine) instead.")
     parser.add_argument("--out", type=Path,
                         default=Path("local_results/lmo_durable_state.json"))
     args = parser.parse_args()
@@ -172,7 +189,12 @@ def main() -> int:
             str(args.data), question_type="knowledge-update", limit=None)
         annotations = load_annotations(str(args.annotations))
 
-    examples, oracle = build_from_kupdate_oracle(instances, annotations)
+    examples, oracle = build_from_kupdate_oracle(
+        instances, annotations, order=args.order, confidence=args.confidence)
+    if args.order == "permuted":
+        print("order=permuted: a STALE value is written last; task_success is NOT "
+              "meaningful here (session text is decoupled from the written value) "
+              "-- read the durable-state buckets.")
     print(f"instances={len(instances)} annotations={len(annotations)} "
           f"examples={len(examples)} gold_keys={len(oracle.gold_current_values)}")
     if not examples:
@@ -182,7 +204,7 @@ def main() -> int:
     def settings_factory() -> Settings:
         return Settings(
             deterministic_test_mode=True, chroma_mode="memory", extractor="mock",
-            authoritative_update_supersede=True,
+            authoritative_update_supersede=not args.no_authoritative_supersede,
         )
 
     embeddings = (
@@ -203,6 +225,8 @@ def main() -> int:
         "n_gold_keys": len(oracle.gold_current_values),
         "embeddings": args.embeddings,
         "fixture": bool(args.fixture),
+        "order": args.order,
+        "confidence": args.confidence,
         **_dataset_provenance(args.data, fixture=bool(args.fixture)),
         **_provenance(args.annotations, annotations),
     }}

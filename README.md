@@ -1,6 +1,9 @@
 # Ontology-Constrained Memory (OCM)
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tysjosh/ocmr/blob/main/OCM_Colab.ipynb)
+To run the notebook in Colab, upload `OCM_Colab.ipynb` directly (**File → Upload
+notebook**), or open it from a Git remote by setting `OCM_REPO_URL` in the clone
+cell. A one-click badge is omitted here because it would embed a repository
+owner, which is not compatible with anonymous review.
 
 OCM is a **write-time-governed, ontology-constrained memory layer** for long-horizon
 LLM agents. Its central claim is that memory should be governed at *write time* —
