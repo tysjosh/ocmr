@@ -20,8 +20,6 @@ SciPy:
   with cluster-robust (sandwich) standard errors by participant. This is a
   documented simplification: the ordinal outcome uses a cluster-robust fixed-
   effects fit rather than a random-intercept fit.
-
-Requirements: 12.1, 12.2, 12.3, 12.4.
 """
 
 from __future__ import annotations

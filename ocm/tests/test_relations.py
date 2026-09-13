@@ -1,6 +1,6 @@
 """Unit tests for the relation signature registry and task transition map.
 
-Covers task 2.6:
+Covers:
 
 * ``get_relation_signature`` returns the declared source/target types and
   cardinality for representative predicates.

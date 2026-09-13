@@ -1,4 +1,4 @@
-"""Unit tests for the deterministic offline Mock_Extractor (task 10.1).
+"""Unit tests for the deterministic offline Mock_Extractor.
 
 These tests pin the behaviors W1 relies on and that downstream stages
 (normalizer, resolver, write pipeline, Task T1 integration test) depend on:

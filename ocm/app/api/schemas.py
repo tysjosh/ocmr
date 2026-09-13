@@ -3,7 +3,7 @@
 The ``API_Service`` is a FastAPI app whose routers are thin: they validate the
 request model, call into the :class:`~ocm.core.container.CoreContainer`, and
 serialize the result. These Pydantic v2 models are the request/response bodies
-for the five endpoints (task 15.2), reusing the ontology and pipeline-contract
+for the five endpoints, reusing the ontology and pipeline-contract
 models wherever possible so the API shape mirrors the internal contracts.
 
 Endpoints (design "API Design"):
@@ -13,8 +13,6 @@ Endpoints (design "API Design"):
 3. ``POST /memory/validate``        — :class:`ValidateRequest` -> :class:`ValidateResponse`
 4. ``GET  /memory/entity/{id}``     — :class:`EntityResponse`
 5. ``GET  /memory/conflicts``       — :class:`ConflictsResponse`
-
-Requirements: 19.1, 19.2, 19.3, 19.4, 19.5, 19.6.
 """
 
 from __future__ import annotations

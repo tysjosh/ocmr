@@ -1,4 +1,4 @@
-"""Schema validation unit tests for the ontology models (task 2.4).
+"""Schema validation unit tests for the ontology models.
 
 These tests pin down four behaviors of ``ocm.ontology.models`` that the
 ontology layer guarantees:

@@ -2,11 +2,11 @@
 
 `Answer_Policy` (`ocm/agent/answer_policy.py`) shapes the agent's final,
 human-readable answer from an :class:`EvidencePackage` (the R4 retrieval
-contract). It is the last hop in the agent loop (task 16.1) and the toggled
-feature that distinguishes baseline B4 from B3 (task 17.x).
+contract). It is the last hop in the agent loop and the toggled
+feature that distinguishes baseline B4 from B3.
 
 The policy is a deterministic, pure transform — same package in, same string
-out — so its output can be asserted directly in tests (task 16.3) and compared
+out — so its output can be asserted directly in tests and compared
 across baselines.
 
 Policies

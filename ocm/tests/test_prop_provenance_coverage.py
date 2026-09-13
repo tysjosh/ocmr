@@ -1,4 +1,4 @@
-"""Property test for provenance coverage (task 8.8).
+"""Property test for provenance coverage.
 
 Feature: ontology-constrained-memory, Property 4.
 

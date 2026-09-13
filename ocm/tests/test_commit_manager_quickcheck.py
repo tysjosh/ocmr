@@ -1,4 +1,4 @@
-"""Quick verification checks for the Commit Manager (W8 routing, task 8.2).
+"""Quick verification checks for the Commit Manager (W8 routing).
 
 
 Exercises each routing leg against an in-memory SQLite repository + graph:

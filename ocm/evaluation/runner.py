@@ -16,8 +16,7 @@ governed-memory state, then replays every
 
 For every (baseline, example, question) the runner:
 
-* appends a structured **result record** (the shape the Metrics_Reporter, task
-  17.4, consumes) to the list returned by :meth:`run`, and
+* appends a structured **result record** (the shape the Metrics_Reporter consumes) to the list returned by :meth:`run`, and
 * emits a **benchmark research log** via
   :meth:`~ocm.core.logging.ResearchLogger.log_benchmark`
   (``baseline_name``, ``answer``, ``retrieved_ids``, ``conflicts``,
@@ -27,8 +26,6 @@ Scoring here is intentionally lightweight: the formal evaluation metrics
 (hit@k, factual precision/recall, conflict-surfacing rate, …) are computed by
 the Metrics_Reporter from these records; the runner only needs to produce
 records carrying the required fields.
-
-Requirements: 22.6, 25.3, 28.9.
 """
 
 from __future__ import annotations
@@ -131,7 +128,7 @@ class BaselineRunner:
         memory state leaks between baselines), every example's sessions are
         ingested, and every question is queried and scored. Returns one result
         record per (baseline, example, question) — the records the
-        Metrics_Reporter (task 17.4) consumes — and emits a benchmark research
+        Metrics_Reporter consumes — and emits a benchmark research
         log per record.
         """
         records: list[dict] = []

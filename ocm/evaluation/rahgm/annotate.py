@@ -10,8 +10,6 @@ This substitution is disclosed in every emitted artifact. The reported alpha
 characterizes the *rubric's* determinacy under perturbation — how reliably a
 label can be recovered from the case features — not human agreement. It is not a
 substitute for the paper's inter-annotator study.
-
-Requirements: 9.6, 9.8, 13.1, 14.1.
 """
 
 from __future__ import annotations

@@ -24,8 +24,6 @@ recognizes them: ``"X owns Project Y"`` (OWNS), ``"X is assigned to Task Y"``
 ``"Task Y is not started"`` (status), ``"We decided to ..."`` (Decision), and
 ``http(s)://`` URLs (Document). This keeps the benchmark fully offline and
 reproducible end to end.
-
-Requirements: 23.1, 23.2, 23.3, 23.4, 23.5, 23.6.
 """
 
 from __future__ import annotations

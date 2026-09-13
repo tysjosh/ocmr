@@ -1,4 +1,4 @@
-"""Temporal constraint unit tests for C2 and C3 (task 6.4).
+"""Temporal constraint unit tests for C2 and C3.
 
 These tests pin down the two temporal graph-level constraints in
 ``ocm.validation.constraints``:

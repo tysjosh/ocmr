@@ -1,4 +1,4 @@
-"""Agent loop and Answer Policy unit tests (task 16.3).
+"""Agent loop and Answer Policy unit tests.
 
 Two halves, matching the two units under test:
 

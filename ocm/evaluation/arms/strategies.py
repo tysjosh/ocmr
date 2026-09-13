@@ -59,10 +59,10 @@ from ocm.memory.write_pipeline import WriteResult
 from ocm.ontology.enums import WriteIntent
 from ocm.retrieval.evidence_packager import EvidencePackage
 
-# The Answer_Policy is built by a parallel task (16.2). Import it defensively so
+# The Answer_Policy is built separately. Import it defensively so
 # this module — and the B4 baseline — load even before that task lands. When it
 # is unavailable B4 falls back to a small built-in renderer (see ``_render``).
-try:  # pragma: no cover - exercised once task 16.2 lands.
+try: # pragma: no cover - exercised only when AnswerPolicy is importable.
     from ocm.agent.answer_policy import AnswerPolicy as _AnswerPolicy
 except Exception:  # pragma: no cover - parallel task may not exist yet.
     _AnswerPolicy = None  # type: ignore[assignment]
@@ -117,7 +117,7 @@ class StrategyToggles:
 class MemoryStrategy:
     """A baseline as a configurable strategy over a wired ``CoreContainer``.
 
-    Exposes the uniform interface the Baseline_Runner (task 17.3) drives:
+    Exposes the uniform interface the Baseline_Runner drives:
 
     * :meth:`write` — ingest text into governed memory.
     * :meth:`query` — retrieve an :class:`EvidencePackage`, composed and
@@ -322,7 +322,7 @@ class MemoryStrategy:
         return contradicted
 
     def _build_answer_policy(self) -> Optional[Any]:
-        """Instantiate the Answer_Policy if available (defensive, task 16.2)."""
+        """Instantiate the Answer_Policy if available (defensive)."""
         if _AnswerPolicy is None:
             return None
         try:  # pragma: no cover - depends on parallel task's constructor.
@@ -335,7 +335,7 @@ class MemoryStrategy:
 
         Prefers the real Answer_Policy (``render(pkg, high_stakes) -> str``);
         falls back to a small built-in renderer when the policy is unavailable
-        so B4 still produces a rendered answer before task 16.2 lands.
+        so B4 still produces a rendered answer without it.
         """
         if self._answer_policy is not None:
             for attempt in (

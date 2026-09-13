@@ -1,4 +1,4 @@
-"""Unit tests for the Quarantine Store and Provenance Tracker (task 8.1).
+"""Unit tests for the Quarantine Store and Provenance Tracker.
 
 
 These example-based tests exercise the two stores end to end against an

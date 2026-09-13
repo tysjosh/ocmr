@@ -41,8 +41,6 @@ is additionally invoked (single seed) to obtain write-outcome tallies and prove
 run-to-run identity, and ``aggregate_methods`` is kept available for single-seed
 reporting parity. A single seed is sufficient because the offline oracle/mock
 pipeline is deterministic — recorded in the :data:`DIAGNOSTIC_SCOPE_NOTE`.
-
-Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 10.1, 10.4, 11.1, 11.3, 12.4, 14.1, 14.2, 14.4.
 """
 
 from __future__ import annotations

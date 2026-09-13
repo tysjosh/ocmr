@@ -17,8 +17,6 @@ irreversible write escalates. Nothing here consults a language model, and the
 score is never surfaced as an unexplained confidence value — every
 :class:`~ocm.governance.router.RoutingDecision` carries the features and the rule
 that fired.
-
-Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4.
 """
 
 from __future__ import annotations

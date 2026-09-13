@@ -31,8 +31,6 @@ alongside these types once implemented):
 The extractor is wired into the harness exactly as the LongMemEval oracle is::
 
     CoreContainer(settings, extractor=oracle)
-
-Requirements: 6.1, 6.3, 5.5.
 """
 
 from __future__ import annotations

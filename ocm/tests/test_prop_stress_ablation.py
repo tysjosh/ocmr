@@ -10,28 +10,28 @@ correctness properties map 1:1 onto the tests that validate them.
 Currently implemented:
 
 * **Property 1 — Full arm clean; gate-only strictly worse than
-  schema+provenance** (task 5.2): for any generated workload the ``Full_Arm``
+  schema+provenance**: for any generated workload the ``Full_Arm``
   and ``Schema_Provenance_Arm`` totals are ``0`` while the ``Gate_Only_Arm``
   total is strictly greater than the ``Schema_Provenance_Arm`` total — the
   decisive shared-input comparison.
-* **Property 2 — Ungoverned and gate-only leave invalid state** (task 5.3):
+* **Property 2 — Ungoverned and gate-only leave invalid state**:
   for any generated workload both the ``Ungoverned_Arm`` total and the
   ``Gate_Only_Arm`` total are strictly greater than zero — the poison writes
   survive in durable memory when the schema/constraint checks are off, and the
   contradiction gate alone (fed the same inputs) cannot see them.
-* **Property 7 — Generator determinism** (task 2.3): for any seed, invoking
+* **Property 7 — Generator determinism**: for any seed, invoking
   :func:`~ocm.evaluation.datasets.stress_workload.generate_stress_workload`
   twice produces an identical list of ``BenchmarkExample`` objects and an
   identical oracle ``writes_by_ref`` mapping. This is the reproducibility
   guarantee the offline single-seed evaluation relies on.
-* **Property 8 — Runner determinism** (task 5.5): for any seed, running
+* **Property 8 — Runner determinism**: for any seed, running
   :func:`~ocm.evaluation.stress_ablation.run_stress_ablation` twice produces
   identical Typed_Violation_Reports for every arm — the reproducibility
   guarantee that lets the offline diagnostic rely on a single seed.
-* **Property 9 — Workload composition and labeling** (task 2.4): for any seed
+* **Property 9 — Workload composition and labeling**: for any seed
   the workload contains ≥1 Valid_Write, ≥1 Poison_Write, ≥1 case of each of the
   four poison classes, and every example carries a valid ``WriteClass``
-* **Property 4 — Valid writes are admitted with zero violations** (task 5.7):
+* **Property 4 — Valid writes are admitted with zero violations**:
   for any generated workload, every Valid_Write is admitted by the ``Full_Arm``
   as an accepted outcome (with no rejected or quarantined outcome) and
   contributes zero Invalid_Active_State to the ``Full_Arm``'s
@@ -39,7 +39,7 @@ Currently implemented:
   configuration (``STRESS_ARMS["Full_Arm"]`` + injected oracle) but replays only
   the cheap VALID cases, so it runs at the spec's ``MIN_PROPERTY_ITERATIONS``
   minimum rather than driving the full four-arm ``run_stress_ablation``.
-* **Property 10 — The reconcile-path guard is default-preserving** (task 5.6):
+* **Property 10 — The reconcile-path guard is default-preserving**:
   for any C4/C8/C10-governed status/decision write, replaying it under a
   default-governed container (``enable_constraint_validation=True``, the
   guard's non-taken branch) routes the offending ``HAS_STATUS`` to the

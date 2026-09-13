@@ -5,8 +5,8 @@ The :class:`RetrievalPipeline` runs the read path end to end:
     R0 classify → R1 symbolic → R2 semantic → R3 rerank → R4 package
 
 and returns an :class:`~ocm.retrieval.evidence_packager.EvidencePackage`. It is
-the object behind ``POST /memory/query`` (task 15.2) and the agent's
-``MemoryTool.query`` (task 16.x). The pipeline performs no ranking or packaging
+the object behind ``POST /memory/query`` and the agent's
+``MemoryTool.query``. The pipeline performs no ranking or packaging
 logic itself — it wires the five stages together and records one structured
 research-log record per query.
 

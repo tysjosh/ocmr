@@ -1,4 +1,4 @@
-"""Unit tests for the semantic ``Vector_Index`` in in-memory mode (task 12.3).
+"""Unit tests for the semantic ``Vector_Index`` in in-memory mode.
 
 
 These example-based tests exercise :class:`ocm.retrieval.vector_index.VectorIndex`

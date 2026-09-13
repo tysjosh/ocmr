@@ -26,8 +26,6 @@ pipeline agree on what "invalid" means:
   miss: a ``done`` Task with no completion Event via ``RESULTS_IN`` (C4), or a status
   reached from a terminal status such as the ``done`` -> ``todo`` flip (a transition the
   C10 map forbids).
-
-Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 8.1.
 """
 
 from __future__ import annotations

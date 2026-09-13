@@ -1,4 +1,4 @@
-"""Property test for supersession integrity (task 8.7).
+"""Property test for supersession integrity.
 
 Feature: ontology-constrained-memory, Property 7.
 

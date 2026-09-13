@@ -1,4 +1,4 @@
-"""Governance integration tests for the write path (task 8.9).
+"""Governance integration tests for the write path.
 
 
 Unlike ``test_commit_manager_quickcheck`` (which drives the Commit Manager's

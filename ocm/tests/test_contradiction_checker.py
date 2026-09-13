@@ -1,4 +1,4 @@
-"""Contradiction-detection unit tests for the Contradiction_Checker (W7, task 7.2).
+"""Contradiction-detection unit tests for the Contradiction_Checker (W7).
 
 These tests pin down the contradiction categories that
 ``ocm.validation.contradiction_checker.ContradictionChecker`` is the single

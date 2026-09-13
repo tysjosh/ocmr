@@ -19,7 +19,7 @@ Two concrete providers are supplied:
   identical input always yields an identical vector and distinct inputs yield
   distinct vectors.
 
-The :class:`CoreContainer` (task 15.1) selects :class:`LocalEmbeddingProvider`
+The :class:`CoreContainer` selects :class:`LocalEmbeddingProvider`
 by default (matching ``Settings.embedding_mode == "local"`` and
 ``embedding_model == "sentence-transformers/all-MiniLM-L6-v2"``); tests can wire
 the deterministic provider instead.

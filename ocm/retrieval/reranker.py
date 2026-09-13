@@ -44,7 +44,7 @@ Contradiction monotonicity
 Because ``lambda > 0`` and a contradicted item has ``contradiction_penalty > 0``
 while an otherwise-identical non-contradicted item has
 ``contradiction_penalty = 0``, the contradicted item always scores strictly
-lower. This is asserted as a correctness property (Property 9, task 13.5).
+lower. This is asserted as a correctness property (Property 9).
 
 The hit inputs are duck-typed (the Symbolic/Semantic retrievers, R1/R2, are
 built alongside this module): any object or mapping exposing the relevant
@@ -93,8 +93,7 @@ class RankedItem(BaseModel):
     ``contradiction_penalty``) so downstream stages and the monotonicity
     property test can inspect exactly what drove the ranking.
 
-    The remaining fields carry the metadata the Evidence Packager (R4, task
-    13.6) needs to assemble an ``EvidencePackage``: ``confidence`` and
+    The remaining fields carry the metadata the Evidence Packager (R4) needs to assemble an ``EvidencePackage``: ``confidence`` and
     ``memory_id`` for ``supporting_assertions``; ``source_ref`` for
     ``supporting_sources``; ``contradicted`` to surface conflicts; ``status`` to
     keep accepted-vs-quarantined provenance.

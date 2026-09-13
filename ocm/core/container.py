@@ -1,7 +1,7 @@
 """Dependency container wiring the whole OCM system.
 
 ``CoreContainer`` constructs and holds every wired component the API service
-(``ocm/app/api/``, task 15.2) and the agent (``ocm/agent/``, task 16.x) depend
+(``ocm/app/api/``) and the agent (``ocm/agent/``) depend
 on, so endpoints and tools stay decoupled from construction. A single container
 is built per process (or per test) and FastAPI dependencies resolve from it.
 

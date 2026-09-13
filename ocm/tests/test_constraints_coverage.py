@@ -1,8 +1,8 @@
 """Consolidated constraint coverage tests for the Constraint_Validator (W6).
 
 This module provides example-based unit coverage for the graph-level constraints
-that are *not* exercised by the temporal (C2/C3, task 6.4) or task (C4/C5,
-task 6.5) test files, plus the aggregating :class:`ConstraintValidator`. Together
+that are *not* exercised by the temporal (C2/C3) or task (C4/C5) test
+files, plus the aggregating :class:`ConstraintValidator`. Together
 with those files the suite spans every constraint C1–C10.
 
 Coverage here:

@@ -1,4 +1,4 @@
-"""Unit tests for the task-oriented graph constraints C4 and C5 (task 6.5).
+"""Unit tests for the task-oriented graph constraints C4 and C5.
 
 
 * **C4 — done-task completion event.** A Task whose status is ``done``

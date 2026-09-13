@@ -1,10 +1,10 @@
-"""Endpoint-shape tests for the five memory routes (task 15.2).
+"""Endpoint-shape tests for the five memory routes.
 
 These exercise :func:`ocm.app.main.create_app` end to end against a
 deterministic, in-memory :class:`~ocm.core.container.CoreContainer` using
 FastAPI's :class:`~starlette.testclient.TestClient`. They assert each endpoint
-returns ``200`` with the expected response shape (–19.6, 28.1, 28.2,
-28.7); deeper behavioral coverage belongs to task 15.4.
+returns ``200`` with the expected response shape; deeper behavioral
+coverage belongs to the service-level tests.
 """
 
 from __future__ import annotations

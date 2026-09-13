@@ -1,4 +1,4 @@
-"""Unit tests for repository persistence and graph rebuild (task 3.4).
+"""Unit tests for repository persistence and graph rebuild.
 
 
 These example-based tests complement the property-based round-trip test in

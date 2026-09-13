@@ -72,7 +72,7 @@ def deterministic_settings_kwargs() -> Dict[str, Any]:
 def deterministic_settings(deterministic_settings_kwargs: Dict[str, Any]) -> Any:
     """A deterministic, offline ``Settings`` object for hermetic tests.
 
-    Instantiates ``ocm.core.config.Settings`` when it exists (task 1.3).
+    Instantiates ``ocm.core.config.Settings`` when it exists.
     Until then it returns a ``SimpleNamespace`` carrying the same fields so
     tests written against the attributes still work and collection never
     fails on a missing import.
@@ -88,13 +88,13 @@ def deterministic_settings(deterministic_settings_kwargs: Dict[str, Any]) -> Any
 def in_memory_repository(deterministic_settings: Any) -> Any:
     """An in-memory ``StorageRepository`` for hermetic, offline tests.
 
-    Skips until the repository layer (task 3.2) lands. The repository is
+    Skips until the repository layer lands. The repository is
     constructed in SQLite ``:memory:`` mode so nothing touches disk.
     """
     try:
         from ocm.memory.sqlite_repository import SQLiteRepository  # type: ignore
     except Exception:
-        pytest.skip("StorageRepository not implemented yet (task 3.2)")
+        pytest.skip("StorageRepository not implemented yet")
     return SQLiteRepository(":memory:")
 
 
@@ -102,12 +102,12 @@ def in_memory_repository(deterministic_settings: Any) -> Any:
 def container(deterministic_settings: Any) -> Any:
     """A wired ``CoreContainer`` using the deterministic/offline settings.
 
-    Skips until the dependency container (task 1.3 / API wiring) lands. When
+    Skips until the dependency container (API wiring) lands. When
     available it wires the Mock_Extractor, in-memory Chroma, and deterministic
     IDs from ``deterministic_settings`` so the whole pipeline is hermetic.
     """
     try:
         from ocm.core.container import CoreContainer  # type: ignore
     except Exception:
-        pytest.skip("CoreContainer not implemented yet (task 1.3)")
+        pytest.skip("CoreContainer not implemented yet")
     return CoreContainer(deterministic_settings)

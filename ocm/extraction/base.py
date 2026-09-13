@@ -17,7 +17,6 @@ If an extractor cannot produce output that validates into
 pipeline turns that into a rejected input plus a recorded validation
 failure.
 
-Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7.
 """
 
 from __future__ import annotations

@@ -15,8 +15,6 @@ request payload dict and returning the parsed response dict) can be supplied at
 construction time, or :meth:`_post` can be overridden. This keeps the class
 fully offline-testable — no network call happens until :meth:`extract` is
 invoked, and tests can inject a fake client.
-
-Requirements: 3.2, 3.3, 3.6.
 """
 
 from __future__ import annotations
@@ -30,7 +28,7 @@ from ocm.core.config import Settings
 from ocm.memory.contracts import ExtractionResult
 
 # Prefer importing the shared Extractor protocol + ExtractionError from the
-# extraction base module (task 10.1). If it is not present yet, fall back to a
+# extraction base module. If it is not present yet, fall back to a
 # locally-defined ExtractionError so this module is independently importable.
 try:  # pragma: no cover - exercised by whichever ordering tasks run in
     from ocm.extraction.base import ExtractionError

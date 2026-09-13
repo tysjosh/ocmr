@@ -1,4 +1,4 @@
-"""Unit tests for the W2 Normalizer (task 10.4).
+"""Unit tests for the W2 Normalizer.
 
 These tests pin the value-level normalization behaviors that downstream stages
 (entity resolution, assertion building, schema/constraint validation) depend on:

@@ -1,4 +1,4 @@
-"""Unit tests for the Assertion_Builder (W4) and the manual write path (task 4.3).
+"""Unit tests for the Assertion_Builder (W4) and the manual write path.
 
 
 Two clusters of example-based tests:

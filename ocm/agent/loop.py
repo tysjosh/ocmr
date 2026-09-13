@@ -16,7 +16,7 @@ On each turn the loop walks six nodes::
 * **receive** — take the user message and assign a per-turn ``source_ref``.
 * **retrieve** — call ``memory.query`` with the user input.
 * **answer** — shape a response from the :class:`EvidencePackage`, preferring
-  the P1–P5 :class:`~ocm.agent.answer_policy.AnswerPolicy` (task 16.2) when it
+  the P1–P5 :class:`~ocm.agent.answer_policy.AnswerPolicy` when it
   is available and falling back to a simple, deterministic renderer otherwise.
 * **extract** — treat the turn content as candidate new memory.
 * **validate** — decide whether the turn yielded memory worth persisting.
@@ -43,10 +43,10 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 
 # --------------------------------------------------------------------------- #
-# Answer rendering — prefer the P1–P5 AnswerPolicy (task 16.2) when present.
+# Answer rendering — prefer the P1–P5 AnswerPolicy when present.
 # --------------------------------------------------------------------------- #
 def _load_answer_policy() -> Optional[Any]:
-    """Return an :class:`AnswerPolicy` instance if task 16.2 has landed, else ``None``.
+    """Return an :class:`AnswerPolicy` instance when the module is importable, else ``None``.
 
     The import is defensive so the loop works before (and independently of) the
     Answer Policy module; when the module is present the loop prefers it.
@@ -64,7 +64,7 @@ def _load_answer_policy() -> Optional[Any]:
 class _SimpleAnswerRenderer:
     """A minimal, deterministic fallback renderer for an :class:`EvidencePackage`.
 
-    Used only when the P1–P5 :class:`AnswerPolicy` (task 16.2) is unavailable.
+    Used only when the P1–P5 :class:`AnswerPolicy` is unavailable.
     It still honors the spirit of the policy at a basic level: lead with a
     derived answer or supporting assertions, surface conflicts separately, and
     state missing evidence.
@@ -237,7 +237,7 @@ class AgentLoop:
                 :class:`CoreContainer` may be passed instead; it is wrapped in a
                 :class:`MemoryTool` automatically.
             answer_policy: Optional object with ``render(pkg, high_stakes) -> str``.
-                When omitted, the P1–P5 :class:`AnswerPolicy` (task 16.2) is used
+                When omitted, the P1–P5 :class:`AnswerPolicy` is used
                 if available; otherwise a simple deterministic renderer.
             extract_fn: Optional hook mapping ``(user_message, evidence)`` to the
                 new memory text to write (or ``None`` to skip the write). Defaults

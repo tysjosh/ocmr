@@ -2,8 +2,8 @@
 
 The :class:`EvidencePackager` is the final stage of the retrieval pipeline
 (R0→R1→R2→R3→**R4**). It turns the reranked candidate list (R3) into a single,
-structured :class:`EvidencePackage` — the object the API (`POST /memory/query`,
-task 15.2) serializes and the agent (`Answer_Policy`, task 16.x) consumes.
+structured :class:`EvidencePackage` — the object the API (`POST /memory/query`)
+serializes and the agent (`Answer_Policy`) consumes.
 
 What the package carries
 -----------------------------------

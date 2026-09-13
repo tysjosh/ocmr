@@ -1,4 +1,4 @@
-"""Property 1: Schema round-trip identity (task 2.2).
+"""Property 1: Schema round-trip identity.
 
 
 For any valid ontology/contract model instance ``x`` (Person, Organization,

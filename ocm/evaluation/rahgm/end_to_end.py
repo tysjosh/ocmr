@@ -18,8 +18,6 @@ Three outcomes per condition:
 Results are broken out by scenario family so the largest gain and the largest cost
 can be named, and reviewer minutes per 100 writes are reported alongside so an
 accuracy gain is never read without its oversight price.
-
-Requirements: 11.2, 13.5.
 """
 
 from __future__ import annotations

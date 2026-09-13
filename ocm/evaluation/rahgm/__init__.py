@@ -18,8 +18,6 @@ Modules:
 * :mod:`ocm.evaluation.rahgm.stats` — random-intercept models and Holm correction.
 * :mod:`ocm.evaluation.rahgm.report` — table renderers and the scope note.
 * :mod:`ocm.evaluation.rahgm.run_all` — the single-command runner.
-
-Requirements: 9.x, 11.x, 12.x, 13.x, 14.x.
 """
 
 from __future__ import annotations

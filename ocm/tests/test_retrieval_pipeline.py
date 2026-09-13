@@ -93,7 +93,7 @@ def pipeline_env():
     try:
         from ocm.memory.sqlite_repository import SQLiteRepository
     except Exception:  # pragma: no cover
-        pytest.skip("StorageRepository not implemented yet (task 3.2)")
+        pytest.skip("StorageRepository not implemented yet")
 
     repo = SQLiteRepository(":memory:")
     ids = IdGenerator(deterministic=True)

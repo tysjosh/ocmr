@@ -11,7 +11,7 @@ collects the three scalar modifiers the router also consumes: consequence ``q``,
 reversibility ``v``, and source authority ``a``, plus ``k``, the number of
 simultaneously unresolved or failed checks.
 
-Component provenance (–1.7):
+Component provenance:
 
 ===========  ====================================================  ==============================
 Component    OCMR sources                                          ``0.5`` (unresolved) condition

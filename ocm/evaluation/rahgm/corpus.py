@@ -26,8 +26,6 @@ makes the routing metrics objective.
 Scenarios — not individual writes — are partitioned into training (25),
 development (10), canary (5), and test (10). Entity ids are namespaced by
 scenario, so no fact or alias can appear in more than one partition.
-
-Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7.
 """
 
 from __future__ import annotations

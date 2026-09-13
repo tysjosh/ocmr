@@ -1,4 +1,4 @@
-"""Baseline definitions B0–B4 as toggle presets (–22.5).
+"""Baseline definitions B0–B4 as toggle presets.
 
 Each baseline is the same :class:`~ocm.evaluation.arms.strategies.MemoryStrategy`
 differing only by its :class:`~ocm.evaluation.arms.strategies.StrategyToggles`, per

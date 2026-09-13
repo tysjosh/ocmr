@@ -1,7 +1,6 @@
-"""Behavioral API tests for the five memory endpoints (task 15.4).
+"""Behavioral API tests for the five memory endpoints.
 
-These go beyond the endpoint-shape checks in ``test_api_endpoints.py`` (task
-15.2) and exercise the *behavior* of each route end to end against a
+These go beyond the endpoint-shape checks in ``test_api_endpoints.py`` and exercise the *behavior* of each route end to end against a
 deterministic, in-memory :class:`~ocm.core.container.CoreContainer` wired into
 :func:`ocm.app.main.create_app` via FastAPI's
 :class:`~starlette.testclient.TestClient`:

@@ -1,7 +1,7 @@
 """MemoryTool — the single seam between an agent and OCM.
 
 The :class:`MemoryTool` is the only object the :class:`~ocm.agent.loop.AgentLoop`
-(task 16.1) talks to. It maps 1:1 onto the two memory operations the agent needs:
+ talks to. It maps 1:1 onto the two memory operations the agent needs:
 
 * :meth:`query` → the Retrieval Pipeline (R0→R4), returning an
   :class:`~ocm.retrieval.evidence_packager.EvidencePackage`.

@@ -1,7 +1,7 @@
 """Read-only debug/inspection router (``routes_debug``).
 
 A **non-production** router that exposes read-only inspection endpoints used by
-tests and the research demo. The main app (``ocm/app/main.py``, task 15.2)
+tests and the research demo. The main app (``ocm/app/main.py``)
 mounts this router **only** when ``settings.deterministic_test_mode`` (or an
 explicit debug flag) is set, so these endpoints never ship in a normal
 deployment. They never mutate state — they only project the current

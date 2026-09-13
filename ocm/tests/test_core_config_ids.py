@@ -1,6 +1,6 @@
 """Unit tests for OCM configuration defaults and deterministic ID generation.
 
-These cover task 1.4:
+These cover:
 
 * ``Settings`` offline-first defaults: the Mock_Extractor and local
   ``all-MiniLM-L6-v2`` embeddings run with no API key or network,

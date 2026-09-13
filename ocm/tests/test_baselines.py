@@ -1,4 +1,4 @@
-"""Baseline strategy + B0–B4 construction/run tests (–22.5).
+"""Baseline strategy + B0–B4 construction/run tests.
 
 Drives every baseline (B0–B4) over a single deterministic, offline
 ``CoreContainer`` to confirm each one constructs from the registry and runs a

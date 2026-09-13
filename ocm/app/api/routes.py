@@ -1,4 +1,4 @@
-"""The five memory endpoints (task 15.2).
+"""The five memory endpoints.
 
 This :class:`~fastapi.APIRouter` exposes the ``API_Service`` surface described in
 the design's "API Design" section. The routers are intentionally thin: each one

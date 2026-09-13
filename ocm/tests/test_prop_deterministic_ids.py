@@ -1,4 +1,4 @@
-"""Property test for deterministic IDs across runs (task 10.8).
+"""Property test for deterministic IDs across runs.
 
 Feature: ontology-constrained-memory, Property 8.
 

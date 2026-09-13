@@ -17,8 +17,6 @@ What this does **not** deliver: an answer to RQ2. Any explanation-depth effect
 reported here is a consequence of :data:`~ocm.evaluation.rahgm.analyst.DEPTH_COMPETENCE`,
 which is an assumption about people, not a measurement of them. Every emitted
 artifact carries that disclosure.
-
-Requirements: 6.3, 11.3, 12.1, 12.2, 12.3, 13.3, 14.1, 14.2.
 """
 
 from __future__ import annotations

@@ -37,8 +37,6 @@ specification gaps this evaluation surfaced in eq. (3):
   consequence weight, a well-attributed irreversible write can be discounted into
   autonomous commitment however consequential it is. Capping each discount at
   ``β_q`` measures the cost of closing that gap.
-
-Requirements: 13.2.
 """
 
 from __future__ import annotations

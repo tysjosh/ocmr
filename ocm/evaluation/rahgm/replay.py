@@ -17,8 +17,6 @@ Candidate writes are supplied directly as typed tuples rather than as text run
 through an extractor. That matches the paper's unit of analysis — the write ``u =
 (x, e, t, E, s, o)`` — and keeps ground truth objective: no extraction noise sits
 between the corpus label and the governed decision.
-
-Requirements: 10.1, 10.2, 10.3, 11.1, 11.2, 13.2.
 """
 
 from __future__ import annotations

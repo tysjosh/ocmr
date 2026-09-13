@@ -46,8 +46,6 @@ Output shape
 
 :meth:`MetricsReporter.report` renders a readable summary table from the same
 data.
-
-Requirements: 24.1, 24.2, 24.3, 24.4, 24.5.
 """
 
 from __future__ import annotations
@@ -189,7 +187,7 @@ class MetricsReporter:
     """Computes the metric suite and B0 comparisons over result records."""
 
     def compute(self, results: Iterable[Any]) -> dict[str, Any]:
-        """Compute all metrics grouped by ``baseline_name`` (–24.5).
+        """Compute all metrics grouped by ``baseline_name``.
 
         Args:
             results: An iterable of per-question result records (dicts or typed

@@ -1,4 +1,4 @@
-"""Unit tests for the Entity_Resolver (W3, task 10.6).
+"""Unit tests for the Entity_Resolver (W3).
 
 These tests exercise every branch of the conservative resolution priority order
  implemented by ``ocm.resolution.entity_resolver.EntityResolver``,

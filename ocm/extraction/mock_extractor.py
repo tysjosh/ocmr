@@ -36,7 +36,6 @@ The word ``actually``/``correction``/``instead``/``in fact`` in a sentence
 sets ``write_intent="correction"`` for relations from that sentence; otherwise
 ``new_fact`` is used (default is applied downstream too).
 
-Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.7.
 """
 
 from __future__ import annotations
