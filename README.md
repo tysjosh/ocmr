@@ -16,8 +16,7 @@ produces it, so the reported numbers can be inspected without re-running anythin
 **Contents** — [1 Setup](#1-setup) · [2 Check the install](#2-check-the-install) ·
 [3 Get the data](#3-get-the-data) · [4 Run the evaluations](#4-run-the-evaluations) ·
 [5 Arms](#5-arms) · [6 Metrics](#6-metrics) · [7 Configuration](#7-configuration) ·
-[8 Repository layout](#8-repository-layout) · [9 Notebook](#9-notebook-the-gpu-path) ·
-[10 License](#10-license)
+[8 Repository layout](#8-repository-layout) · [9 Notebook](#9-notebook-the-gpu-path)
 
 ## 1. Setup
 
