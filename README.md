@@ -150,21 +150,41 @@ the individual axes and intensities.
 ### 4.4 LM-R — LongMemEval end-to-end (needs a GPU)
 
 Real extraction from raw text with Qwen2.5-14B over the 277 MB haystack. This is
-the expensive one: roughly **two days on one GPU** without cached extractions.
+the expensive one — roughly **two days on one GPU** from scratch — so the recorded
+extractions are published and can be replayed instead.
+
+**Replay from the published caches.** No model, no GPU. Fetch them first (2.4 MB
+and 6.9 MB), keeping the `local_results/` prefix the download creates:
 
 ```bash
+# one --include per invocation: passing several patterns at once silently
+# fetches only the last of them
+hf download olukotunjosh/ocmr-extraction-cache --repo-type dataset --local-dir . \
+  --include "local_results/lme_e2e_extract_cache_longmemeval__32e1c2065787.json"
+hf download olukotunjosh/ocmr-extraction-cache --repo-type dataset --local-dir . \
+  --include "local_results/lme_e2e_link_cache_longmemeval__09ccdb187380.json"
+
 python run_6f_local.py --full \
   --extract-prompt longmemeval \
   --llm-model Qwen/Qwen2.5-14B-Instruct \
   --slot-linker qwen \
-  --extract-cache local_results/lme_e2e_extract_cache_longmemeval.json \
-  --link-cache local_results/lme_e2e_link_cache_longmemeval.json
+  --extract-cache local_results/lme_e2e_extract_cache_longmemeval__32e1c2065787.json \
+  --link-cache local_results/lme_e2e_link_cache_longmemeval__09ccdb187380.json
 ```
 
-Point `--extract-cache` / `--link-cache` at existing cache files to replay without
-re-running the model. Cache identity includes the code revision and working-tree
-diff, so an edit anywhere invalidates every key — see the module docstring before
-reusing caches across revisions.
+The digests in those filenames are part of their identity, so keep the names as
+downloaded. Add `--manager memgpt` for the `Bmemgpt` arm, which also needs
+`local_results_memgpt/lme_e2e_memgpt_decide_cache_longmemeval__51d024d839f9.json`
+(0.3 MB, same dataset).
+
+**Run extraction yourself.** Drop both cache flags and supply a GPU; the run
+writes its own caches so a re-run replays rather than re-generating.
+
+One caveat if you modify the code: cache identity folds in the code revision *and*
+the working-tree diff, and that identity is hashed into every cache key rather
+than merely checked on load. Any edit to a tracked file therefore invalidates the
+whole cache and silently triggers re-extraction. See the module docstring in
+[`run_6f_local.py`](run_6f_local.py) before reusing caches across revisions.
 
 ### 4.5 Synthetic benchmark
 
@@ -254,6 +274,6 @@ Sections 1–5 need no GPU. The section-6 cells load a local Qwen model through
 | 6 | Qwen2.5-14B-Instruct load in bf16 (~28 GB) | — |
 | 6b | full research experiment with the Qwen extractor and real embeddings | `results_qwen.json` |
 | 6c | governed-write replay: qualitative evidence and false-quarantine reconciliation | `governance_examples.json` |
-| 6d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | `multiwoz_exact_state.json` |
+| 6d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | `results_multiwoz.json` (the copy in `results/` is `multiwoz_exact_state.json`, from the script) |
 | 6e | LongMemEval knowledge-update oracle arm, including the annotation pass | `results_longmemeval.json`, gold trajectories |
-| 6f | LongMemEval end-to-end (LM-R): real extraction from raw text | `results_longmemeval_e2e.json`, `results_longmemeval_e2e_memgpt.json` (with `--manager memgpt`), plus the extraction and slot-link caches |
+| 6f | LongMemEval end-to-end (LM-R): real extraction from raw text | `results_longmemeval_e2e.json`, plus the extraction and slot-link caches |
