@@ -254,6 +254,6 @@ Sections 1–5 need no GPU. The section-6 cells load a local Qwen model through
 | 6 | Qwen2.5-14B-Instruct load in bf16 (~28 GB) | — |
 | 6b | full research experiment with the Qwen extractor and real embeddings | `results_qwen.json` |
 | 6c | governed-write replay: qualitative evidence and false-quarantine reconciliation | `governance_examples.json` |
-| 6d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | — |
+| 6d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | `multiwoz_exact_state.json` |
 | 6e | LongMemEval knowledge-update oracle arm, including the annotation pass | `results_longmemeval.json`, gold trajectories |
-| 6f | LongMemEval end-to-end (LM-R): real extraction from raw text | extraction and slot-link caches |
+| 6f | LongMemEval end-to-end (LM-R): real extraction from raw text | `results_longmemeval_e2e.json`, `results_longmemeval_e2e_memgpt.json` (with `--manager memgpt`), plus the extraction and slot-link caches |
