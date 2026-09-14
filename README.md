@@ -105,83 +105,7 @@ Cell **6e** of [`OCM_Colab.ipynb`](OCM_Colab.ipynb) runs this pass end to end.
 
 ## 4. Run the evaluations
 
-Three of the four surfaces need **no GPU** and finish in minutes — they replay
-governance decisions over oracle-supplied or cached facts, so no language model is
-invoked at scoring time.
-
-### 4.1 LM-O — LongMemEval durable state
-
-```bash
-python run_lmo_durable_state.py \
-  --annotations results/longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json \
-  --data data/longmemeval_oracle.json \
-  --arms B0,B2,Bsup,B3 \
-  --embeddings local \
-  --out local_results/lmo_durable_state.json
-```
-
-Compare against [`results/lmo_durable_state.json`](results/lmo_durable_state.json).
-
-Keep `--embeddings local`. The `deterministic` default hashes text into vectors,
-which is fine for the durable-state buckets but makes answer-recall numbers
-meaningless.
-
-
-### 4.2 MultiWOZ — dialogue-state slots
-
-```bash
-python run_multiwoz_durable_state.py \
-  --arms B0,B2,Bsup,B3 \
-  --out local_results/multiwoz_durable_state.json
-```
-
-Full validation split (1,000 dialogues) by default; `--limit N` for a smoke run.
-
-### 4.3 Entity-linking evasion — security suite
-
-```bash
-python run_entity_linking_evasion.py --paper-suite
-```
-
-Five seeds over seven attack axes, with original and mutated attacks, a
-configuration-off ablation, and a benign false-positive workload. `--help` lists
-the individual axes and intensities.
-
-### 4.4 LM-R — LongMemEval end-to-end (needs a GPU)
-
-Real extraction from raw text with Qwen2.5-14B over the 277 MB haystack. This is
-the expensive one: roughly **two days on one GPU** from scratch.
-
-The same command works whether or not the caches exist. Point the two flags at
-paths of your choosing: files that are absent are **created** as extraction
-proceeds, and a later run against the same paths replays from them instead of
-calling the model again.
-
-```bash
-mkdir -p local_results
-
-python run_6f_local.py --full \
-  --extract-prompt longmemeval \
-  --llm-model Qwen/Qwen2.5-14B-Instruct \
-  --slot-linker qwen \
-  --extract-cache local_results/lme_e2e_extract_cache_longmemeval.json \
-  --link-cache local_results/lme_e2e_link_cache_longmemeval.json
-```
-
-First run: real extraction, needs the GPU, roughly two days. Second run against
-the same two paths: replay, minutes, no model loaded. `--flush-every N` controls
-how often the caches are written, so an interrupted run keeps what it had reached.
-
-Add `--manager memgpt` for the `Bmemgpt` arm; it keeps a third cache of its own
-edit decisions, created the same way.
-
-One caveat if you modify the code: cache identity folds in the code revision *and*
-the working-tree diff, and that identity is hashed into every cache key rather
-than merely checked on load. Any edit to a tracked file therefore invalidates the
-whole cache and silently triggers re-extraction. See the module docstring in
-[`run_6f_local.py`](run_6f_local.py) before reusing caches across revisions.
-
-### 4.5 Synthetic benchmark
+### 4.1 Synthetic benchmark
 
 Seeded and fully offline:
 
@@ -199,6 +123,96 @@ python -m ocm.scripts.report_metrics --results results.jsonl --json metrics.json
 `report_metrics` takes exactly one of `--results` or `--benchmark`.
 `python -m ocm.scripts.run_experiments` runs the whole suite.
 
+### 4.2 MultiWOZ — dialogue-state slots
+
+```bash
+python run_multiwoz_durable_state.py \
+  --arms B0,B2,Bsup,B3 \
+  --out local_results/multiwoz_durable_state.json
+```
+
+Full validation split (1,000 dialogues) by default; `--limit N` for a smoke run.
+
+### 4.3 LM-O — LongMemEval durable state
+
+```bash
+python run_lmo_durable_state.py \
+  --annotations results/longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json \
+  --data data/longmemeval_oracle.json \
+  --arms B0,B2,Bsup,B3 \
+  --embeddings local \
+  --out local_results/lmo_durable_state.json
+```
+
+Compare against [`results/lmo_durable_state.json`](results/lmo_durable_state.json).
+
+Keep `--embeddings local`. The `deterministic` default hashes text into vectors,
+which is fine for the durable-state buckets but makes answer-recall numbers
+meaningless.
+
+### 4.4 LM-R — LongMemEval end-to-end (needs a GPU)
+
+```bash
+mkdir -p local_results
+
+python run_6f_local.py --full \
+  --extract-prompt longmemeval \
+  --llm-model Qwen/Qwen2.5-14B-Instruct \
+  --slot-linker qwen \
+  --extract-cache local_results/lme_e2e_extract_cache_longmemeval.json \
+  --link-cache local_results/lme_e2e_link_cache_longmemeval.json
+```
+
+
+Add `--manager memgpt` for the `Bmemgpt` arm; it keeps a third cache of its own
+edit decisions, created the same way.
+
+### 4.5 Entity-linking evasion — security suite
+
+```bash
+python run_entity_linking_evasion.py --paper-suite
+```
+
+Five seeds over seven attack axes, with original and mutated attacks, a
+configuration-off ablation, and a benign false-positive workload. `--help` lists
+the individual axes and intensities.
+
+### 4.6 Bounded review — escalation and review-and-release
+
+Adds `B3R` and `B3Q` on top of `B3` and scores them under reviewer policies of
+varying accuracy:
+
+```bash
+python -m ocm.evaluation.rahgm.run_ocmr_arm \
+  --extractor qwen \
+  --model Qwen/Qwen2.5-14B-Instruct \
+  --embeddings local \
+  --cache local_results/ocmr_arm/extraction_cache.json \
+  --out local_results/ocmr_arm
+```
+
+Every other flag is left at its default, which is what
+[`results/ocmr_arm_results.json`](results/ocmr_arm_results.json) was produced
+with: 25 items per category, seeds `1337,7,42,99,2024`, all five arms, nine
+reviewer policies, and `--fit leave-one-seed-out`. `--out` is a directory and
+receives `ocmr_arm_results.json` and `ocmr_arm_table.txt`. `--cache` makes the
+run resumable.
+
+Offline smoke run, no GPU, a few seconds:
+
+```bash
+python -m ocm.evaluation.rahgm.run_ocmr_arm \
+  --extractor mock --per-category 3 --seeds 1337 \
+  --arms B0,B3,B3R,B3Q --reviewers identity,oracle --fit dev-split \
+  --out local_results/ocmr_arm_smoke
+```
+
+Each run prints a reproduction gate against the published numbers; `--extractor
+mock` is indicative and is expected to fail it. Quote the `identity` reviewer.
+`oracle` reads benchmark conflict labels and is a ceiling, not a deployable
+policy; `release_all` and `uphold_all` are controls.
+
+
 ## 5. Arms
 
 Selected by name via `--arms` / `--baselines`, defined in
@@ -214,6 +228,15 @@ Selected by name via `--arms` / `--baselines`, defined in
 | `Bsup` | latest-value supersession only |
 | `Bmemgpt` | MemGPT-style self-editing baseline |
 | `Brag`, `Brtcf` | retrieval-augmented / read-time conflict filtering |
+
+The bounded-review arms are separate, defined in
+[`ocm/evaluation/rahgm/ocmr_arm.py`](ocm/evaluation/rahgm/ocmr_arm.py) and
+selected by the run in 4.6:
+
+| Arm | Governance |
+| --- | --- |
+| `B3R` | `B3` plus risk-adaptive escalation and review-and-release |
+| `B3Q` | `B3` with every quarantine reviewed (recall ceiling) |
 
 ## 6. Metrics
 
@@ -262,7 +285,7 @@ Sections 1–5 need no GPU. The section-6 cells load a local Qwen model through
 
 | Section | What it does | Output |
 | --- | --- | --- |
-| 1–2, 2b | clone, install, optional Drive mount for persistent output | — |
+| 1–2, 2b | download the code, install, optional Drive mount for persistent output | — |
 | 3 | offline governance demo, no GPU or API key | — |
 | 4 | full offline suite: multi-seed CIs, significance, τ-sweep, stress | `results_offline.json` |
 | 5 | switch to real `sentence-transformers` embeddings | — |
