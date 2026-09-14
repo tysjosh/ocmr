@@ -40,7 +40,7 @@ docs/_paper1_extracted.txt
 docs/_paper2_extracted.txt
 
 # Runtime shim for the LongMemEval end-to-end arm. Must stay untracked:
-# run_7f_local.py folds `git diff --binary HEAD` into the extraction/slot-link
+# run_6f_local.py folds `git diff --binary HEAD` into the extraction/slot-link
 # cache identity, and that identity is hashed into every cache key. Tracking
 # this file would change the diff and invalidate the existing caches, which
 # cost ~2 days of GPU time to build. See its module docstring.

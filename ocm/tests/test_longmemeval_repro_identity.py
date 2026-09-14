@@ -9,7 +9,7 @@ import pytest
 
 from ocm.evaluation.benchmark import BenchmarkExample, Question, Session
 from ocm.evaluation.datasets.longmemeval_adapter import _fingerprint_examples
-from run_7f_local import CachedChat
+from run_6f_local import CachedChat
 
 
 def _example(answer: str) -> BenchmarkExample:

@@ -11,7 +11,7 @@ Probed locations, in order:
 Location                                      Written by
 ============================================  ==========================================
 ``__meta__.fingerprint``                      :class:`~ocm.extraction.caching_extractor.CachingExtractor`
-``__meta__.namespace``                        ``CachedChat`` (run_7f_local / notebook 7f)
+``__meta__.namespace``                        ``CachedChat`` (run_6f_local / notebook 7f)
 ``_run_manifest.run_identity``                ``run_longmemeval_e2e`` result payloads
 ``run_identity``                              ``run_manifest.json``
 ============================================  ==========================================
