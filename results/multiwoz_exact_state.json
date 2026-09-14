@@ -1,0 +1,64 @@
+{
+  "_meta": {
+    "split": "validation",
+    "limit": null,
+    "n_dialogues": 1000,
+    "n_probes": 8104
+  },
+  "B0": {
+    "exact_state_accuracy": 93.0898321816387,
+    "lenient_accuracy": 93.10217176702862,
+    "ambiguous_rate": 6.87314906219151,
+    "counts": {
+      "total": 8104,
+      "correct": 7544,
+      "wrong_value": 3,
+      "ambiguous": 557,
+      "missing": 0
+    },
+    "durable_violations": 579,
+    "task_success": 99.87660414610069
+  },
+  "B2": {
+    "exact_state_accuracy": 93.0898321816387,
+    "lenient_accuracy": 93.10217176702862,
+    "ambiguous_rate": 6.87314906219151,
+    "counts": {
+      "total": 8104,
+      "correct": 7544,
+      "wrong_value": 3,
+      "ambiguous": 557,
+      "missing": 0
+    },
+    "durable_violations": 579,
+    "task_success": 99.87660414610069
+  },
+  "Bsup": {
+    "exact_state_accuracy": 99.95064165844028,
+    "lenient_accuracy": 99.96298124383021,
+    "ambiguous_rate": 0.0,
+    "counts": {
+      "total": 8104,
+      "correct": 8100,
+      "wrong_value": 4,
+      "ambiguous": 0,
+      "missing": 0
+    },
+    "durable_violations": 0,
+    "task_success": 99.96298124383021
+  },
+  "B3": {
+    "exact_state_accuracy": 99.95064165844028,
+    "lenient_accuracy": 99.96298124383021,
+    "ambiguous_rate": 0.0,
+    "counts": {
+      "total": 8104,
+      "correct": 8100,
+      "wrong_value": 4,
+      "ambiguous": 0,
+      "missing": 0
+    },
+    "durable_violations": 0,
+    "task_success": 99.96298124383021
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "_run_manifest": {
+    "run_fingerprint": "c07b03093793",
+    "run_identity": {
+      "dataset": "longmemeval_s",
+      "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "extract_prompt": "longmemeval",
+      "extract_prompt_sha256": "78f7824e574129d6d23976b5f8aad03e498d488cec54acc55ca12c63ee2896ab",
+      "extract_backend": "transformers",
+      "llm_model": "Qwen/Qwen2.5-14B-Instruct",
+      "llm_max_tokens": 1024,
+      "slot_linker": "qwen",
+      "link_threshold": 0.75,
+      "intent_mode": "auto",
+      "knowledge_update_limit": null,
+      "abstention_limit": null,
+      "baselines": [
+        "B0",
+        "B2",
+        "Bsup",
+        "B3"
+      ],
+      "seeds": [
+        1337,
+        7,
+        42,
+        99,
+        2024
+      ],
+      "embeddings": "local",
+      "manager": "memgpt",
+      "code_revision": "601abe5c3f8a7b3822a251f1b0a79a2bf81f3cf6",
+      "code_diff_sha256": "clean",
+      "legacy_cache_keys": false
+    },
+    "extract_cache": "lme_e2e_extract_cache_longmemeval__32e1c2065787.json",
+    "extract_cache_identity": {
+      "dataset": "longmemeval_s",
+      "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "extract_backend": "transformers",
+      "llm_model": "Qwen/Qwen2.5-14B-Instruct",
+      "llm_max_tokens": 1024,
+      "decoding": {
+        "temperature": 0,
+        "do_sample": false
+      },
+      "system_prompt_sha256": "52450a82e23f46864eda8b52c291a6e8af51554e028fafaa26b26b58c3d889d4",
+      "code_revision": "601abe5c3f8a7b3822a251f1b0a79a2bf81f3cf6",
+      "code_diff_sha256": "clean",
+      "task": "fact_extraction",
+      "extract_prompt": "longmemeval",
+      "extract_prompt_sha256": "78f7824e574129d6d23976b5f8aad03e498d488cec54acc55ca12c63ee2896ab"
+    },
+    "link_cache": "lme_e2e_link_cache_longmemeval__09ccdb187380.json",
+    "link_cache_identity": {
+      "dataset": "longmemeval_s",
+      "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "extract_backend": "transformers",
+      "llm_model": "Qwen/Qwen2.5-14B-Instruct",
+      "llm_max_tokens": 1024,
+      "decoding": {
+        "temperature": 0,
+        "do_sample": false
+      },
+      "system_prompt_sha256": "52450a82e23f46864eda8b52c291a6e8af51554e028fafaa26b26b58c3d889d4",
+      "code_revision": "601abe5c3f8a7b3822a251f1b0a79a2bf81f3cf6",
+      "code_diff_sha256": "clean",
+      "task": "slot_linking",
+      "slot_linker": "qwen",
+      "slot_link_prompt": "longmemeval-slot-link-v1"
+    },
+    "checkpoint_root": "extract_longmemeval__intent_auto__ku_full__abs_full__link_qwen_t75__mgr_memgpt__run_d811fc3b4dc8",
+    "extract_cache_entries": 4609,
+    "link_cache_entries": 33919,
+    "memgpt_decision_cache_entries": 2974,
+    "knowledge_update_examples_fingerprint": "e8f1a090fc4a23413fd1cdc3ffb6b8270b7c877864246e753700e6e0c87eec05"
+  },
+  "knowledge_update": {
+    "dataset": "longmemeval",
+    "subset": "knowledge-update",
+    "arm": "end_to_end_memgpt",
+    "extract_prompt": "longmemeval",
+    "slot_linker": "qwen",
+    "methods": [
+      "Bmemgpt"
+    ],
+    "seeds": [
+      1337,
+      7,
+      42,
+      99,
+      2024
+    ],
+    "n_examples": 72,
+    "examples_fingerprint": "e8f1a090fc4a23413fd1cdc3ffb6b8270b7c877864246e753700e6e0c87eec05",
+    "decisive_metrics": {
+      "Bmemgpt": {
+        "task_success": {
+          "mean": 48.611111111111114,
+          "low": 48.611111111111114,
+          "high": 48.611111111111114,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "contradiction_rate": {
+          "mean": 0.0,
+          "low": 0.0,
+          "high": 0.0,
+          "half_width": 0.0,
+          "n": 5
+        },
+        "constraint_violations": {
+          "mean": 8.333333333333334,
+          "low": 8.333333333333334,
+          "high": 8.333333333333334,
+          "half_width": 0.0,
+          "n": 5
+        }
+      }
+    },
+    "write_outcomes": {
+      "Bmemgpt": {
+        "candidates": 61060,
+        "accepted": 57395,
+        "superseded": 3665,
+        "quarantined": 0,
+        "rejected": 0
+      }
+    }
+  }
+}
