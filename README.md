@@ -150,35 +150,30 @@ the individual axes and intensities.
 ### 4.4 LM-R — LongMemEval end-to-end (needs a GPU)
 
 Real extraction from raw text with Qwen2.5-14B over the 277 MB haystack. This is
-the expensive one — roughly **two days on one GPU** from scratch — so the recorded
-extractions are published and can be replayed instead.
+the expensive one: roughly **two days on one GPU** from scratch.
 
-**Replay from the published caches.** No model, no GPU. Fetch them first (2.4 MB
-and 6.9 MB), keeping the `local_results/` prefix the download creates:
+The same command works whether or not the caches exist. Point the two flags at
+paths of your choosing: files that are absent are **created** as extraction
+proceeds, and a later run against the same paths replays from them instead of
+calling the model again.
 
 ```bash
-# one --include per invocation: passing several patterns at once silently
-# fetches only the last of them
-hf download olukotunjosh/ocmr-extraction-cache --repo-type dataset --local-dir . \
-  --include "local_results/lme_e2e_extract_cache_longmemeval__32e1c2065787.json"
-hf download olukotunjosh/ocmr-extraction-cache --repo-type dataset --local-dir . \
-  --include "local_results/lme_e2e_link_cache_longmemeval__09ccdb187380.json"
+mkdir -p local_results
 
 python run_6f_local.py --full \
   --extract-prompt longmemeval \
   --llm-model Qwen/Qwen2.5-14B-Instruct \
   --slot-linker qwen \
-  --extract-cache local_results/lme_e2e_extract_cache_longmemeval__32e1c2065787.json \
-  --link-cache local_results/lme_e2e_link_cache_longmemeval__09ccdb187380.json
+  --extract-cache local_results/lme_e2e_extract_cache_longmemeval.json \
+  --link-cache local_results/lme_e2e_link_cache_longmemeval.json
 ```
 
-The digests in those filenames are part of their identity, so keep the names as
-downloaded. Add `--manager memgpt` for the `Bmemgpt` arm, which also needs
-`local_results_memgpt/lme_e2e_memgpt_decide_cache_longmemeval__51d024d839f9.json`
-(0.3 MB, same dataset).
+First run: real extraction, needs the GPU, roughly two days. Second run against
+the same two paths: replay, minutes, no model loaded. `--flush-every N` controls
+how often the caches are written, so an interrupted run keeps what it had reached.
 
-**Run extraction yourself.** Drop both cache flags and supply a GPU; the run
-writes its own caches so a re-run replays rather than re-generating.
+Add `--manager memgpt` for the `Bmemgpt` arm; it keeps a third cache of its own
+edit decisions, created the same way.
 
 One caveat if you modify the code: cache identity folds in the code revision *and*
 the working-tree diff, and that identity is hashed into every cache key rather
