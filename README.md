@@ -257,14 +257,3 @@ Sections 1–5 need no GPU. The section-6 cells load a local Qwen model through
 | 6d | MultiWOZ 2.2 real-data run (oracle extraction, so no LLM calls) | — |
 | 6e | LongMemEval knowledge-update oracle arm, including the annotation pass | `results_longmemeval.json`, gold trajectories |
 | 6f | LongMemEval end-to-end (LM-R): real extraction from raw text | extraction and slot-link caches |
-
-Numbering runs 1–5 then jumps to the 7-series, which is the GPU block. `7e` and
-`7f` keep their labels because [`run_6e_local.py`](run_6e_local.py) and
-[`run_6f_local.py`](run_6f_local.py) are the local equivalents of those cells.
-
-Section 6 loads Qwen2.5-14B-Instruct in full bf16 (~28 GB), which needs a single
-A100 40GB. The load cell carries commented alternatives for Qwen2.5-32B in 4-bit
-NF4 (~20 GB, same card) and in bf16 (~64 GB, A100 80GB).
-
-Section 6f is the expensive one — roughly two days on a single GPU. Its caches are
-written to the output directory so re-runs replay instead of re-generating.
