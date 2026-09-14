@@ -269,7 +269,3 @@ NF4 (~20 GB, same card) and in bf16 (~64 GB, A100 80GB).
 
 Section 6f is the expensive one — roughly two days on a single GPU. Its caches are
 written to the output directory so re-runs replay instead of re-generating.
-
-## 10. License
-
-MIT (see [`pyproject.toml`](pyproject.toml)).
