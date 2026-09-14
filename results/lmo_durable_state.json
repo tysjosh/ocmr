@@ -9,14 +9,14 @@
     "order": "aligned",
     "confidence": "aligned",
     "dataset": "longmemeval_oracle.json",
-    "dataset_path": "/tmp/ocmr-data/data/longmemeval_oracle.json",
+    "dataset_path": "data/longmemeval_oracle.json",
     "dataset_sha256": "821a2034d219ab45846873dd14c14f12cfe7776e73527a483f9dac095d38620c",
     "dataset_bytes": 15388478,
     "annotations_path": "results/longmemeval_kupdate_annotations__Qwen_Qwen2.5-14B-Instruct.json",
     "annotations_sha256": "973378bee978610ff237277e7ef144b925817270346b49fe7f965945e7837d25",
     "annotating_model_slug": "Qwen_Qwen2.5-14B-Instruct",
-    "code_revision": "96e7ac755b5b507a92289bd6d1526d13699f0f55",
-    "code_dirty": true
+    "code_revision": "d7345965f447acc50260c729d32b8959d83f4996",
+    "code_dirty": false
   },
   "B0": {
     "correct": 0.0,
